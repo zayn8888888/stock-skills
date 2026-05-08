@@ -17,7 +17,14 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 
 本 skill **依赖一个能调用富途 OpenAPI 的 skill / 脚本集**（例如社区 `futuapi` skill），自身不包含任何富途脚本。如果 OpenD 未运行，提示用户先启动 OpenD。脚本路径请替换为你本地实际安装位置（例如 `~/.claude/skills/futuapi/scripts/` 或 `skills/futuapi/scripts/`）。
 
-如果用户给出的是中文名或英文简称（如"五粮液"、"JPM"），请映射为富途完整代码（如 `SZ.000858`、`US.JPM`）。
+如果用户给出的是中文名或英文简称（如"五粮液"、"JPM"），请映射为富途完整代码。富途代码格式：
+
+- **港股**：`HK.XXXXX`（5 位数字补零，如 `HK.00700` 腾讯、`HK.09988` 阿里）
+- **美股**：`US.TICKER`（如 `US.TSLA`、`US.NVDA`、`US.JPM`）
+- **A 股沪市**：`SH.XXXXXX`（6 位，如 `SH.600519` 茅台）
+- **A 股深市**：`SZ.XXXXXX`（6 位，如 `SZ.000858` 五粮液）
+- **期权简写代码**：交给富途脚本 `resolve_option_code.py` 解析，不要手工拼
+- **不确定代码时**用 Tavily 或 WebSearch 确认一次，不要猜错代码后继续往下拉数据
 
 ## 分析流程（八维度）
 
