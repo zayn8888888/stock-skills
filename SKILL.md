@@ -17,6 +17,8 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 
 本 skill **依赖一个能调用富途 OpenAPI 的 skill / 脚本集**（例如社区 `futuapi` skill），自身不包含任何富途脚本。如果 OpenD 未运行，提示用户先启动 OpenD。脚本路径请替换为你本地实际安装位置（例如 `~/.claude/skills/futuapi/scripts/` 或 `skills/futuapi/scripts/`）。
 
+> **关于下文的 `python3 skills/futuapi/scripts/...` 命令**：这些是与 `futuapi` skill 的脚本目录约定对齐的**示例命令**，不是硬性要求。Claude Skill 机制下 skill 之间无法互相函数调用，只能共享"跑某条命令"的约定。如果你用的是其他数据源（yfinance / Alpha Vantage / 自建 MCP server 等），或者脚本名不同，**直接替换下文每个维度里的命令行即可**，只要能返回对应的字段（行情 / K 线 / 估值 / 资金 / 盘口 / 板块 / 期权链），八维度流程都能跑通。
+
 如果用户给出的是中文名或英文简称（如"五粮液"、"JPM"），请映射为富途完整代码。富途代码格式：
 
 - **港股**：`HK.XXXXX`（5 位数字补零，如 `HK.00700` 腾讯、`HK.09988` 阿里）
