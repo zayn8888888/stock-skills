@@ -1,110 +1,85 @@
-# stock-analyzer-skill
+# stock-skills
 
-> 为 [Claude Code](https://claude.com/claude-code) 设计的**个股多维分析** Skill。基于富途 OpenAPI 实时行情 + Tavily 新闻搜索，对单只股票做行情、技术、估值、资金、盘口、同行、新闻、期权链共八个维度的结构化分析。
+> 为 [Claude Code](https://claude.com/claude-code) 设计的**股票分析 Skill 套件**。基于富途 OpenAPI 实时行情 + Tavily 新闻搜索，覆盖从"市场扫板"到"个股深挖"的完整链路。
 
-## 特性
+## 包含的 Skill
 
-- **八维度覆盖**：行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链
-- **多空并陈**：同时列出利多 / 利空 / 风险提示 / 关键观察信号，不做单边推荐
-- **拒绝迎合**：即使用户倾向某方向（"是不是利空出尽了"），也客观列出反驳论据
-- **不出买卖指令**：只提供分析框架和数据，最终决策权交给用户
-- **数据时效标注**：行情标清时点，新闻标清日期，避免旧信息误导
-- **期权链深扫**：覆盖深度 OTM 的 OI 堆积点，识别单一 strike 事件级仓位
+| Skill | 解决什么问题 | 触发举例 |
+|-------|------------|---------|
+| [`stock-analyzer/`](stock-analyzer/) | 单只股票八维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
+| [`market-scanner/`](market-scanner/) | HK / US 市场热点板块扫描 + 板块内"尚未过度拉升"候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" / "XX 板块里有没有还没涨透的票" |
 
-适用场景：`"分析 XXX"` / `"XXX 怎么样"` / `"XXX 能不能抄底"` / `"机构在赌什么方向"`
-
-不适用：纯指数/板块分析、宏观研究、纯财报深度解读。
+两者设计为**链式协作**：scanner 扫出候选清单 → analyzer 逐个做深度分析。
 
 ## 安装
 
-### 1. 作为 Claude Code Skill 安装
-
-把本仓库克隆到 Claude skills 目录：
+### 方式 1：整个套件一起装
 
 ```bash
-git clone https://github.com/zaynhuang/stock-analyzer-skill.git ~/.claude/skills/stock-analyzer
+git clone https://github.com/zayn8888888/stock-skills.git ~/tmp-stock-skills
+cp -r ~/tmp-stock-skills/stock-analyzer ~/.claude/skills/stock-analyzer
+cp -r ~/tmp-stock-skills/market-scanner ~/.claude/skills/market-scanner
+rm -rf ~/tmp-stock-skills
 ```
 
-或作为项目级 skill：
+### 方式 2：只装其中一个
 
 ```bash
-git clone https://github.com/zaynhuang/stock-analyzer-skill.git .claude/skills/stock-analyzer
+# 只要个股分析
+git clone --depth 1 --filter=blob:none --sparse \
+  https://github.com/zayn8888888/stock-skills.git ~/tmp
+cd ~/tmp && git sparse-checkout set stock-analyzer
+cp -r stock-analyzer ~/.claude/skills/stock-analyzer
 ```
 
-### 2. 准备依赖
+或直接在 GitHub 上复制需要的子目录。
 
-本 skill **只提供分析框架和 prompt**，不附带任何数据获取脚本。你需要自备：
+## 共同依赖
 
-#### 富途行情数据源（必需）
+两个 skill 都依赖：
 
-本 skill 通过 shell 命令调用富途 OpenAPI 脚本取数据。你需要：
+### 富途 OpenAPI（必需）
 
 - **富途 OpenD** 运行中，默认 `127.0.0.1:11111`
   - 下载：<https://www.futunn.com/OpenAPI>
-- 一个能调用富途 OpenAPI 的 Python 脚本集或 Claude skill，例如任意开源的 `futuapi` skill（社区已有多个实现）
+- 能调用富途 OpenAPI 的 Python 脚本集或 Claude skill（社区已有多个 `futuapi` 实现）
 
-SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_stock_info.py` / `get_capital_flow.py` / `get_orderbook.py` / `get_ticker.py` / `get_option_chain.py` 等）对应富途官方 Python SDK [`futu-api`](https://pypi.org/project/futu-api/) 的基础能力。如果你用的是其他命名/实现，请在使用前告诉 Claude 具体路径，或修改 SKILL.md 中的命令。
+SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capital_flow.py` / `get_option_chain.py` 等）对应富途官方 Python SDK [`futu-api`](https://pypi.org/project/futu-api/) 的基础能力。
 
-#### Tavily 新闻搜索（推荐）
+### Tavily 新闻搜索（推荐）
 
-维度 7（新闻与事件）依赖 [Tavily MCP Server](https://docs.tavily.com/)：
-
-- 注册 Tavily 免费账号获取 API Key
-- 在 Claude Code 中接入 Tavily MCP，skill 会自动调用 `tavily_search`
-
-如果没有 Tavily，维度 7 可以改用 WebSearch 或让 Claude 跳过，其他七个维度不受影响。
+新闻相关维度依赖 [Tavily MCP Server](https://docs.tavily.com/)。没有也能跑，新闻维度会降级或跳过。
 
 ## 使用
 
-安装后，直接对 Claude 说：
+安装后直接对 Claude 说自然语言即可：
 
 ```
+# 触发 market-scanner
+港股最近哪个板块在涨
+帮我找找美股还没涨透的热点
+
+# 触发 stock-analyzer
 分析一下 US.NVDA
-帮我看看腾讯（HK.00700）
 五粮液能不能抄底
 TSLA 机构在赌什么方向
 ```
 
-Claude 会自动识别并触发本 skill，按八维度流程拉数据、做分析、输出报告。
-
-## 输出样例（结构）
-
-```markdown
-## 📊 名称(CODE) 多维分析 · YYYY-MM-DD HH:MM
-
-### 1. 行情速览
-### 2. 技术面
-### 3. 估值水平
-### 4. 资金面
-### 5. 盘口情绪
-### 6. 同行对比
-### 7. 新闻与事件
-### 8. 期权链（可选）
-
-### 💡 综合研判
-- 利多：...
-- 利空：...
-- 风险提示：...
-- 关键信号：...
-```
-
-完整模板见 [references/report-template.md](references/report-template.md)。
-
 ## 文档
 
-- [SKILL.md](SKILL.md) — 完整的触发规则、八维度流程、输出约束
-- [references/methodology.md](references/methodology.md) — 每个维度的判断方法论
-- [references/metrics-interpretation.md](references/metrics-interpretation.md) — 各项指标的解读陷阱速查
-- [references/report-template.md](references/report-template.md) — 完整输出模板和场景化调整
+- [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股八维度分析流程
+- [`stock-analyzer/references/`](stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
+- [`market-scanner/SKILL.md`](market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
+- [`market-scanner/references/`](market-scanner/references/) — 扫描报告模板
 
 ## ⚠️ 免责声明
 
 **本项目只是一个 LLM prompt 集合，不是投资建议、不是投资顾问、不是金融产品。**
 
 - 所有分析由大语言模型生成，**可能包含错误、幻觉或过时数据**
-- 任何基于本 skill 输出的投资决策由使用者自行承担全部风险
-- 本项目作者不对任何直接或间接损失负责
-- **禁止**将本项目用于商业投顾、付费荐股、金融机构对外服务
+- 任何基于本项目输出的投资决策由使用者自行承担全部风险
+- 作者不对任何直接或间接损失负责
+- **禁止**用于商业投顾、付费荐股、金融机构对外服务
 - 使用富途 OpenAPI 需遵守富途 [OpenAPI 服务协议](https://www.futunn.com/OpenAPI)，本项目与富途无任何合作或背书关系
 - 市场有风险，决策需谨慎
 
@@ -119,8 +94,8 @@ Claude 会自动识别并触发本 skill，按八维度流程拉数据、做分�
 欢迎 issue 和 PR，尤其是：
 
 - 维度判断逻辑的完善
-- 新市场/新品种适配（台股、加密货币衍生品等）
-- 输出模板的改进
-- 不同数据源适配（非富途）
+- 新市场适配（A 股、台股、加密等）
+- 输出模板改进
+- 非富途数据源适配
 
-提交 PR 前请确认没有引入任何个人账户 ID、API key 或专有数据。
+提交前请确认没有引入任何个人账户 ID、API key 或专有数据。
