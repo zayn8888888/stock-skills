@@ -20,6 +20,7 @@
 ```bash
 git clone https://github.com/zayn8888888/stock-skills.git ~/tmp-stock-skills
 cp -r ~/tmp-stock-skills/stock-analyzer ~/.claude/skills/stock-analyzer
+cp -r ~/tmp-stock-skills/stock-fundamentals ~/.claude/skills/stock-fundamentals
 cp -r ~/tmp-stock-skills/market-scanner ~/.claude/skills/market-scanner
 cp -r ~/tmp-stock-skills/stock-fundamentals ~/.claude/skills/stock-fundamentals
 cp -r ~/tmp-stock-skills/stock-valuation ~/.claude/skills/stock-valuation
@@ -58,6 +59,10 @@ SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capit
 
 没有 Tavily 时，analyzer 的新闻维度会降级或跳过；valuation 则可能无法完成部分方法。
 
+### stock-fundamentals 额外依赖
+
+- 近 7 天新闻快扫依赖社区 **`futu-stock-digest`** skill（SKILL 内约定；无需 OpenD）。
+
 ## 使用
 
 安装后直接对 Claude 说自然语言即可：
@@ -83,6 +88,7 @@ TSLA 机构在赌什么方向
 
 - [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股八维度分析流程
 - [`stock-analyzer/references/`](stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
+- [`stock-fundamentals/SKILL.md`](stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架
 - [`market-scanner/SKILL.md`](market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
 - [`market-scanner/references/`](market-scanner/references/) — 扫描报告模板
 - [`stock-fundamentals/SKILL.md`](stock-fundamentals/SKILL.md) — 基本面研究四步流程
