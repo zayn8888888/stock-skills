@@ -7,9 +7,10 @@
 | Skill | 解决什么问题 | 触发举例 |
 |-------|------------|---------|
 | [`stock-analyzer/`](stock-analyzer/) | 单只股票八维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
+| [`stock-fundamentals/`](stock-fundamentals/) | 自下而上基本面四步研究（商业模式 → 护城河 → 财务验证 → 估值），输出结构化研究报告 | "XXX 护城河在哪" / "值不值得长期持有" / "盈利质量与估值贵不贵" |
 | [`market-scanner/`](market-scanner/) | HK / US 市场热点板块扫描 + 板块内"尚未过度拉升"候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" / "XX 板块里有没有还没涨透的票" |
 
-两者设计为**链式协作**：scanner 扫出候选清单 → analyzer 逐个做深度分析。
+**链式协作**：scanner 扫出候选清单 → `stock-analyzer` 做交易视角深挖；若关心长期价值与护城河，可改用或叠加 `stock-fundamentals`（与 analyzer 分工见各 SKILL 的「不适用于」说明）。
 
 ## 安装
 
@@ -18,6 +19,7 @@
 ```bash
 git clone https://github.com/zayn8888888/stock-skills.git ~/tmp-stock-skills
 cp -r ~/tmp-stock-skills/stock-analyzer ~/.claude/skills/stock-analyzer
+cp -r ~/tmp-stock-skills/stock-fundamentals ~/.claude/skills/stock-fundamentals
 cp -r ~/tmp-stock-skills/market-scanner ~/.claude/skills/market-scanner
 rm -rf ~/tmp-stock-skills
 ```
@@ -30,13 +32,15 @@ git clone --depth 1 --filter=blob:none --sparse \
   https://github.com/zayn8888888/stock-skills.git ~/tmp
 cd ~/tmp && git sparse-checkout set stock-analyzer
 cp -r stock-analyzer ~/.claude/skills/stock-analyzer
+
+# 只要基本面研究：把上一行的 sparse-checkout set 改为 stock-fundamentals
 ```
 
 或直接在 GitHub 上复制需要的子目录。
 
 ## 共同依赖
 
-两个 skill 都依赖：
+各 skill 普遍依赖：
 
 ### 富途 OpenAPI（必需）
 
@@ -49,6 +53,10 @@ SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capit
 ### Tavily 新闻搜索（推荐）
 
 新闻相关维度依赖 [Tavily MCP Server](https://docs.tavily.com/)。没有也能跑，新闻维度会降级或跳过。
+
+### stock-fundamentals 额外依赖
+
+- 近 7 天新闻快扫依赖社区 **`futu-stock-digest`** skill（SKILL 内约定；无需 OpenD）。
 
 ## 使用
 
@@ -63,12 +71,17 @@ SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capit
 分析一下 US.NVDA
 五粮液能不能抄底
 TSLA 机构在赌什么方向
+
+# 触发 stock-fundamentals
+NVDA 长期持有逻辑是什么
+帮我做腾讯的基本面尽调
 ```
 
 ## 文档
 
 - [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股八维度分析流程
 - [`stock-analyzer/references/`](stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
+- [`stock-fundamentals/SKILL.md`](stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架
 - [`market-scanner/SKILL.md`](market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
 - [`market-scanner/references/`](market-scanner/references/) — 扫描报告模板
 
