@@ -15,30 +15,64 @@
 
 ## 安装
 
-### 方式 1：整个套件一起装
-
 ```bash
-git clone https://github.com/zayn8888888/stock-skills.git ~/tmp-stock-skills
-cp -r ~/tmp-stock-skills/stock-analyzer ~/.claude/skills/stock-analyzer
-cp -r ~/tmp-stock-skills/stock-fundamentals ~/.claude/skills/stock-fundamentals
-cp -r ~/tmp-stock-skills/market-scanner ~/.claude/skills/market-scanner
-cp -r ~/tmp-stock-skills/stock-fundamentals ~/.claude/skills/stock-fundamentals
-cp -r ~/tmp-stock-skills/stock-valuation ~/.claude/skills/stock-valuation
-rm -rf ~/tmp-stock-skills
+git clone https://github.com/zayn8888888/stock-skills.git ~/stock-skills
+cd ~/stock-skills
 ```
 
-### 方式 2：只装其中一个
+然后任选一种安装方式（仓库内自带 `scripts/install.sh`）：
+
+### 方式 1：软链模式（推荐，更新最省事）
 
 ```bash
-# 只要个股分析
-git clone --depth 1 --filter=blob:none --sparse \
-  https://github.com/zayn8888888/stock-skills.git ~/tmp
-cd ~/tmp && git sparse-checkout set stock-analyzer
-cp -r stock-analyzer ~/.claude/skills/stock-analyzer
-# 其他 skill：将 sparse-checkout 中的目录名换成 market-scanner / stock-fundamentals / stock-valuation 即可
+./scripts/install.sh --link
 ```
 
-或直接在 GitHub 上复制需要的子目录。
+把仓库里的 skill 目录软链到 `~/.claude/skills/`。以后只要 `cd ~/stock-skills && git pull`，所有 skill 自动跟着更新，无需重装。
+
+> ⚠️ 软链下「修改 ~/.claude/skills/xxx」= 修改仓库内容；如果你计划本地魔改 skill，建议改用拷贝模式。
+
+### 方式 2：拷贝模式（默认，安全隔离）
+
+```bash
+./scripts/install.sh
+```
+
+仓库与 `~/.claude/skills/` 互不影响，本地随便改。更新时跑 `./scripts/update.sh`（自动 `git pull` + `rsync --delete` 同步）。
+
+### 只装其中几个
+
+两种模式都支持指定 skill：
+
+```bash
+./scripts/install.sh --link stock-analyzer market-scanner
+./scripts/install.sh stock-valuation
+```
+
+可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation`。
+
+### 自定义安装目录
+
+设置 `CLAUDE_SKILLS_DIR` 环境变量即可（默认 `~/.claude/skills`）：
+
+```bash
+CLAUDE_SKILLS_DIR=/path/to/skills ./scripts/install.sh --link
+```
+
+## 更新
+
+```bash
+cd ~/stock-skills
+./scripts/update.sh
+```
+
+脚本会自动 `git pull`，再按你当初安装的模式同步：
+
+- 软链装的：`git pull` 已生效，脚本只做提示
+- 拷贝装的：`rsync --delete` 把仓库目录覆盖到 `~/.claude/skills/<skill>/`
+- 未安装的 skill：跳过（不会主动新增，需要装请用 `install.sh`）
+
+加 `--no-pull` 可跳过 `git pull` 只做本地同步。
 
 ## 共同依赖
 
