@@ -1,8 +1,8 @@
 # Plan: 迁移到 Claude Code Plugin / Marketplace（org 路径）
 
-> 目标：把 `zayn8888888/stock-skills` 改造成一个 GitHub Organization (`fire-skills`) 下的 Claude Code Marketplace，让 stock-analyzer / market-scanner 各自作为独立 plugin 被 `/plugin install` 装、`/plugin update` 升，并支持开源共创。
+> 目标：把 `zayn8888888/stock-skills` 改造成一个 GitHub Organization (`fire-alpha`) 下的 Claude Code Marketplace，让 stock-analyzer / market-scanner 各自作为独立 plugin 被 `/plugin install` 装、`/plugin update` 升，并支持开源共创。
 
-**Org 名已敲定：`fire-skills`** (FIRE = Financial Independence, Retire Early)
+**Org 名已敲定：`fire-alpha`**（保留 FIRE 方向，同时用 Alpha 承接后续量化、市场研究、策略工具等扩展）
 
 ---
 
@@ -13,22 +13,17 @@
 ### 步骤
 
 1. **建 org**（github.com → 右上角 + → New organization → Free plan）
-   - 候选 org 名（待用户敲定）：
-     - `stock-skills-community`
-     - `clauder-finance`
-     - `oss-stock-skills`
-     - `cc-stock-skills`（cc = claude code）
-     - 其他建议：尽量避开个人风格名字，体现"社区"或"主题"。建议 12 字符以内。
-   - 创建后记录最终 org 名（下文用 `fire-skills` 占位）
+   - Organization name：`fire-alpha`
+   - 命名取向：保留 FIRE 方向，但不局限于股票分析；后续可扩展到量化、回测、因子、市场扫描、Agent / MCP 工具等
 
 2. **Transfer repo 到 org**
    - github.com/zayn8888888/stock-skills → Settings → Danger Zone → Transfer ownership
-   - 新 owner 填 `fire-skills`，确认后 GitHub 会保留旧 URL 的 301 redirect（安全）
+   - 新 owner 填 `fire-alpha`，确认后 GitHub 会保留旧 URL 的 301 redirect（安全）
 
 3. **更新本地 git remote**
    ```bash
    cd /Users/admin/Developer/stock-skills
-   git remote set-url origin git@github.com:fire-skills/stock-skills.git
+   git remote set-url origin git@github.com:fire-alpha/stock-skills.git
    git remote -v   # 验证
    ```
 
@@ -37,7 +32,7 @@
    - 或在 repo Settings → Collaborators 加单 repo 权限
 
 5. **验证 transfer 成功**
-   - 浏览器访问 `https://github.com/fire-skills/stock-skills` 能打开
+   - 浏览器访问 `https://github.com/fire-alpha/stock-skills` 能打开
    - `git pull` 能正常拉
 
 ---
@@ -119,7 +114,7 @@ mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plu
 ```json
 {
   "name": "stock-skills",
-  "owner": "fire-skills",
+  "owner": "fire-alpha",
   "description": "股票分析 Claude Code Skill 套件 — 富途行情 + Tavily 新闻，覆盖个股深挖与板块扫描",
   "plugins": [
     { "path": "./stock-analyzer" },
@@ -137,9 +132,9 @@ mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plu
   "name": "stock-analyzer",
   "version": "1.0.0",
   "description": "个股多维分析助手 — 行情/技术/估值/资金/盘口/同行/新闻/期权链 八维度",
-  "author": "fire-skills",
+  "author": "fire-alpha",
   "license": "MIT",
-  "homepage": "https://github.com/fire-skills/stock-skills/tree/main/stock-analyzer",
+  "homepage": "https://github.com/fire-alpha/stock-skills/tree/main/stock-analyzer",
   "keywords": ["stock", "futu", "options", "claude-code-skill"]
 }
 ```
@@ -151,9 +146,9 @@ mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plu
   "name": "market-scanner",
   "version": "1.0.0",
   "description": "市场热点板块扫描 + 产业链外推器 — HK/US 双窗口板块扫描 + L5 传导预测",
-  "author": "fire-skills",
+  "author": "fire-alpha",
   "license": "MIT",
-  "homepage": "https://github.com/fire-skills/stock-skills/tree/main/market-scanner",
+  "homepage": "https://github.com/fire-alpha/stock-skills/tree/main/market-scanner",
   "keywords": ["stock", "futu", "sector-rotation", "claude-code-skill"]
 }
 ```
@@ -216,7 +211,7 @@ git push origin --tags
 
 ```bash
 # 1. 一次性添加 marketplace
-/plugin marketplace add fire-skills/stock-skills
+/plugin marketplace add fire-alpha/stock-skills
 
 # 2. 装 plugin
 /plugin install stock-analyzer@stock-skills
@@ -235,7 +230,7 @@ git push origin --tags
 如果暂时不想用 plugin，仍可手动拷贝 SKILL：
 
 ```bash
-git clone https://github.com/fire-skills/stock-skills.git ~/tmp-stock-skills
+git clone https://github.com/fire-alpha/stock-skills.git ~/tmp-stock-skills
 cp -r ~/tmp-stock-skills/stock-analyzer/skills/stock-analyzer ~/.claude/skills/stock-analyzer
 cp -r ~/tmp-stock-skills/market-scanner/skills/market-scanner ~/.claude/skills/market-scanner
 rm -rf ~/tmp-stock-skills
@@ -248,7 +243,7 @@ rm -rf ~/tmp-stock-skills
 
 ```bash
 # 在测试机或当前机器
-/plugin marketplace add fire-skills/stock-skills
+/plugin marketplace add fire-alpha/stock-skills
 /plugin install stock-analyzer@stock-skills
 /plugin install market-scanner@stock-skills
 
@@ -292,7 +287,7 @@ rm -rf ~/tmp-stock-skills
 |-----|---------|
 | **同名冲突优先级**（本地 skill vs plugin skill 同名） | 文档未明确。实测后写进 README FAQ |
 | **plugin.json 字段 schema** | 用最小集，后续按需扩 |
-| **官方 marketplace 目录提交流程** | 不依赖。public repo + marketplace.json 合规即可被 `/plugin marketplace add fire-skills/stock-skills` 拉 |
+| **官方 marketplace 目录提交流程** | 不依赖。public repo + marketplace.json 合规即可被 `/plugin marketplace add fire-alpha/stock-skills` 拉 |
 | **transfer repo 后旧 URL** | GitHub 自动 301 redirect，但 `~/.claude/skills/` 里手动 clone 的副本不会自动更新——README 写一句"原个人 repo URL 已 transfer，建议改用 plugin 装" |
 | **version bump 漏改** | CI 加个简单 check：PR 改 SKILL.md 时若 plugin.json version 没动且 commit 不是 docs-only，提示 reviewer |
 
@@ -300,7 +295,7 @@ rm -rf ~/tmp-stock-skills
 
 ## 落地优先级
 
-1. ⏳ **阶段 0**：建 org + transfer repo（**阻塞所有后续**，需用户决定 org 名）
+1. ⏳ **阶段 0**：建 org + transfer repo（**阻塞所有后续**，org 名已定为 `fire-alpha`）
 2. **阶段 1**：目录重组（独立分支，可 review）
 3. **阶段 2**：写三个 manifest
 4. **阶段 3**：CHANGELOG + git tag
@@ -316,13 +311,13 @@ rm -rf ~/tmp-stock-skills
 🔴 **等用户在 GitHub 网页完成阶段 0**：
 
 1. 登录 github.com → 右上角 + → New organization → Free plan
-2. Organization name 填 `fire-skills`
+2. Organization name 填 `fire-alpha`
 3. 邮箱用你的常用邮箱即可
 4. 创建后进 `github.com/zayn8888888/stock-skills` → Settings → Danger Zone → Transfer ownership
-5. New owner 填 `fire-skills`，按提示输入 repo 名确认
+5. New owner 填 `fire-alpha`，按提示输入 repo 名确认
 6. 等 GitHub 完成 transfer（通常几秒）
 
 完成后告诉 AI，AI 会：
-- 更新本地 git remote 到 `git@github.com:fire-skills/stock-skills.git`
+- 更新本地 git remote 到 `git@github.com:fire-alpha/stock-skills.git`
 - 跑阶段 1-4（目录重组 + 三个 manifest + CHANGELOG + README 更新）
 - 推送 PR 分支让你 review
