@@ -103,6 +103,13 @@
 
 ## 表格硬规则
 
+0. **整张表必须从头到尾保持 markdown 表格格式**：即 `| 列1 | 列2 | ... |` + 表头分隔行 `|---|---|...|`。**禁止中途切换为 vertical list**（如 `日期: xxx / 事件: xxx / 信源: finnhub / ──────`）——一旦发现某行内容太长想换 vertical list，请改为：
+   - (a) 单元格内用 `<br>` 或 `- ` 列表多行展示，但仍在表格里
+   - (b) 把过长的"备注 / 说明"字段拆到表外的独立段落
+   - **同一张表混用 markdown 表格 + vertical list 是最严重的格式污染**，宁可压缩字段长度也不要换格式
+
+0a. **不允许重复输出同一事件**：表格里的事件不能再用 vertical list 复述一遍。任一格式只能展示一次。
+
 1. **一事件一行（独立事件）**：互相独立的事件不许合并。`Existing Home Sales` 和 `CPI` 是两个独立事件，必须分两行；同样 `LPR 1Y` 和 `LPR 5Y` 是同一份报告里的两个数字，但 `Retail Sales` 和 `CPI` 是不同发布，必须分行
 2. **同事件多指标 → 一行内换行**：CPI 报告同时发布 `Inflation MoM + Core CPI MoM + YoY` 三个指标；PCE 报告同时发布 `Core PCE + GDP 2nd Est + Personal Income/Spending + Durable Goods` 四个指标。**这种情况算"一个发布事件"，保留一行**，但**「市场预期」单元格内必须用换行（`<br>` / markdown 列表 `- `）让每个指标占独立一行**，禁止用斜杠 `/` 串接：
 

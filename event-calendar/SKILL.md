@@ -67,7 +67,7 @@ fi
 | `from` | 否 | 今天 | UTC 日期 `YYYY-MM-DD` |
 | `to` | 否 | 今天 + 14 天 | UTC 日期 |
 | `symbols` | 否 | 空 | 关心的标的列表，影响 Finnhub `/calendar/earnings?symbol=...` 是否单独拉某只票 |
-| `region` | 否 | `US` | `US` / `HK` / `BOTH`，影响 Tavily 搜索关键词与是否启用港股财报兜底 |
+| `region` | 否 | **`BOTH`** | `US` / `HK` / `BOTH`，影响 Tavily 搜索关键词与是否启用港股财报兜底。**默认 BOTH**——大多数中文用户同时关注美股与港股，默认 US 会漏港股大盘股财报（HK.00700 / HK.09988 / HK.01810 / HK.03690 等）。只有调用方**明确说"只看美股 / 只看港股"** 时才传单一 region |
 
 ### 窗口外关键政策决议白名单（重要）
 
@@ -130,7 +130,9 @@ curl -sS "https://finnhub.io/api/v1/calendar/economic?from=${FROM}&to=${TO}&toke
 | US 非农就业 | 月度第一个周五 | 全市场 |
 | 中国 PMI（官方+财新） | 月度 | A 股 + 港股 |
 
-### A2. 美股财报日历
+### A2. 财报日历（美股优先 Finnhub，港股自动兜底 Tavily）
+
+#### A2.1 美股（Finnhub 主力）
 
 ```bash
 # 全市场未来 14 天财报
@@ -147,6 +149,43 @@ curl -sS "https://finnhub.io/api/v1/calendar/earnings?from=${FROM}&to=${TO}&symb
 **财报日历过滤规则**：
 - 全市场场景：只保留 EPS estimate ≥ \$0.5 或 revenue ≥ \$1B 的票（避开小票噪声）
 - 单票场景：直接返回，不过滤
+
+#### A2.2 港股（Finnhub estimate 经常空 → Tavily 兜底）
+
+**问题**：Finnhub 对港股 symbol（`0700.HK` / `9988.HK` / `1810.HK` 等）支持有限——`date` 字段一般有，但 `epsEstimate` / `revenueEstimate` 经常 null，导致输出空骨架。
+
+**fallback 决策**：
+1. **先尝试 Finnhub**：`curl ".../calendar/earnings?...&symbol=<code>.HK&token=..."`
+2. **判 fallback 触发条件**（任一满足）：
+   - Finnhub 返回 `earningsCalendar = []`（完全没收录）
+   - `date` 字段存在但 `epsEstimate = null && revenueEstimate = null`（数据壳无内容）
+3. **触发后并行调用 Tavily**（具体 query 模板见 `references/query-templates.md` 港股财报章节）：
+   - Q1: `site:hkex.com.hk <code> 業績公告 <月份>` → 港交所原始公告
+   - Q2: `<公司中文名> 業績 公布日期 <月份>` → 中文媒体确认日
+   - Q3: `<English company name> earnings results Hong Kong <month>` → SCMP / Reuters 英文确认
+4. **结果整合**：从 Tavily 摘要里抽取**日期 + 时段（盘前/盘后/午间/收盘后）**，标注「日期来自 Tavily，共识 EPS/Rev 暂无」并附信源 URL；不要硬编共识值
+
+**港股财报输出格式**（与美股一致，但共识列允许"待披露"）：
+
+```
+| 05-14 | 收盘后 | HK.00700 腾讯控股 | EPS / Rev 待披露 | tavily（site:hkex.com.hk） |
+| 05-15 | 盘后 | HK.09988 阿里巴巴 | EPS 1.62 / Rev 245B（CNY，21财经预期）| tavily（21jingji.com） |
+```
+
+**港股财报常用 ticker 对照**（避免 Tavily 关键词错配）：
+
+| 富途 code | 港股 ticker | 中文名 | English |
+|-----------|------------|--------|---------|
+| HK.00700 | 0700.HK | 腾讯控股 | Tencent |
+| HK.09988 | 9988.HK | 阿里巴巴-W | Alibaba |
+| HK.01810 | 1810.HK | 小米集团-W | Xiaomi |
+| HK.03690 | 3690.HK | 美团-W | Meituan |
+| HK.00941 | 0941.HK | 中国移动 | China Mobile |
+| HK.00388 | 0388.HK | 香港交易所 | HKEX |
+| HK.01211 | 1211.HK | 比亚迪股份 | BYD |
+| HK.02318 | 2318.HK | 中国平安 | Ping An |
+| HK.00005 | 0005.HK | 汇丰控股 | HSBC |
+| HK.09618 | 9618.HK | 京东集团-SW | JD.com |
 
 **数字格式硬规则（避免上一版 bug）**：
 - ⛔ **禁止省略前导整数位**：`12876543000` 必须写成 `12.9B`，**不许写 `.88B` / `2.88B` / `12876.5M`**——前导数字一旦丢，读者会差一个数量级
@@ -179,8 +218,15 @@ curl -sS "https://gamma-api.polymarket.com/markets?closed=false&active=true&limi
 | `outcomes` | `["Yes", "No"]` 数组 |
 | `outcomePrices` | 与 outcomes 对齐的价格数组，0-1 之间，**这就是市场隐含概率** |
 | `volumeNum` | 累计成交量（USD） |
-| `endDate` | 市场结算日期（ISO 8601） |
+| `volume24hr` | 24 小时成交量（USD），**流动性门槛用这个，不用 volumeNum** |
+| `endDate` | 市场**结算日**（ISO 8601）—— ⚠️ **这不是事件日**！结算日往往晚于事件日（例如 "Trump visit by May 31" 的 endDate 可能是 3/31 但事件日是 5/31） |
 | `slug` | 用于拼出 URL：`https://polymarket.com/event/{slug}` |
+| `description` | 市场详细规则，**真实事件日通常在 description 里**或在 `question` 文本中 |
+
+**事件日抽取规则（避免 endDate 误读）**：
+- 优先级：从 `question` 文本 regex 抽日期 > 从 `description` 抽 > endDate（仅作 fallback）
+- `question` 里典型表达："by May 15"、"in May 2026"、"after the June 2026 meeting"、"by end of 2026"
+- 抽不到日期的市场标"事件日不明确"，不要把 endDate 当事件日
 
 ### B2. 分类与过滤
 
@@ -205,6 +251,69 @@ Claude 读取每条市场的 `question + description`，按以下分类映射，
 | > $200k | ✅ 主表 Top 5 | — |
 
 **Top 5 主表必须满足**：每条 vol > $200k；不满足条数即便 < 5 也允许（"Top N" 而非硬凑 5）。如果窗口内 vol > $200k 的市场不足 5 条，主表只列实际条数，不要为凑数把低流动性市场拉上来。
+
+**「已基本定局」市场必须排除**（避免 Top 5 被无信息量市场占据）：
+
+| 触发条件（任一） | 处理 |
+|----------------|------|
+| `max(yesPrice, noPrice) ≥ 95%` 且 `事件日`距今 < 14 天 | 完全排除，不进 Top 5 也不进附加区 |
+| `max(yesPrice, noPrice) ≥ 99%`（无论日期） | 完全排除——已视为定局，无信息量 |
+| `max(yesPrice, noPrice) ≥ 90%` 且事件日已过 | 完全排除——市场未结算但已无悬念 |
+
+例：Trump visit China by May 5/31（99.65% / 0.35%）、Fed Chair confirmation 接近 0% 或 100% 的市场——这些已是市场共识，**不要再占 Top 5 名额**。
+
+**信息量优先**：Top 5 应优先选 `min(yesPrice, noPrice) ≥ 5%` 的"仍有不确定性"的市场，例如：
+- "Will May CPI YoY be > 3.5%?" 35/65（核心信号，市场分歧）
+- "Will Fed cut 25bps in May?" 73/27（明确分歧）
+- "US recession by 2026?" 28/72（政策路径分歧）
+
+### B4. 经济数据押注子表（**专属经济事件 Polymarket，门槛降到 $50k**）
+
+通用 Polymarket Top 5 倾向于政治 / 地缘 / Fed 人事市场（因为它们 vol 大）。**CPI / NFP / GDP / unemployment / recession 这类经济数据押注 24h vol 通常 \$50k-150k，会被挤出 Top 5**。但这类市场对宏观分析价值最大——直接告诉你"市场对下次 CPI / NFP 的押注分布"。
+
+**单独抽出经济数据子表**：
+
+```bash
+jq '[.[] | select(
+  ((.question | ascii_downcase) | (
+    contains("cpi") or contains("inflation rate")
+    or contains("nonfarm") or contains("nfp") or contains("jobs report")
+    or contains("unemployment")
+    or contains("gdp") or contains("recession")
+    or contains("pce") or contains("core inflation")
+    or contains("retail sales")
+    or contains("payroll")
+  ))
+  and (.volume24hr // 0) > 50000
+)] | sort_by(-.volume24hr) | .[0:8]'
+```
+
+**门槛与展示**：
+- vol24 > $50k 即可上经济数据子表（比通用 Top 5 的 $200k 宽松）
+- 对每条市场抽 question 中的"具体阈值"——例如 "Will May CPI YoY be > 3.5%" 就标 阈值=3.5%、概率=Yes 价
+- 输出格式：
+
+```markdown
+### 经济数据押注（来自 Polymarket，门槛 vol24 > $50k）
+
+| 关联事件 | 市场标题 | 阈值 / 共识 | Yes / No | vol24 | 链接 |
+|---------|---------|-----------|---------|-------|------|
+| 5/12 CPI YoY | Will April CPI YoY be > 3.5%? | 阈值 3.5% | 35% / 65% | $98k | [...] |
+| 6/6 NFP | Will May NFP be > 150k? | 阈值 150k | 58% / 42% | $76k | [...] |
+| 全年 | US recession by 2026 | — | 28% / 72% | $211k | [...] |
+```
+
+**和宏观日历主表的关联**：经济数据子表里的每条市场，**尽量在宏观日历主表里找到对应行**（如 5/12 CPI 行），子表展示让用户在日历事件 vs 市场押注间一眼对照。
+
+**空结果显式说明（重要）**：当 B4 jq 返回 0 条（即 Polymarket 上经济数据押注当前 vol24 全部 < $50k 或全部已定局），**必须在报告里输出一行明确说明**，不要静默省略整个段落：
+
+```markdown
+### 经济数据押注（来自 Polymarket，门槛 vol24 > $50k）
+
+> 本期无符合条件的经济数据市场（vol24 ≥ $50k 且非定局）。可能原因：(a) 当前 Polymarket 经济数据押注流动性偏低；(b) Fed / CPI / NFP 类市场全部已呈极端定局价（≥99% 或 ≤1%），按 skill 规则全部排除。
+```
+
+**避免误判**：如果不写这段，用户会以为本 skill 没跑 B4 / 漏数据，实际是数据真实空。显式说明 = 让读者区分"没数据"与"没跑"。
 
 **链接强制**：Polymarket slug **必须**输出为完整可点 URL，**不允许用 `link` / `url` / `slug` 等文字占位**：
 

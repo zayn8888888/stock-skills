@@ -36,7 +36,57 @@
 | `中国 社融 信贷 {NEXT-MM}` | pbc.gov.cn / cls.cn |
 | `Hong Kong GDP release schedule` | censtatd.gov.hk / scmp.com |
 
-## 4. 中国行业政策（按板块拆）
+## 4. 港股财报日历兜底（Finnhub 港股 estimate 经常空时启用）
+
+触发条件：Finnhub `/calendar/earnings?symbol=<CODE>.HK` 返回空数组、或返回 `date` 但 `epsEstimate / revenueEstimate` 全 null。
+
+### 4.1 三层并行 query
+
+| 顺序 | Query 模板 | 主要目标域 | 期望抽取 |
+|------|-----------|----------|---------|
+| Q1 | `site:hkex.com.hk {CODE} 業績公告 {NEXT-MM}` | hkex.com.hk | 公告原文 + 准确披露日 |
+| Q2 | `{中文公司名} 業績 公布日期 {NEXT-MM}` | aastocks.com / mingpao.com / cls.cn | 中文媒体确认日 |
+| Q3 | `"{English Company Name}" earnings date Hong Kong {YYYY-MM}` | scmp.com / reuters.com / bloomberg.com | 英文媒体共识日 + 估值（如有） |
+
+> ⚠️ Q1 必须 `site:hkex.com.hk` 严格限定——港交所披露日是权威源；Q2 / Q3 仅在 Q1 失败时启用。
+
+### 4.2 Tavily 调用示例（腾讯）
+
+```python
+# Q1：site: 港交所
+mcp__plugin_tavily-web-search_tavily-web-search__tavily_search(
+  query="site:hkex.com.hk 0700 業績公告 2026年5月",
+  topic="news", days=14, max_results=5
+)
+
+# Q1 命中即停；失败再 Q2
+mcp__plugin_tavily-web-search_tavily-web-search__tavily_search(
+  query="腾讯控股 業績 公布日期 2026年5月",
+  include_domains=["aastocks.com", "mingpao.com", "cls.cn"],
+  topic="news", days=14, max_results=5
+)
+```
+
+### 4.3 信息抽取规则
+
+从 Tavily 返回的标题 + 摘要里抽：
+
+| 字段 | 抽取关键词 |
+|------|----------|
+| 披露日期 | `將於 X 月 X 日`、`scheduled for`、`to release on`、`公布 X 月 X 日` |
+| 时段 | `收市後 / 盤後 / 收盘后` → amc；`午間 / 中午` → during；`開市前 / 早晨` → bmo |
+| 共识值（可选） | 仅当 Q3 摘要明确给出"市场预期 EPS X / Rev XB" 时抽取，否则留 "待披露" |
+
+**禁止操作**：
+- ❌ 从 Tavily 文章正文里硬猜披露日（"上次是 5/14，所以这次也是 5/14"）—— 港股财报披露日由公司决定，无规律
+- ❌ 把分析师预测的 EPS 当成"共识"——分析师预测 ≠ Bloomberg / Refinitiv 系统共识，标"分析师预测 EPS X.XX（来源 X）" 而非裸数字
+- ❌ 港股 ticker 错配：`HK.00700` 在 Tavily 里要写 `0700`（去前导 HK 与多余 0），中文媒体常用 `00700` 或纯名字
+
+### 4.4 港股常用 ticker 对照
+
+参见 `SKILL.md` A2.2 节末尾对照表（此处不重复）。
+
+## 5. 中国行业政策（按板块拆）
 
 通用模板：`{INDUSTRY_CN} 政策 监管 {NEXT-MM}` + 英文版 `{INDUSTRY_EN} regulation policy China {YYYY-MM}`。
 
@@ -54,7 +104,7 @@
 | 教育培训 | "教培 政策" / "双减" | "China tutoring regulation" / "K-12 policy" |
 | 游戏 | "游戏版号" / "防沉迷" | "China game license" / "minor gaming rule" |
 
-## 5. 中美贸易 / 关税
+## 6. 中美贸易 / 关税
 
 | Query | 主要目标域 |
 |-------|----------|
@@ -64,7 +114,7 @@
 | `中美贸易 关税 {NEXT-MM}` | sina.com.cn / cls.cn |
 | `China retaliatory tariff schedule` | reuters.com |
 
-## 6. 官方域名优先级（**重要：上一版 0 命中的根因**）
+## 7. 官方域名优先级（**重要：上一版 0 命中的根因**）
 
 中港政策日程公告几乎只在官方渠道首发，路透/Bloomberg 是二手转载。**Tavily query 必须先用 `site:` 限定官方源**，全文搜不到再放宽。
 
@@ -114,7 +164,7 @@ mcp__plugin_tavily-web-search_tavily-web-search__tavily_search(
 )
 ```
 
-## 7. 调用建议
+## 8. 调用建议
 
 ### 并行 vs 串行
 
@@ -144,7 +194,7 @@ Tavily 返回后，Claude 必须过一遍**自检**：
 - ❌ 不要拉"过去一周回顾"类周报——本 skill 看未来，不看历史
 - ❌ 不要相信单一标题党源（财经头条 / 雪球热文等）
 
-## 8. 失败兜底
+## 9. 失败兜底
 
 如果某组 query 返回 0 条或全部被自检过滤，**不要硬填**——在输出里写：
 
