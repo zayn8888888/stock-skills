@@ -16,7 +16,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
-ALL_SKILLS=(market-scanner stock-analyzer stock-fundamentals stock-valuation)
+ALL_SKILLS=(market-scanner stock-analyzer stock-fundamentals stock-valuation event-calendar)
 
 MODE="copy"
 TARGETS=()
@@ -71,3 +71,10 @@ done
 
 echo
 echo "完成。重启 Claude Code 或新开会话即可使用。"
+echo
+echo "提示：event-calendar 的「美国经济日历 / 美股财报日历」需 Finnhub API key（免费）："
+echo "  1. 申请：https://finnhub.io/register"
+echo "  2. 配置：export FINNHUB_API_KEY=xxxxxx"
+echo "     首选写入 ~/.zshenv（non-interactive shell 也生效，对 Claude Code Bash 工具最稳）"
+echo "     次选 ~/.zshrc / ~/.bashrc（仅交互 shell 生效，skill 已做 grep 兜底）"
+echo "  未配置时 event-calendar 仅启用 Polymarket + Tavily 两源，不阻塞使用。"

@@ -10,8 +10,9 @@
 | [`stock-analyzer/`](stock-analyzer/) | 单只股票八维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
 | [`stock-fundamentals/`](stock-fundamentals/) | 自下而上基本面（商业模式 → 护城河 → 财务 → 估值视角） | "XXX 适不适合长期持有" / "护城河在哪" / "盈利质量怎么样" |
 | [`stock-valuation/`](stock-valuation/) | DCF + 历史 P/E + PEG 定量估值与安全边际区间 | "帮我估一下 XXX 合理价" / "三种方法算算估值区间" |
+| [`event-calendar/`](event-calendar/) | 未来 14 天前瞻事件日历（Finnhub 美国经济+美股财报 / Polymarket 押注 / Tavily 中港政策） | "未来一周有什么大事" / "FOMC 降息概率" / "NVDA 什么时候出财报" |
 
-**链式协作建议**：scanner 扫出候选 → **analyzer** 多维扫一遍；若要价值投资叙事用 **fundamentals**，要「算清楚数字」再上 **valuation**（可与 analyzer 并行参考，侧重点不同）。
+**链式协作建议**：scanner 扫出候选 → **analyzer** 多维扫一遍；若要价值投资叙事用 **fundamentals**，要「算清楚数字」再上 **valuation**（可与 analyzer 并行参考，侧重点不同）。**event-calendar** 是横向辅助，被 scanner 的「催化」「产业链外推」与 analyzer 的「事件日历」维度自动调用，也可独立使用回答「未来一周有什么大事」。
 
 ## 安装
 
@@ -49,7 +50,7 @@ cd ~/stock-skills
 ./scripts/install.sh stock-valuation
 ```
 
-可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation`。
+可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar`。
 
 ### 自定义安装目录
 
@@ -97,6 +98,18 @@ SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capit
 
 - 近 7 天新闻快扫依赖社区 **`futu-stock-digest`** skill（SKILL 内约定；无需 OpenD）。
 
+### event-calendar 额外依赖（可选但推荐）
+
+- **Finnhub API key**：用于美国经济日历与美股财报日历。免费版 60 calls/min，足够一次扫描使用。
+  - 申请：<https://finnhub.io/register>
+  - 配置：`export FINNHUB_API_KEY=xxxxxx`
+    - **首选写入 `~/.zshenv`**（zsh non-interactive shell 也读，对 Claude Code Bash 工具最稳）
+    - 次选 `~/.zshrc` / `~/.bashrc`（仅交互 shell 生效，skill 已做 grep 兜底，但稳定性略低）
+    - ⚠️ 写完后**新开一个 Claude Code 会话**，旧会话的 env 不会自动刷新
+  - 未配置时本 skill 仅启用 Polymarket + Tavily 两源，**不阻塞使用**，但报告会标注"⚠️ Finnhub 未配置"
+- **Polymarket Gamma API**：无需 key，public read-only
+- **Tavily**：与 stock-analyzer 共用
+
 ## 使用
 
 安装后直接对 Claude 说自然语言即可：
@@ -116,6 +129,11 @@ TSLA 机构在赌什么方向
 
 # 触发 stock-valuation（定量估值）
 帮我用 DCF / P/E / PEG 估一下 US.AAPL 合理区间
+
+# 触发 event-calendar（前瞻事件日历）
+未来 14 天有什么大事
+FOMC 降息概率多少
+NVDA 什么时候出财报
 ```
 
 ## 文档
@@ -127,6 +145,8 @@ TSLA 机构在赌什么方向
 - [`market-scanner/references/`](market-scanner/references/) — 扫描报告模板
 - [`stock-fundamentals/SKILL.md`](stock-fundamentals/SKILL.md) — 基本面研究四步流程
 - [`stock-valuation/SKILL.md`](stock-valuation/SKILL.md) — DCF / P/E / PEG 估值与安全边际模板
+- [`event-calendar/SKILL.md`](event-calendar/SKILL.md) — 前瞻事件日历（Finnhub + Polymarket + Tavily 三源整合）
+- [`event-calendar/references/`](event-calendar/references/) — 三源端点详解 / 中港政策 Tavily 关键词模板 / 输出格式
 
 ## ⚠️ 免责声明
 

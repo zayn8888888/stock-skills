@@ -20,6 +20,7 @@ description: 市场热点板块扫描 + 产业链外推器。基于富途 OpenAP
 
 - **富途 API**：依赖 futuapi skill。OpenD 未运行时先提示用户启动 OpenD。脚本路径按 futuapi skill 的查找规则（默认 `skills/futuapi/scripts/`，fallback `/Users/admin/.claude/skills/futuapi/scripts/`）
 - **Tavily**：`mcp__plugin_tavily-web-search_tavily-web-search__tavily_search`。第一版强依赖（不像 stock-analyzer 可降级），因为主题发现必须靠它
+- **event-calendar skill**（新增，可选但强烈推荐）：用于 L2 维度 4「催化（前瞻）」与 L5 外推章节的可证伪日历。未安装时回退为「仅回看催化」，并在报告局限里说明
 
 ## 扫描范围
 
@@ -173,7 +174,8 @@ q3: "<英文板块名> outperform sector rotation 2026" topic=news days=7 → �
 |------|--------|----------|
 | **持续性** | 5 日 + 10 日涨幅同向？资金流连续 ≥ 3 日净流入？ | 双窗口同向 + 资金连续 → 强信号；单窗口 / 资金断续 → 弱信号 |
 | **广度** | 板块内 5 日涨幅 > 0 的成分股占比 | >60% → 广度好；30-60% → 分化；<30% → 少数票拉指数 |
-| **催化** | 近 7 日有无财报 / 政策 / 订单 / 监管 / 产品事件？ | 有明确催化 → 可讲故事；纯资金推无基本面 → 纯情绪轮动 |
+| **催化（回看）** | 近 7 日有无财报 / 政策 / 订单 / 监管 / 产品事件？ | 有明确催化 → 可讲故事；纯资金推无基本面 → 纯情绪轮动 |
+| **催化（前瞻）** | 未来 14 天是否有 FOMC / CPI / 板块龙头财报 / 政策窗口？通过 `event-calendar` skill 取数 | 有明确日期的前瞻催化 → 可写"等 X 月 X 日 XX 出来" 而非空话；前瞻无催化但热度仍在 → 警惕情绪驱动透支 |
 | **异动密度**（新增） | 板块前 10 大成分股中，多少只在 anomaly 三件套里命中？ | ≥3 只命中 → 强信号（机构在多只票同时建仓）；1-2 只 → 中性；0 只 → 即便指数涨，也只是 beta 拉升 |
 
 **异动密度怎么扫**：对 L2 通过的每个板块，取前 10 大成分股，**并行**调用 `futu-technical-anomaly` + `futu-capital-anomaly` + `futu-derivatives-anomaly` 三个 skill，统计有多少只票出现非空异动信号。这一步的价值在于**绕开权重法陷阱**——一个板块即使指数被 1-2 只权重拉起，只要成分股普遍出现资金/技术/衍生品异动，就是真热度；反之即便广度好，没异动密度也只是普涨 beta。
@@ -267,8 +269,10 @@ python3 skills/futuapi/scripts/quote/get_capital_flow.py <STOCK_CODE> --json
 | **🔴 反向走弱** | 5 日跑输大盘且资金净流出 | 市场不认这条传导，不要硬讲故事 |
 
 **对每条「🟢 还没动」必须二选一**：
-- (a) 给一个**可证伪的催化日历**（"等 X 月 X 日 XX 财报 / 数据 / 政策出来才会启动"）
+- (a) 给一个**可证伪的催化日历**——**强制调用 `event-calendar` skill** 取未来 14 天事件（FOMC / CPI / 板块龙头财报 / 中港政策），找到具体日期，例如 *"等 5/13 NVDA 财报 + 5/15 FOMC 之后才会启动"*；不许用 "等 X 月 X 日某事件" 占位措辞
 - (b) 承认"市场可能在告诉我们这条传导本身错了"
+
+> ⚠️ 调用 event-calendar 的输入：`from=今天, to=今天+14, region=US/HK/BOTH`（按主热点市场决定），输出按 event-calendar 的"子调用模板 A"返回，直接嵌入本节。
 
 #### L5 输出格式
 
