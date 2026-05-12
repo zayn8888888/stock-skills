@@ -206,9 +206,11 @@ curl -sS "https://finnhub.io/api/v1/calendar/earnings?from=${FROM}&to=${TO}&symb
 ### B1. 拉取活跃市场
 
 ```bash
-curl -sS "https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=100&order=volume24hr&ascending=false" \
+curl -sS "https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=1000&order=volume24hr&ascending=false" \
   | jq '.[] | select(.volumeNum > 50000) | {question, slug, endDate, volumeNum, outcomes, outcomePrices, description}'
 ```
+
+> ⚠️ **注意**：`/markets` 端点不支持关键词搜索（`q=` 参数会被忽略），唯一有效的过滤只有 `limit` + `order`。经济数据类市场（CPI/NFP）vol24h 通常偏低，容易被体育/地缘市场挤出前列——B4 使用专用搜索端点补漏，不依赖此处结果。
 
 关键字段：
 
@@ -271,22 +273,31 @@ Claude 读取每条市场的 `question + description`，按以下分类映射，
 
 通用 Polymarket Top 5 倾向于政治 / 地缘 / Fed 人事市场（因为它们 vol 大）。**CPI / NFP / GDP / unemployment / recession 这类经济数据押注 24h vol 通常 \$50k-150k，会被挤出 Top 5**。但这类市场对宏观分析价值最大——直接告诉你"市场对下次 CPI / NFP 的押注分布"。
 
-**单独抽出经济数据子表**：
+**使用官方 `/public-search` 端点按关键词搜索**（不依赖 B1 的 top-N 排行）：
 
 ```bash
-jq '[.[] | select(
-  ((.question | ascii_downcase) | (
-    contains("cpi") or contains("inflation rate")
-    or contains("nonfarm") or contains("nfp") or contains("jobs report")
-    or contains("unemployment")
-    or contains("gdp") or contains("recession")
-    or contains("pce") or contains("core inflation")
-    or contains("retail sales")
-    or contains("payroll")
-  ))
-  and (.volume24hr // 0) > 50000
-)] | sort_by(-.volume24hr) | .[0:8]'
+BASE="https://gamma-api.polymarket.com/public-search?events_status=active&limit_per_type=10"
+
+# 并行执行以下三条搜索
+curl -sS "${BASE}&q=CPI+inflation"        | jq '.events[] | {title, slug, volume24hr}'
+curl -sS "${BASE}&q=Fed+interest+rate"    | jq '.events[] | {title, slug, volume24hr}'
+curl -sS "${BASE}&q=nonfarm+payroll+jobs" | jq '.events[] | {title, slug, volume24hr}'
+
+# 对搜到的 slug，用 /events?slug= 取各档位实时价格
+curl -sS "https://gamma-api.polymarket.com/events?slug=<slug>" \
+  | jq '.[] | {title, markets: (.markets[] | {question, outcomePrices, outcomes, volume24hr})}'
 ```
+
+**搜索关键词参考**：
+
+| 经济事件 | 推荐 query |
+|---------|-----------|
+| 美国 CPI | `CPI inflation` |
+| 美联储利率 | `Fed interest rate` |
+| 非农就业 | `nonfarm payroll jobs` |
+| 失业率 | `unemployment rate` |
+| GDP / 衰退 | `GDP recession` |
+| PCE | `PCE core inflation` |
 
 **门槛与展示**：
 - vol24 > $50k 即可上经济数据子表（比通用 Top 5 的 $200k 宽松）
@@ -310,7 +321,7 @@ jq '[.[] | select(
 ```markdown
 ### 经济数据押注（来自 Polymarket，门槛 vol24 > $50k）
 
-> 本期无符合条件的经济数据市场（vol24 ≥ $50k 且非定局）。可能原因：(a) 当前 Polymarket 经济数据押注流动性偏低；(b) Fed / CPI / NFP 类市场全部已呈极端定局价（≥99% 或 ≤1%），按 skill 规则全部排除。
+> 本期无符合条件的经济数据市场（vol24 ≥ $50k 且非定局）。可能原因：(a) `/public-search` 搜索返回结果 vol24 全部 < $50k；(b) Fed / CPI / NFP 类市场全部已呈极端定局价（≥99% 或 ≤1%），按 skill 规则全部排除。已用关键词 `CPI inflation` / `Fed interest rate` / `nonfarm payroll jobs` 搜索确认。
 ```
 
 **避免误判**：如果不写这段，用户会以为本 skill 没跑 B4 / 漏数据，实际是数据真实空。显式说明 = 让读者区分"没数据"与"没跑"。
