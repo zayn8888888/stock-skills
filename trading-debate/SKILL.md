@@ -96,6 +96,49 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 **这是阶段中最容易被 LLM 偷懒省略的环节**。明确规则：
 
+#### 并行执行硬规则（**最关键的性能优化**）
+
+阶段 0 涉及多个 skill / 多个 API 调用，**必须最大化并行**。否则 5 个 skill 串行 = 5 倍等待时间。
+
+**并行原则**：
+
+1. **skill 加载只能串行**（Skill 工具本身限制），但 skill 加载完成后的实际工具调用必须并行
+2. **同一类工具的多次调用必须用单条消息批量发**：
+   - ✅ 正确：一条消息里同时发 4 个 Bash 调用（拉 snapshot / kline / capital-flow / capital-distribution）
+   - ❌ 错误：一条消息发 1 个 Bash → 等结果 → 下一条消息再发 1 个
+3. **不同 skill 的独立 API 调用也要并行**：
+   - 例：`futu-derivatives-anomaly` 的 Python 脚本 + `event-calendar` 的 Finnhub curl + `tavily_search` 4 条新闻 → 这些之间无依赖，**全部塞进单条消息**并行触发
+4. **依赖链才串行**：只有当步骤 B 真的需要步骤 A 的输出时才串行（例：拉 owner_plate 拿到板块 code → 才能拉 plate_stock 同行）
+5. **最长串行链不应超过 3 跳**：Skill 加载 → 数据并行采集 → （可选）依赖型二次查询
+
+**自检**：阶段 0 完成后回看主对话——若发现连续 5+ 条消息每条只调 1 个工具，说明偷懒了，下次必须批量。
+
+#### 推荐的并行批次结构（默认套餐示例）
+
+```
+批次 1（顺序加载所需 skill，注册到上下文）：
+  Skill(stock-analyzer) → Skill(event-calendar)
+  → Skill(futu-derivatives-anomaly) → Skill(futu-news-search)
+  ※ 这一批必然串行，但只是 skill 注册，不实际拉数据
+
+批次 2（单条消息内 N 路并行拉数据）：
+  ‖ Bash: get_snapshot.py
+  ‖ Bash: get_kline.py 60d
+  ‖ Bash: get_stock_info.py
+  ‖ Bash: get_capital_flow.py
+  ‖ Bash: get_capital_distribution.py
+  ‖ Bash: get_owner_plate.py
+  ‖ Bash: handle_derivatives_anomaly.py
+  ‖ Bash: finnhub earnings + economic calendar curl
+  ‖ Bash: polymarket curl
+  ‖ curl: futu-news-search 中文 + 英文 (2 路)
+  ‖ tavily_search × 3-4 个查询
+
+批次 3（依赖批次 2 输出的二次查询）：
+  ‖ Bash: get_plate_stock.py（用批次 2 拿到的板块 code）
+  ‖ tavily_search（用批次 2 发现的关键事件作 follow-up）
+```
+
 #### 必须做的事
 
 1. **必须显式调用 `stock-analyzer` skill** — 用 `Skill` 工具触发，**不允许**：
@@ -381,6 +424,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - ❌ **跳过 event-calendar**（用"最近新闻"假装是前瞻事件）
 - ❌ **用 Tavily 单源新闻替代 stock-analyzer 维度 7**（覆盖度差太多）
 - ❌ **缺失的 skill / 跳过的大师只写在 data_source 不写 data_gaps**（藏起来 = 偷懒）
+- ❌ **每条消息只发 1 个工具调用让本可并行的请求被串行化**（10 个独立 Bash 串行 = 10 倍等待，必须批量；自检：阶段 0 主对话出现 5+ 条连续只调 1 个工具的消息 = 违规）
 
 ### 辩论与决策层（阶段 2-6）
 
