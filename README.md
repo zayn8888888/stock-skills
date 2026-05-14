@@ -7,12 +7,17 @@
 | Skill | 解决什么问题 | 触发举例 |
 |-------|------------|---------|
 | [`market-scanner/`](market-scanner/) | HK / US 市场热点板块扫描 + 板块内"尚未过度拉升"候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" / "XX 板块里有没有还没涨透的票" |
-| [`stock-analyzer/`](stock-analyzer/) | 单只股票八维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
+| [`stock-analyzer/`](stock-analyzer/) | 单只股票九维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链 / 事件） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
 | [`stock-fundamentals/`](stock-fundamentals/) | 自下而上基本面（商业模式 → 护城河 → 财务 → 估值视角） | "XXX 适不适合长期持有" / "护城河在哪" / "盈利质量怎么样" |
 | [`stock-valuation/`](stock-valuation/) | DCF + 历史 P/E + PEG 定量估值与安全边际区间 | "帮我估一下 XXX 合理价" / "三种方法算算估值区间" |
 | [`event-calendar/`](event-calendar/) | 未来 14 天前瞻事件日历（Finnhub 美国经济+美股财报 / Polymarket 押注 / Tavily 中港政策） | "未来一周有什么大事" / "FOMC 降息概率" / "NVDA 什么时候出财报" |
+| [`trading-debate/`](trading-debate/) | 多 agent 辩论决策（TradingAgents 七阶段 + ai-hedge-fund 7 大师 + Reflection + 组合层 + 跨标的教训 + 跨市场基准） | "NVDA 给我一次多空辩论" / "用 Buffett+Burry 视角看 700" / "复盘我对 X 的决策" / "NVDA/AAPL/TSLA 哪个该加仓" / "我对半导体股有什么模式问题" |
 
-**链式协作建议**：scanner 扫出候选 → **analyzer** 多维扫一遍；若要价值投资叙事用 **fundamentals**，要「算清楚数字」再上 **valuation**（可与 analyzer 并行参考，侧重点不同）。**event-calendar** 是横向辅助，被 scanner 的「催化」「产业链外推」与 analyzer 的「事件日历」维度自动调用，也可独立使用回答「未来一周有什么大事」。
+**链式协作建议**：
+- scanner 扫出候选 → **analyzer** 多维扫一遍
+- 长期价值视角加 **fundamentals**；要算清楚数字再加 **valuation**
+- 想从"分析"转到"决策"（该不该买 / 仓位多少 / 风险点）→ **trading-debate**（自动调用 analyzer + event-calendar，无需手动先跑）
+- **event-calendar** 横向辅助，被 scanner 的「催化」「产业链外推」与 analyzer 的「事件日历」维度自动调用
 
 ## 安装
 
@@ -50,7 +55,7 @@ cd ~/stock-skills
 ./scripts/install.sh stock-valuation
 ```
 
-可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar`。
+可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `trading-debate`。
 
 ### 自定义安装目录
 
@@ -134,6 +139,14 @@ TSLA 机构在赌什么方向
 未来 14 天有什么大事
 FOMC 降息概率多少
 NVDA 什么时候出财报
+
+# 触发 trading-debate（多 agent 辩论决策）
+NVDA 给我一次多空辩论决策            # 七阶段：自动调 analyzer + event-calendar → Bull/Bear → RM → Trader → Risk 三方 → PM
+用 Buffett + Burry 视角看 700        # v0.2 大师团模式（启用指定大师）
+复盘我对 NVDA 的决策                 # v0.3 跨会话反思
+NVDA / AAPL / TSLA 哪个该加仓        # v0.4 组合层：相关性矩阵 + 行业封顶 + 换手控制
+NVDA + 700 + 茅台 该怎么排            # v0.5 跨市场：市值加权基准 + 时段对齐 + 汇率敞口
+我对半导体股的判断有什么模式问题       # v0.5 跨标的教训聚合：4 维度切片找模式
 ```
 
 ## 文档
@@ -147,6 +160,14 @@ NVDA 什么时候出财报
 - [`stock-valuation/SKILL.md`](stock-valuation/SKILL.md) — DCF / P/E / PEG 估值与安全边际模板
 - [`event-calendar/SKILL.md`](event-calendar/SKILL.md) — 前瞻事件日历（Finnhub + Polymarket + Tavily 三源整合）
 - [`event-calendar/references/`](event-calendar/references/) — 三源端点详解 / 中港政策 Tavily 关键词模板 / 输出格式
+- [`trading-debate/SKILL.md`](trading-debate/SKILL.md) — 多 agent 辩论决策七阶段（v0.4：单标的 + 大师 + Reflection + 组合层）
+- [`trading-debate/references/framework-reference.md`](trading-debate/references/framework-reference.md) — TradingAgents + ai-hedge-fund 架构对照
+- [`trading-debate/references/role-prompts.md`](trading-debate/references/role-prompts.md) — 8 个角色完整 prompt 模板
+- [`trading-debate/references/master-styles.md`](trading-debate/references/master-styles.md) — 7 个大师风格 agent（Buffett/Munger/Lynch/Burry/Druckenmiller/Damodaran/Ackman）
+- [`trading-debate/references/reflection.md`](trading-debate/references/reflection.md) — v0.3 跨会话反思机制（基于 Claude Code memory）
+- [`trading-debate/references/portfolio-layer.md`](trading-debate/references/portfolio-layer.md) — v0.4 多标的组合层 PM
+- [`trading-debate/references/cross-ticker-lessons.md`](trading-debate/references/cross-ticker-lessons.md) — v0.5 跨标的教训聚合（4 维度切片找模式级错误）
+- [`trading-debate/references/multi-market.md`](trading-debate/references/multi-market.md) — v0.5 跨市场基准选择（市值加权 + 时段对齐 + 汇率敞口 + 双 alpha 口径）
 
 ## ⚠️ 免责声明
 

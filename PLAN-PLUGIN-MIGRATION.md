@@ -61,16 +61,31 @@ stock-skills/                                  # repo 根 = marketplace 根
 │               ├── metrics-interpretation.md
 │               └── report-template.md
 │
-└── market-scanner/                            # plugin #2
+├── market-scanner/                            # plugin #2
+│   ├── .claude-plugin/
+│   │   └── plugin.json
+│   └── skills/
+│       └── market-scanner/
+│           ├── SKILL.md                       # 从原 market-scanner/SKILL.md 移过来
+│           └── references/
+│               ├── plate-index-calc.md
+│               ├── pitfalls.md
+│               └── report-template.md
+│
+└── trading-debate/                            # plugin #3（新增 v0.5）
     ├── .claude-plugin/
     │   └── plugin.json
     └── skills/
-        └── market-scanner/
-            ├── SKILL.md                       # 从原 market-scanner/SKILL.md 移过来
+        └── trading-debate/
+            ├── SKILL.md                       # 从原 trading-debate/SKILL.md 移过来
             └── references/
-                ├── plate-index-calc.md
-                ├── pitfalls.md
-                └── report-template.md
+                ├── framework-reference.md     # TradingAgents + ai-hedge-fund 架构对照
+                ├── role-prompts.md            # 8 个角色完整 prompt 模板
+                ├── master-styles.md           # v0.2 — 7 个大师风格 agent
+                ├── reflection.md              # v0.3 — 跨会话反思机制
+                ├── portfolio-layer.md         # v0.4 — 多标的组合层
+                ├── cross-ticker-lessons.md    # v0.5 — 跨标的教训聚合
+                └── multi-market.md            # v0.5 — 跨市场基准选择
 ```
 
 ### 关键改动
@@ -81,6 +96,8 @@ stock-skills/                                  # repo 根 = marketplace 根
 | `stock-analyzer/references/` | `stock-analyzer/skills/stock-analyzer/references/` |
 | `market-scanner/SKILL.md` | `market-scanner/skills/market-scanner/SKILL.md` |
 | `market-scanner/references/` | `market-scanner/skills/market-scanner/references/` |
+| `trading-debate/SKILL.md` | `trading-debate/skills/trading-debate/SKILL.md` |
+| `trading-debate/references/` | `trading-debate/skills/trading-debate/references/` |
 
 **为什么多嵌一层 `skills/`**：Claude Code Plugin 规范要求 plugin 内的 skill 放在 `skills/<skill-name>/` 下，引擎才能识别。直接放 plugin 根目录不会被加载。
 
@@ -100,9 +117,14 @@ mkdir -p market-scanner/skills/market-scanner
 git mv market-scanner/SKILL.md market-scanner/skills/market-scanner/SKILL.md
 git mv market-scanner/references market-scanner/skills/market-scanner/references
 
+# trading-debate（新增）
+mkdir -p trading-debate/skills/trading-debate
+git mv trading-debate/SKILL.md trading-debate/skills/trading-debate/SKILL.md
+git mv trading-debate/references trading-debate/skills/trading-debate/references
+
 # manifests
-mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plugin
-# 然后写 marketplace.json 和两个 plugin.json（见阶段 2）
+mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plugin trading-debate/.claude-plugin
+# 然后写 marketplace.json 和三个 plugin.json（见阶段 2）
 ```
 
 ---
@@ -118,7 +140,8 @@ mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plu
   "description": "股票分析 Claude Code Skill 套件 — 富途行情 + Tavily 新闻，覆盖个股深挖与板块扫描",
   "plugins": [
     { "path": "./stock-analyzer" },
-    { "path": "./market-scanner" }
+    { "path": "./market-scanner" },
+    { "path": "./trading-debate" }
   ]
 }
 ```
@@ -153,6 +176,20 @@ mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plu
 }
 ```
 
+### 2.4 `trading-debate/.claude-plugin/plugin.json`
+
+```json
+{
+  "name": "trading-debate",
+  "version": "0.5.0",
+  "description": "多 agent 辩论决策 — TradingAgents 七阶段主干 + ai-hedge-fund 7 大师 + Reflection + 多标的组合层 + 跨标的教训聚合 + 跨市场基准选择",
+  "author": "fire-alpha",
+  "license": "MIT",
+  "homepage": "https://github.com/fire-alpha/stock-skills/tree/main/trading-debate",
+  "keywords": ["stock", "trading-agents", "multi-agent", "bull-bear-debate", "claude-code-skill"]
+}
+```
+
 > ⚠️ `plugin.json` 完整 schema 文档校验过但有些字段（如 `dependencies` / `scripts`）未明确，先用最小集 `name / version / description / author / license / homepage / keywords`，后续按需补。
 
 ---
@@ -180,6 +217,17 @@ mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plu
 - 5 层漏斗扫描（L0 主题发现 → L1-L4 信号交集 → L5 产业链外推）
 - 七大 bug 修复：CONCEPT 并扫、5d∪10d 并集、权重法背离、集中度前置门槛、美股蓝筹资金流 fallback、PE 字段 fallback、新闻发现通道
 - L5 产业链外推（受约束的预测，五类传导路径 + 数据回测四档）
+
+## trading-debate
+
+### v0.5.0 (2026-05-14)
+- 首次以 plugin 形式发布（含 v0.1-v0.5 全部能力）
+- v0.1：TradingAgents 完整七阶段主干（analysts → bull/bear → research-manager → trader → risk 三方 → portfolio-manager → 复盘锚点）+ 5 档评级（Buy/Overweight/Hold/Underweight/Sell）+ 阶段 0 数据采集硬约束
+- v0.2：ai-hedge-fund 风格 7 大师 agent（Buffett/Munger/Lynch/Burry/Druckenmiller/Damodaran/Ackman），4 段式 prompt（角色 + checklist + signal rules + confidence scale 0-100），信号注入 Bull/Bear 辩论作为弹药
+- v0.3：跨会话 Reflection — 决策存档到 Claude Code memory + 3 月窗口反思 + 历史教训自动召回注入 PM prompt
+- v0.4：多标的组合层 — 候选并行跑七阶段 + 60 日相关性矩阵 + 组合层 PM（5 档评级 + 信心度排序 + 相关性折扣 >0.7 减半 + 行业封顶 25% + 换手 ≤20%）+ 组合复盘锚点
+- v0.5：跨标的教训聚合（阶段 L1，4 维度切片找模式级错误）+ 跨市场基准选择（阶段 M1，市值加权基准 + 交易时段对齐 + 汇率敞口 + 双 alpha 口径）
+- 七阶段 + 大师 + Reflection + 组合层 + 跨标的聚合 + 跨市场五层叠加，token 用量大，建议 Opus 模型
 ```
 
 ### 3.2 Git Tag 策略
@@ -189,6 +237,7 @@ mkdir -p .claude-plugin stock-analyzer/.claude-plugin market-scanner/.claude-plu
 ```bash
 git tag stock-analyzer-v1.0.0
 git tag market-scanner-v1.0.0
+git tag trading-debate-v0.5.0
 git push origin --tags
 ```
 
@@ -216,10 +265,12 @@ git push origin --tags
 # 2. 装 plugin
 /plugin install stock-analyzer@stock-skills
 /plugin install market-scanner@stock-skills
+/plugin install trading-debate@stock-skills
 
 # 3. 升级
 /plugin update stock-analyzer
 /plugin update market-scanner
+/plugin update trading-debate
 
 # 4. 卸载
 /plugin uninstall stock-analyzer
@@ -233,6 +284,7 @@ git push origin --tags
 git clone https://github.com/fire-alpha/stock-skills.git ~/tmp-stock-skills
 cp -r ~/tmp-stock-skills/stock-analyzer/skills/stock-analyzer ~/.claude/skills/stock-analyzer
 cp -r ~/tmp-stock-skills/market-scanner/skills/market-scanner ~/.claude/skills/market-scanner
+cp -r ~/tmp-stock-skills/trading-debate/skills/trading-debate ~/.claude/skills/trading-debate
 rm -rf ~/tmp-stock-skills
 ```
 ````
@@ -246,10 +298,17 @@ rm -rf ~/tmp-stock-skills
 /plugin marketplace add fire-alpha/stock-skills
 /plugin install stock-analyzer@stock-skills
 /plugin install market-scanner@stock-skills
+/plugin install trading-debate@stock-skills
 
 # 验证 skill 能被触发
-> 分析 NVDA            # 应触发 stock-analyzer
-> 港股最近啥热点         # 应触发 market-scanner
+> 分析 NVDA                        # 应触发 stock-analyzer
+> 港股最近啥热点                    # 应触发 market-scanner
+> NVDA 给我一次多空辩论决策          # 应触发 trading-debate（应自动调 stock-analyzer + event-calendar）
+> 用 Buffett + Burry 视角看 700    # 应触发 trading-debate v0.2 大师团模式
+> 复盘我对 NVDA 的决策              # 应触发 trading-debate v0.3 反思流程
+> NVDA / AAPL / TSLA 哪个该加仓     # 应触发 trading-debate v0.4 组合层
+> NVDA + 700 + 茅台 该怎么排         # 应触发 trading-debate v0.5 跨市场基准选择
+> 我对半导体股的判断有什么模式问题     # 应触发 trading-debate v0.5 跨标的教训聚合
 ```
 
 **冲突测试**（重要）：

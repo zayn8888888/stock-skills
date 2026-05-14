@@ -16,7 +16,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
-ALL_SKILLS=(market-scanner stock-analyzer stock-fundamentals stock-valuation event-calendar)
+
+# 自动发现仓库根目录下所有含 SKILL.md 的目录，避免新增 skill 时改脚本
+ALL_SKILLS=()
+while IFS= read -r -d '' skill_md; do
+  skill_dir="$(basename "$(dirname "$skill_md")")"
+  ALL_SKILLS+=("$skill_dir")
+done < <(find "$REPO_ROOT" -mindepth 2 -maxdepth 2 -name SKILL.md -print0 | sort -z)
 
 MODE="copy"
 TARGETS=()
