@@ -1,6 +1,6 @@
 ---
 name: trading-debate
-description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricResearch) 的 LangGraph 七阶段流程 + 借鉴 ai-hedge-fund (virattt) 的大师风格 agent，对 stock-analyzer / stock-fundamentals 已有数据做"分析师采集 → Bull/Bear 多轮辩论 → Research Manager 裁定 → Trader 出 proposal → Risk 三方辩论 → Portfolio Manager 最终决策 → 复盘锚点"七阶段编排，输出含 5 档评级、信心度、入场价、止损位、仓位指引的结构化报告。触发场景：(1) 用户已对某股做完单维分析后追问"该不该买 / 仓位多少 / 风险点在哪 / 现在能上车吗"；(2) 用户明确说"做一次多空辩论 / 给我个交易决策 / TradingAgents 风格分析 / 模拟对冲基金讨论 / Bull vs Bear / 用巴菲特视角看看"；(3) 用户从"分析"转向"行动决策"。不适用于：纯指数/板块讨论（用 market-scanner）、未先做基础分析的冷启动（先调 stock-analyzer）、量化策略回测、A 股盘中逐笔策略。
+description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricResearch) 的 LangGraph 七阶段流程 + 借鉴 ai-hedge-fund (virattt) 的大师风格 agent，对 stock-analyzer / stock-fundamentals / hyperliquid-perps（链上 funding 拥挤度）已有数据做"分析师采集 → Bull/Bear 多轮辩论 → Research Manager 裁定 → Trader 出 proposal → Risk 三方辩论（含链上拥挤红线硬约束） → Portfolio Manager 最终决策（拥挤降档规则） → 复盘锚点"七阶段编排，输出含 5 档评级、信心度、入场价、止损位、仓位指引的结构化报告。触发场景：(1) 用户已对某股做完单维分析后追问"该不该买 / 仓位多少 / 风险点在哪 / 现在能上车吗"；(2) 用户明确说"做一次多空辩论 / 给我个交易决策 / TradingAgents 风格分析 / 模拟对冲基金讨论 / Bull vs Bear / 用巴菲特视角看看"；(3) 用户从"分析"转向"行动决策"。不适用于：纯指数/板块讨论（用 market-scanner）、未先做基础分析的冷启动（先调 stock-analyzer）、量化策略回测、A 股盘中逐笔策略。
 ---
 
 # 多 agent 辩论决策
@@ -92,6 +92,34 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 ❌ **严禁**：未做阶段 0a 直接套默认套餐 + 用 stock-analyzer 维度 3 / 公开 consensus 当 fundamentals 代理跑大师 prompt
 ❌ **严禁**：用户选了 (B) 但仍把缺数据的大师"含糊给 neutral 信号"——必须真跳过，共享报告标 `<master>: skipped (missing <skill>)`
 
+#### 步骤 4：**锁定必调 skill 清单**（**新增硬阻断 — 防止"降级为有限版"偷懒**）
+
+用户选完后，agent **必须**输出一段格式严格的"本次必调 skill 清单"，并在文末重复用户选项。这一段是后续阶段 0 的**唯一权威来源**，禁止口头修改：
+
+```markdown
+### 本次必调 skill 清单（阶段 0a 锁定，后续禁止变更）
+
+用户选项：[A 全调 / B 跳过缺数据大师 / C 换大师 / D 不跑大师团]
+启用大师：[列出大师名]
+时间视角：[长线 / 中短线]
+
+必调 skill（按下方顺序逐个 Skill() 加载，缺一不可）：
+1. stock-analyzer       — 基础九维度（任何选项都必调）
+                         ※ 调用它会自动触发以下子 skill，不要单独 Skill() 加载：
+                           - futu-news-search / futu-comment-sentiment（维度 7 新闻）
+                           - futu-capital-anomaly / hyperliquid-perps（维度 4 资金/链上 funding）
+                           - futu-derivatives-anomaly（维度 8 期权 Step 0 快通道）
+2. event-calendar       — 前瞻 14 天事件（任何选项都必调）
+3. stock-fundamentals   — [若启用 Buffett/Munger/Lynch/Ackman 必调；否则可选]
+4. stock-valuation      — [若启用 Lynch/Burry/Damodaran 必调；否则可选]
+
+合计：[2 / 3 / 4] 个 skill（取决于启用的大师）
+```
+
+❌ **严禁**：跳过此步骤直接进数据采集
+❌ **严禁**：清单输出后口头说"实际上 X skill 数据已包含在 Y 里，可以省略"——这是 SKILL 已知偷懒套路
+✅ **正确做法**：清单一旦输出，阶段 0 批次 1 必须**逐个**Skill() 加载所有列出的 skill，**不允许少**
+
 ### 阶段 0：分析师层 — 数据采集（**强制硬约束**）
 
 **这是阶段中最容易被 LLM 偷懒省略的环节**。明确规则：
@@ -113,12 +141,20 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 **自检**：阶段 0 完成后回看主对话——若发现连续 5+ 条消息每条只调 1 个工具，说明偷懒了，下次必须批量。
 
-#### 推荐的并行批次结构（默认套餐示例）
+#### 阶段 0 入口：**门槛检查（hard gate）**
+
+在跑批次 1 加载 skill 之前，agent 必须能回答："阶段 0a 步骤 4 锁定的必调 skill 清单是什么？"
+
+- ✅ 能引用清单 → 批次 1 必须**逐个**Skill() 加载清单里**全部** skill，一个不漏
+- ❌ 引用不到清单 → 阶段 0a 没做完，**回到阶段 0a 重做**，禁止跳
+
+#### 推荐的并行批次结构
+
+> ⚠️ 下面"批次 1"是**模板格式**，实际加载哪些 skill 由阶段 0a 步骤 4 锁定的清单决定。**不要照抄默认套餐**——示例只为展示批次结构，不是 skill 列表。
 
 ```
-批次 1（顺序加载所需 skill，注册到上下文）：
-  Skill(stock-analyzer) → Skill(event-calendar)
-  → Skill(futu-derivatives-anomaly) → Skill(futu-news-search)
+批次 1（按阶段 0a 锁定清单顺序加载所有 skill，注册到上下文）：
+  Skill(<清单第 1 个>) → Skill(<清单第 2 个>) → ... → Skill(<清单第 N 个>)
   ※ 这一批必然串行，但只是 skill 注册，不实际拉数据
 
 批次 2（单条消息内 N 路并行拉数据）：
@@ -176,7 +212,7 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
   "data_source": "stock-analyzer (fresh) | stock-analyzer (reused from <timestamp>) | partial",
   "market_report":        "<stock-analyzer 维度 1+2 摘要>",
   "fundamentals_report":  "<stock-analyzer 维度 3 + (可选) stock-fundamentals>",
-  "capital_report":       "<stock-analyzer 维度 4+5>",
+  "capital_report":       "<stock-analyzer 维度 4+5；含 hyperliquid-perps 链上 funding/OI/premium（美股/美元资产标的；港股除 BABA 外应标'流动性不足'；A 股应标'链上无镜像'）>",
   "peers_report":         "<stock-analyzer 维度 6>",
   "news_report":          "<stock-analyzer 维度 7>",
   "derivatives_report":   "<stock-analyzer 维度 8 (美股/港股) | 'N/A: 本市场无期权' (A 股)>",
@@ -187,8 +223,10 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 #### 自检（阶段 0 完成前必须能回答）
 
+- [ ] **阶段 0a 步骤 4 锁定的必调 skill 清单的每一个，都已 Skill() 调用过？**（清单 2-4 个 = 实际调用 2-4 个，少一个就是偷懒）
 - [ ] `stock-analyzer` skill 是否真的被 Skill 工具调用过？（不是只读了它的 SKILL.md）
 - [ ] `event-calendar` skill 是否真的被 Skill 工具调用过？
+- [ ] `stock-analyzer` 维度 4 是否真的拉到了 `hyperliquid-perps` 的 lookup 输出？（美股/美元资产；港股仅 BABA；A 股豁免——若没拉到要在 data_gaps 写明原因，不能藏）
 - [ ] **若启用大师团**：按"条件依赖"表查到的每个 skill 是否真的调用过？（启用 Buffett 但没调 stock-fundamentals = 偷懒）
 - [ ] 共享报告里 `data_timestamp` 是否填了？
 - [ ] 如果是续接复用，`data_source` 字段是否标了"reused from"？
@@ -196,6 +234,26 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 - [ ] 若启用大师团，是否核对了每个大师的"条件性必须 skill"是否真有数据传入其 prompt？（数据传入失败时该大师必须改为"跳过"，不允许含糊给 neutral）
 
 **任何一条没做到，停下来补齐，禁止进入阶段 1**。
+
+#### 已知偷懒套路与禁用措辞（**新增 — 当出现以下信号时停下补调**）
+
+LLM 在 trading-debate 流程中最常见的偷懒套路：
+
+| 偷懒措辞（出现即偷懒） | 正确做法 |
+|---|---|
+| "数据足够，直接进入分析与辩论" | 检查阶段 0a 清单 vs 实际调用记录，差一个补一个 |
+| "X 视角降级为'基于已有数据的有限版'" | 该大师必须 `skipped (missing <skill>)`，不允许有限版 |
+| "用 stock-analyzer 维度 3 当 fundamentals 用" | 跳过该大师，不允许代理 |
+| "stock-fundamentals/stock-valuation 未独立 Skill 触发" | **立即** Skill() 调用补齐，不是写在 caveat 里就算了 |
+| "已有公开 consensus / Tavily 搜索结果可以替代" | 跳过该大师，不允许代理 |
+| "数据采集时间紧 / token 预算" | 用户选了 A 全调 = 已接受成本，agent 无权代为缩减 |
+
+**触发条件**：
+- agent 在阶段 0 任何输出里包含"降级"、"有限版"、"代理"、"省略"、"足够直接进入"等词 → 停下，回看阶段 0a 清单，补调遗漏 skill
+- 共享报告 `data_gaps` 字段出现"X skill 未调用，但用 Y 数据近似" → 立即停下补调
+- 大师评分输出但其条件依赖 skill 没在调用记录里 → 该大师改 skipped
+
+**这一节是阶段 0 偷懒的最后防线**。Skill 已经在阶段 0a 锁清单 + 入口门槛检查 + 自检清单三道防线之后，加这一节是因为 LLM 仍可能用措辞绕过——出现禁用措辞 = 自动失败。
 
 ### 阶段 1（可选）：大师风格 agent 团（致敬 ai-hedge-fund）
 
@@ -291,6 +349,23 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 **轮次终止条件**：`count >= 3 × risk_rounds`
 
+#### 链上 funding 拥挤度硬规则（**新增 — 美股 / 美元资产必读**）
+
+阶段 0 共享报告 `capital_report` 中含 hyperliquid-perps 链上 funding 数据时，Risk 三方**必须**依下表读取并表态——禁止"不引用就跳过"：
+
+| 24h avg funding APR（绝对值） | 等级 | 三方义务 |
+|---|---|---|
+| `> 100%` | **🔴 拥挤红线** | Conservative **必须**把"链上拥挤交易反向 squeeze 风险"列为头号下行风险并量化（"funding APR avg X%，> 100% 红线，与 Trader 入场方向同向 = 警惕反向轧空"）；Aggressive **必须**正面回应——给出"为什么仍激进"的具体反驳（不能回避） |
+| `50% ~ 100%` | 🟡 拥挤预警 | Aggressive 与 Conservative 都要引用此数字。Aggressive 可继续推动激进仓位但要注明"funding 偏热但未到红线"；Conservative 必须将其作为缩仓论据之一 |
+| `≤ 50%` | 🟢 中性 | 不构成额外约束，但 Neutral 应在综合段提一句"链上 funding 中性，未给出额外信号" |
+
+**港股 / A 股豁免**：若 capital_report 中链上数据写"流动性不足"或"链上无镜像"，本规则**整体跳过**，三方都不得用链上数据辅证。
+
+**禁止行为**：
+- ❌ Aggressive 在 funding 红线下仍推 Buy 满仓而**不显式回应** funding 拥挤（必须有反驳论据，例如"看 max APR 是单小时极值非稳定状态"或"24h 已开始回落"）
+- ❌ Conservative 在 funding 中性时仍硬把"链上拥挤"当头号风险（找不到的论据要承认找不到）
+- ❌ 三方任何一方说"链上数据不重要"——可以反驳数据强度，但不能整体否认
+
 ### 阶段 6：Portfolio Manager — 最终决策
 
 读完整 Risk 辩论历史 + Trader proposal + Research plan，输出最终 PortfolioDecision：
@@ -306,7 +381,17 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 收敛仓位（例如 Trader Buy → PM Overweight），这是正常的。
 
-**参数漂移记录硬规则**：PM 若覆盖 Trader 的 `entry_price` / `stop_loss` / `position_sizing` 任一字段，**必须**在 `investment_thesis` 里显式写一行 `参数漂移：Trader 原 stop_loss=$X → PM 改为 $Y，依据：<Risk 哪一方哪条论据>`。否则用户复盘时无法判断决策路径，且容易把 Trader 的原始数字误当作最终数字。
+**参数漂移记录硬规则**：PM 若覆盖 Trader 的 `entry_price` / `stop_loss` / `position_sizing` 任一字段，**必须**在 `investment_thesis` 里显式写一行 `参数漂移：Trader 原 stop_loss=X USD → PM 改为 Y USD，依据：<Risk 哪一方哪条论据>`。否则用户复盘时无法判断决策路径，且容易把 Trader 的原始数字误当作最终数字。
+
+**拥挤交易降档硬规则（新增）**：
+
+若 Risk 阶段触达"🔴 拥挤红线"（24h avg funding APR 绝对值 > 100%）且 Aggressive 未能给出量化反驳（如"max APR 是单小时极值，已快速回落"），PM **必须**：
+
+1. **降一档评级**：Buy → Overweight；Overweight → Hold；Hold → Underweight；Underweight 维持
+2. **缩减仓位**：position_sizing 至少砍半
+3. **在 `investment_thesis` 显式写一行**：`拥挤降档：funding APR 24h avg = X%（> 100% 红线），Aggressive 未给出量化反驳，依据 Conservative 论点 Y，评级 Buy→Overweight，仓位 N%→N/2%`
+
+仅当 Aggressive 提供**数据驱动的反驳**（不是定性"未必拥挤"）时，PM 才可豁免降档，但仍需在 `investment_thesis` 里写"funding 红线达成但已豁免，依据 Aggressive 反驳：<具体数据>"。
 
 ### 阶段 7：复盘锚点（可选但推荐）
 

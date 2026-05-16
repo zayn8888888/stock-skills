@@ -181,6 +181,12 @@ Bear 上一轮论点：{current_response}
 用市场数据和情绪分析强化论据，挑战对立观点。
 具体地、用数据驱动地反驳 Conservative 和 Neutral 的每一个观点。
 
+链上 funding 引用要求（hyperliquid-perps 数据，capital_report 中）：
+- 若 24h avg APR > +100% 或 < -100%（🔴 拥挤红线）：你必须正面反驳"链上拥挤"风险，给出量化论据
+  （例："funding max APR 50% 是单小时极值，24h avg 仅 X%，未到红线" / "OI 24h 增速放缓，拥挤回落中"），不允许回避
+- 若 50% < |avgApr| ≤ 100%（🟡 预警）：可继续推动激进仓位，但论据中必须显式说"funding 偏热但未到红线，回报覆盖溢价风险"
+- 若 |avgApr| ≤ 50% 或链上数据"流动性不足/无镜像"：funding 不构成约束，常规辩论
+
 交易员决策：{trader_decision}
 
 可用资源：（共享报告全套）
@@ -202,6 +208,13 @@ Neutral 上一轮：{current_neutral_response}
 - 流动性恶化时的应对
 - 估值回归的下行空间
 - event-calendar 中未来 30 日的负面催化
+- **链上 funding 拥挤度**（hyperliquid-perps，capital_report 中）
+
+链上 funding 引用要求：
+- 若 24h avg APR > +100%（🔴 多头红线）且 Trader 是 Buy / Long 方向：必须把"链上多头反向 squeeze"列为头号下行风险，量化引用 funding 数字
+- 若 24h avg APR < -100%（🔴 空头红线）且 Trader 是 Sell / Short 方向：必须把"链上空头被轧"列为头号风险
+- 若 50% < |avgApr| ≤ 100%（🟡 预警）：作为缩仓论据之一引用，但不强制为头号风险
+- 若 |avgApr| ≤ 50% 或链上数据"流动性不足/无镜像"：不得硬塞"链上拥挤"——找不到的论据要承认找不到
 
 交易员决策：{trader_decision}
 
@@ -221,6 +234,11 @@ Neutral 上一轮：{current_neutral_response}
 作为中立风险分析师，你的角色是平衡两极，指出双方论据中数据支撑薄弱的地方。
 不站队，但要给出"两边各对一半"情境下的合理仓位建议。
 
+链上 funding 引用要求（hyperliquid-perps 数据）：
+- 必须读 capital_report 里的 funding 24h avg / max / min APR 三个数
+- 综合段必须有一句话评估 funding 等级（🔴 红线 / 🟡 预警 / 🟢 中性 / N/A 流动性不足），并指出 Aggressive 与 Conservative 谁更准确引用了这一数据
+- 若 funding 中性，明确说"链上 funding 中性，未给出额外信号"，避免任何一方滥用
+
 交易员决策：{trader_decision}
 
 可用资源：（共享报告全套）
@@ -232,7 +250,7 @@ Conservative 上一轮：{current_conservative_response}
 输出：
 1. Aggressive 论据中数据支撑最弱的一条 + 反驳
 2. Conservative 论据中数据支撑最弱的一条 + 反驳
-3. 综合建议的仓位区间（基于两边各对一半的情境）
+3. 综合建议的仓位区间（基于两边各对一半的情境，含 funding 等级评估）
 ```
 
 ---
