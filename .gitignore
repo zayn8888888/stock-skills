@@ -15,3 +15,5 @@
 # Local env
 .env
 .env.local
+
+narrative_monnitor/
