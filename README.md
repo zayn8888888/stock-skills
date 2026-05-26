@@ -13,6 +13,8 @@
 | [`event-calendar/`](event-calendar/) | 未来 14 天前瞻事件日历（Finnhub 美国经济+美股财报 / Polymarket 押注 / Tavily 中港政策） | "未来一周有什么大事" / "FOMC 降息概率" / "NVDA 什么时候出财报" |
 | [`hyperliquid-perps/`](hyperliquid-perps/) | Hyperliquid 链上永续镜像（HIP-3 七大子 dex：美股/SPX/VIX/商品/FX/Pre-IPO 全覆盖），24/7 隐含价 + funding rate + OI + premium | "NVDA 周末链上多少" / "TSLA funding 拥不拥挤" / "SPX 现在永续在哪" / "OPENAI 链上估值" |
 | [`trading-debate/`](trading-debate/) | 多 agent 辩论决策（TradingAgents 七阶段 + ai-hedge-fund 7 大师 + Reflection + 组合层 + 跨标的教训 + 跨市场基准） | "NVDA 给我一次多空辩论" / "用 Buffett+Burry 视角看 700" / "复盘我对 X 的决策" / "NVDA/AAPL/TSLA 哪个该加仓" / "我对半导体股有什么模式问题" |
+| [`crypto-scanner/`](crypto-scanner/) | 加密市场热点赛道扫描（CoinGecko + 热搜 trending + Tavily 叙事 + Hyperliquid 拥挤度），4 阶段筛出候选 | "加密最近什么赛道在涨" / "山寨季开了吗" / "BTC 主导率高吗" / "DeFi/RWA/AI 哪个方向强" |
+| [`crypto-analyzer/`](crypto-analyzer/) | 单只加密资产七维度分析（行情 / 技术 / 链上 / 叙事 / 同类 / 新闻 / 事件日历） | "分析 SOL" / "HYPE 链上 funding 怎样" / "ETH 值不值得买" |
 
 **链式协作建议**：
 - scanner 扫出候选 → **analyzer** 多维扫一遍
@@ -20,6 +22,7 @@
 - 想从"分析"转到"决策"（该不该买 / 仓位多少 / 风险点）→ **trading-debate**（自动调用 analyzer + event-calendar，无需手动先跑）
 - **event-calendar** 横向辅助，被 scanner 的「催化」「产业链外推」与 analyzer 的「事件日历」维度自动调用
 - **hyperliquid-perps** 横向辅助：被 analyzer 的「资金」维度引用 funding rate + 拥挤度，被 trading-debate 的 Risk 风险辩论引用作为"拥挤交易硬约束"，被 event-calendar 用于"事件后链上即时反应"
+- **crypto-scanner** 扫出加密候选 → **crypto-analyzer** 七维度深挖 → 可选接 **trading-debate**
 
 ## 安装
 
@@ -57,7 +60,7 @@ cd ~/stock-skills
 ./scripts/install.sh stock-valuation
 ```
 
-可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `hyperliquid-perps` / `trading-debate`。
+可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `hyperliquid-perps` / `trading-debate` / `crypto-scanner` / `crypto-analyzer`。
 
 ### 自定义安装目录
 
@@ -116,6 +119,14 @@ SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capit
   - 未配置时本 skill 仅启用 Polymarket + Tavily 两源，**不阻塞使用**，但报告会标注"⚠️ Finnhub 未配置"
 - **Polymarket Gamma API**：无需 key，public read-only
 - **Tavily**：与 stock-analyzer 共用
+
+### crypto-scanner / crypto-analyzer 额外依赖
+
+- **CoinGecko Demo API key**（推荐，免费注册）：用于行情 / K线 / 赛道 / 热搜数据。
+  - 申请：<https://www.coingecko.com/en/api/pricing>（Demo 免费，100 calls/min）
+  - 配置：`export COINGECKO_DEMO_KEY=CG-xxxxxx`，**首选写入 `~/.zshenv`**
+  - 未配置时自动降级到公共端点（~3 calls/min，功能受限但可用）
+- **DNS 注意**：部分网络环境本地 DNS 会将 `api.coingecko.com` 解析到错误 IP（Meta CDN）。skill 内所有 curl 命令已内置 `--resolve "api.coingecko.com:443:104.20.41.132"` 绕过，无需手动修改 hosts。
 
 ### hyperliquid-perps 额外依赖
 
