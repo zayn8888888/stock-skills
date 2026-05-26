@@ -85,24 +85,32 @@ def em_get_board_stocks(bk_code, limit=50):
 
 ```python
 def em_get_board_kline(bk_code, weeks=4):
+    """返回 {日期: {'close':..., 'pct':...}}；失败返回 {} 并打印警告。"""
     end = datetime.today()
     start = end - timedelta(weeks=weeks+1)
     path = (f'/api/qt/stock/kline/get?secid=90.{bk_code}'
             f'&fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59'
             f'&klt=101&fqt=1&beg={start.strftime("%Y%m%d")}&end={end.strftime("%Y%m%d")}&lmt=200')
-    req = urllib.request.Request(EM_HIS_NODE + path, headers=EM_HEADERS)
-    with urllib.request.urlopen(req, timeout=8) as r:
-        d = json.loads(r.read())
-    # 返回 {日期: {'close':..., 'pct':...}}
-    result = {}
-    for k in (d.get('data') or {}).get('klines') or []:
-        f = k.split(',')
-        try: result[f[0]] = {'close': float(f[2]), 'pct': float(f[8])}
-        except: pass
-    return result
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(EM_HIS_NODE + path, headers=EM_HEADERS)
+            with urllib.request.urlopen(req, timeout=10) as r:
+                d = json.loads(r.read())
+            result = {}
+            for k in (d.get('data') or {}).get('klines') or []:
+                f = k.split(',')
+                try: result[f[0]] = {'close': float(f[2]), 'pct': float(f[8])}
+                except: pass
+            if result:
+                return result
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2 ** attempt)  # 1s, 2s 退避
+    print(f'⚠️ push2his 限流/不可用（{bk_code}），L1.5 降级到 f109/f115 估算')
+    return {}  # 调用方检查空值后走降级逻辑
 ```
 
-> 历史 K 线走 `EM_HIS_NODE`，高频调用后会触发限流，建议调用间隔 ≥ 0.3s，或换时段重试。
+> **`push2his` 是单点，无备用节点**，`push2`/`push2delay` 不提供历史 K 线。限流后调用间隔 ≥ 2s 可恢复，持续失败换时段重试（高峰期 09:00-10:00 / 14:30-15:30 最易触发）。降级逻辑见 [rotation-analysis.md](rotation-analysis.md#限流降级)。
 
 ## 已验证 BK 代码表
 
