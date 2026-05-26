@@ -37,7 +37,10 @@ ret2, vdata = ctx.get_valuation_detail('<CODE>')
 # trend['valuation_percentile']                          当前 PE 百分位（0~1）
 ctx.close()
 ```
-**降层**：`report_list` 为空（A 股常见）或 OpenD 不可用 → 层 2
+**降层规则**：
+- `get_financials_statements`：A 股返回空 → 层 2 Tavily 补 FCF/EPS
+- `get_valuation_detail`：A 股**可用**，继续执行（PE 百分位直接用）
+- OpenD 不可用 → 整个层 1 跳过
 
 **层 2：Tavily 兜底**（4 条并行）
 ```

@@ -29,19 +29,33 @@ python3 skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json
 import futu as ft
 ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
 
-# 财务三大表（⚠️ 返回 key 是 report_list，不是 statement_list）
+# 财务三大表（⚠️ 返回 key 是 report_list） — ❌ A股返回空，直接用层 2 替代
 ret, data = ctx.get_financials_statements('<CODE>', num=8)
 reports = data.get('report_list', [])   # 每条含 yoy / qoq，直接可用
 
+# 估值分位数 — ✅ 全市场含A股
 ret2, vdata = ctx.get_valuation_detail('<CODE>')
 # vdata['trend']['valuation_percentile'] 历史百分位 | ['forward_value'] 前瞻 PE
 # vdata['profit_growth_rate'] 盈利 vs 市值增速对比
 
-ret3, sdata = ctx.get_shareholders_overview('<CODE>')   # 股东持股结构
-ret4, ddata = ctx.get_corporate_actions_dividends('<CODE>')  # 分红历史
+# 股东持股 — ❌ A股明确报错"只支持港股美股"，A股直接跳过
+ret3, sdata = ctx.get_shareholders_overview('<CODE>')
+
+# 分红历史 — ✅ 全市场含A股
+ret4, ddata = ctx.get_corporate_actions_dividends('<CODE>')
+
 ctx.close()
 ```
-**降层条件**：`report_list` 为空（A 股常见）或 OpenD 不可用 → 执行层 2
+**各接口 A 股支持情况**：
+
+| 接口 | A 股 | 降级 |
+|------|------|------|
+| `get_financials_statements` | ❌ 空列表 | → 层 2 Tavily 补财务数据 |
+| `get_valuation_detail` | ✅ 可用 | — |
+| `get_shareholders_overview` | ❌ 明确报错 | A 股跳过，Tavily 补股东结构 |
+| `get_corporate_actions_dividends` | ✅ 可用 | — |
+
+**OpenD 不可用** → 整个层 1 跳过，执行层 2
 
 #### 层 2：Tavily 搜索兜底（层 1 无数据时，并行）
 ```

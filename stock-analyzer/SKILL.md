@@ -44,17 +44,20 @@ python3 skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 30 --j
 **Step A**：`python3 skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json`  
 提取：PE-TTM / PB / 股息率 / 总市值 / 流通市值 / 52 周高低 / 换手率。
 
-**Step B（美股/港股，并行，需 OpenD）**：
+**Step B（并行，需 OpenD）**：
 ```python
 import futu as ft
 ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
-ret, vdata = ctx.get_valuation_detail('<CODE>')   # PE 历史序列 + 百分位 + 同板块横排
-ret2, rdata = ctx.get_research_rating_summary('<CODE>')  # 分析师评级汇总
+ret, vdata = ctx.get_valuation_detail('<CODE>')   # ✅ 全市场（含A股）
+ret2, rdata = ctx.get_research_rating_summary('<CODE>')  # ✅ 美股/港股；A股未知，失败时跳过
 ctx.close()
 # vdata['trend']['valuation_percentile'] 历史百分位 | ['forward_value'] 前瞻 PE
 # rdata['inst_rating_summary_list'] 机构评级列表
 ```
-降级：A 股 / OpenD 不可用 → 跳过 Step B，Tavily 补 `"<公司名> PE ratio analyst rating consensus"`。
+**降级规则**：
+- `get_valuation_detail`：全市场可用（含 A 股），OpenD 不可用时跳过
+- `get_research_rating_summary`：A 股不确定，失败时跳过，Tavily 补 `"<公司名> 分析师评级 目标价"`
+- OpenD 完全不可用 → 整个 Step B 跳过，Tavily 补 `"<公司名> PE ratio analyst rating consensus"`
 
 输出要点：PE 百分位（<0.2 低估 / >0.8 高估）/ 前瞻 vs 当前 PE 折溢价 / 同板块 PE 排名 / 分析师买卖持有比例。
 
