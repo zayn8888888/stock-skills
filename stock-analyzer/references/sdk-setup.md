@@ -33,7 +33,7 @@ quote_ctx.close()
 | `get_option_chain.py <CODE> --start X --end Y` | `quote_ctx.get_option_chain('<CODE>', start='X', end='Y')` → **两值解包** `(ret, data)`，`data.option_type` 列区分 CALL/PUT |
 | `get_stock_quote.py <OPT_CODES>` | 先 `subscribe(codes, [ft.SubType.QUOTE])`，再 `quote_ctx.get_stock_quote(codes)` |
 
-> **已知坑**：`get_ticker` 方法不存在，逐笔数据需通过订阅推送；`request_history_kline` 是三值解包，不是两值。
+> **已知坑**：`get_ticker` 方法不存在，逐笔数据需通过订阅推送；`request_history_kline` 是三值解包，不是两值；`get_financials_statements` 返回 **dict 不是 DataFrame**，禁止调 `.to_dict()` / `.columns`，直接用 `data.get('report_list', [])`。
 
 ## 新 API A 股覆盖矩阵（实测 SH.600519 茅台）
 

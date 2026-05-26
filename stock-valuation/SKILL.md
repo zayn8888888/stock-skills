@@ -28,7 +28,9 @@ python3 skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 import futu as ft
 ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
 ret, fdata = ctx.get_financials_statements('<CODE>', num=12)
-reports = fdata.get('report_list', [])  # ⚠️ 注意是 report_list，不是 statement_list
+# ⚠️ 返回类型是 dict，不是 DataFrame——禁止调 .to_dict() / .columns / .head()
+# ⚠️ 返回 key 是 report_list，不是 statement_list；A股返回空列表，降层 2
+reports = fdata.get('report_list', [])
 # 每条含 field_id=8048(稀释EPS) / 8037(净利润) / yoy / qoq
 
 ret2, vdata = ctx.get_valuation_detail('<CODE>')

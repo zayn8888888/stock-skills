@@ -29,7 +29,10 @@ python3 skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json
 import futu as ft
 ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
 
-# 财务三大表（⚠️ 返回 key 是 report_list） — ❌ A股返回空，直接用层 2 替代
+# 财务三大表
+# ⚠️ 返回类型是 dict，不是 DataFrame——禁止调 .to_dict() / .columns / .head()
+# ⚠️ 返回 key 是 report_list，不是 statement_list
+# ❌ A股返回 report_list=[]（ret==0 但无数据），直接用层 2 替代
 ret, data = ctx.get_financials_statements('<CODE>', num=8)
 reports = data.get('report_list', [])   # 每条含 yoy / qoq，直接可用
 
