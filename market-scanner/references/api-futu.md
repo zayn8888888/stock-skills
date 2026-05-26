@@ -25,6 +25,35 @@ ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
 | `ctx.get_stock_filter(market, filter_list, plate_code)` | 条件选股 | |
 | `ctx.get_stock_info(codes)` | 基本信息（含 pe_ttm） | PE 首选此接口 |
 
+## A 股板块 K 线（`request_history_kline` 全量支持）
+
+实测验证（2026-05-26）：富途 `request_history_kline` 对 A 股 INDUSTRY（131个）和 CONCEPT（788个）板块全量可用，代码格式 `SH.LIST0xxx` / `SH.LIST2xxxx`。**已取代 `push2his` 作为 L1.5 轮动分析的主力数据源。**
+
+```python
+# 拉 A 股概念板块列表（获取 SH.LIST 代码）
+ret, con = ctx.get_plate_list(ft.Market.SH, ft.Plate.CONCEPT)
+# con['code'] 格式：SH.LIST0463 (PCB概念) / SH.LIST23120 (先进封装) / SH.LIST23084 (玻璃基板封装)
+
+# 拉历史 K 线（同港美股完全一样）
+ret, data, _ = ctx.request_history_kline(
+    'SH.LIST0463',  # PCB概念
+    start='2026-04-01', end='2026-05-26',
+    ktype=KLType.K_DAY, autype=AuType.QFQ, max_count=60)
+# data['change_rate'] 即日涨幅（%），data['close'] 即收盘指数
+```
+
+**与东财 f109 的差异**：富途板块指数和东财 f109 绝对涨幅会有差异（成分股构成/加权不同），但方向一致。L1 热度排行继续用东财 f109，L1.5 轮动方向分析改用富途。
+
+**东财 BK 代码 → 富途 SH.LIST 映射**：通过 `plate_name` 模糊匹配，核心热点板块已验证：
+
+| 东财 BK | 板块名 | 富途代码 |
+|--------|--------|---------|
+| BK0877 | PCB | SH.LIST0463（PCB概念） |
+| BK1101 | 先进封装 | SH.LIST23120（先进封装Chiplet） |
+| BK1175 | 玻璃基板封装 | SH.LIST23084 |
+| BK1152 | 高带宽内存HBM | SH.LIST23307 |
+| BK1128 | CPO概念 | SH.LIST23064（共封装光模块CPO） |
+
 ## 港美股板块 K 线代码
 
 ```python
