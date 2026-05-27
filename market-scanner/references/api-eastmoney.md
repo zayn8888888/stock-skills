@@ -84,8 +84,20 @@ def em_get_board_stocks(bk_code, limit=50):
 ## 接口 3：板块历史日 K 线（周度轮动分析用）
 
 ```python
+# Session 级缓存：同一次扫描内对同一板块只拉一次，避免重复调 push2his
+_KLINE_CACHE: dict = {}
+
 def em_get_board_kline(bk_code, weeks=4):
-    """返回 {日期: {'close':..., 'pct':...}}；失败返回 {} 并打印警告。"""
+    """返回 {日期: {'close':..., 'pct':...}}；失败返回 {} 并打印警告。
+
+    ⚠️ 调用时机：只对通过 L1 多重信号交集（A+B+C ≥2）的板块调用，
+    不要对 L1 涨幅 Top 20 的全量候选调用——每次调用都消耗 push2his 配额。
+    A 股 L1 交集结果通常 5-8 个板块，push2his 配额完全够用。
+    """
+    cache_key = (bk_code, weeks, datetime.today().date())
+    if cache_key in _KLINE_CACHE:
+        return _KLINE_CACHE[cache_key]  # 命中缓存，零网络开销
+
     end = datetime.today()
     start = end - timedelta(weeks=weeks+1)
     path = (f'/api/qt/stock/kline/get?secid=90.{bk_code}'
@@ -102,15 +114,17 @@ def em_get_board_kline(bk_code, weeks=4):
                 try: result[f[0]] = {'close': float(f[2]), 'pct': float(f[8])}
                 except: pass
             if result:
+                _KLINE_CACHE[cache_key] = result  # 写入缓存
                 return result
         except Exception as e:
             if attempt < 2:
                 time.sleep(2 ** attempt)  # 1s, 2s 退避
     print(f'⚠️ push2his 限流/不可用（{bk_code}），L1.5 降级到 f109/f115 估算')
-    return {}  # 调用方检查空值后走降级逻辑
+    _KLINE_CACHE[cache_key] = {}  # 缓存空结果，避免限流期间反复重试
+    return {}
 ```
 
-> **`push2his` 是单点，无备用节点**，`push2`/`push2delay` 不提供历史 K 线。限流后调用间隔 ≥ 2s 可恢复，持续失败换时段重试（高峰期 09:00-10:00 / 14:30-15:30 最易触发）。降级逻辑见 [rotation-analysis.md](rotation-analysis.md#限流降级)。
+> **`push2his` 是单点，无备用节点**，`push2`/`push2delay` 不提供历史 K 线。限流根因是交易时段 IP 级高频触发；非交易时段（收盘后/盘前/周末）基本不限。降级逻辑见 [rotation-analysis.md](rotation-analysis.md#限流降级)。
 
 ## 已验证 BK 代码表
 
