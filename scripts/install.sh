@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# 安装 stock-skills 套件到 ~/.claude/skills/
+# 安装 stock-skills 套件
 #
 # 用法:
-#   ./scripts/install.sh                          # 拷贝模式安装全部 skill
-#   ./scripts/install.sh --link                   # 软链模式安装全部 skill (推荐: git pull 自动更新)
-#   ./scripts/install.sh stock-analyzer           # 只装指定 skill (拷贝模式)
-#   ./scripts/install.sh --link stock-analyzer market-scanner   # 只装指定 skill (软链模式)
+#   ./scripts/install.sh                              # 拷贝模式 + user scope (~/.claude/skills/)
+#   ./scripts/install.sh --link                       # 软链模式 (推荐: git pull 自动更新)
+#   ./scripts/install.sh --scope project              # 装到当前目录的 .claude/skills/
+#   ./scripts/install.sh stock-analyzer               # 只装指定 skill
+#   ./scripts/install.sh --link --scope project stock-analyzer
+#
+# scope:
+#   - user (默认): ~/.claude/skills/   全局可用
+#   - project:     $PWD/.claude/skills/  仅当前项目可用 (在哪里跑就装到哪里)
 #
 # 拷贝 vs 软链:
 #   - 拷贝: 安全, 本地改动不会污染仓库; 更新需重跑 ./scripts/update.sh
@@ -15,32 +20,76 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"
 
-# 自动发现仓库根目录下所有含 SKILL.md 的目录，避免新增 skill 时改脚本
+# scope 解析后再决定 SKILLS_DIR; CLAUDE_SKILLS_DIR 仍可作为最高优先级覆盖
+SCOPE=""
+SKILLS_DIR=""
+
+# 自动发现仓库下所有含 SKILL.md 的目录（最多 3 层，支持 group/skill 分组）
+# skill 名取目录 basename，安装到 ~/.claude/skills/<skill>/，分组目录对外不可见
+# 用并行数组而不是关联数组，兼容 macOS 自带 bash 3.2
 ALL_SKILLS=()
+ALL_SKILL_SRCS=()
 while IFS= read -r -d '' skill_md; do
-  skill_dir="$(basename "$(dirname "$skill_md")")"
+  src_dir="$(dirname "$skill_md")"
+  skill_dir="$(basename "$src_dir")"
+  for existing in "${ALL_SKILLS[@]:-}"; do
+    if [ "$existing" = "$skill_dir" ]; then
+      echo "  ✗ skill 名重复: $skill_dir" >&2
+      exit 1
+    fi
+  done
   ALL_SKILLS+=("$skill_dir")
-done < <(find "$REPO_ROOT" -mindepth 2 -maxdepth 2 -name SKILL.md -print0 | sort -z)
+  ALL_SKILL_SRCS+=("$src_dir")
+done < <(find "$REPO_ROOT" -mindepth 2 -maxdepth 3 -name SKILL.md \
+           -not -path "*/.git/*" -not -path "*/scripts/*" -print0 | sort -z)
+
+# 按 skill 名查找其源目录，找不到返回空
+lookup_skill_src() {
+  local target="$1"
+  local i
+  for i in "${!ALL_SKILLS[@]}"; do
+    if [ "${ALL_SKILLS[$i]}" = "$target" ]; then
+      printf '%s' "${ALL_SKILL_SRCS[$i]}"
+      return 0
+    fi
+  done
+  return 1
+}
 
 MODE="copy"
 TARGETS=()
 
-for arg in "$@"; do
-  case "$arg" in
-    --link|-l) MODE="link" ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --link|-l) MODE="link"; shift ;;
+    --scope) SCOPE="${2:-}"; shift 2 ;;
+    --scope=*) SCOPE="${1#*=}"; shift ;;
     --help|-h)
-      sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+      sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     -*)
-      echo "未知参数: $arg" >&2
+      echo "未知参数: $1" >&2
       exit 1
       ;;
-    *) TARGETS+=("$arg") ;;
+    *) TARGETS+=("$1"); shift ;;
   esac
 done
+
+# 解析 SKILLS_DIR：CLAUDE_SKILLS_DIR > --scope > 默认 user
+if [ -n "${CLAUDE_SKILLS_DIR:-}" ]; then
+  SKILLS_DIR="$CLAUDE_SKILLS_DIR"
+else
+  case "${SCOPE:-user}" in
+    user|"") SKILLS_DIR="$HOME/.claude/skills" ;;
+    project) SKILLS_DIR="$PWD/.claude/skills" ;;
+    *)
+      echo "无效 --scope 值: $SCOPE (支持 user / project)" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 if [ ${#TARGETS[@]} -eq 0 ]; then
   TARGETS=("${ALL_SKILLS[@]}")
@@ -54,11 +103,11 @@ echo "==> Skill: ${TARGETS[*]}"
 echo
 
 for skill in "${TARGETS[@]}"; do
-  src="$REPO_ROOT/$skill"
+  src="$(lookup_skill_src "$skill" || true)"
   dst="$SKILLS_DIR/$skill"
 
-  if [ ! -d "$src" ]; then
-    echo "  ✗ $skill: 源目录不存在 ($src)，跳过"
+  if [ -z "$src" ] || [ ! -d "$src" ]; then
+    echo "  ✗ $skill: 仓库中找不到该 skill (无 SKILL.md)，跳过"
     continue
   fi
 

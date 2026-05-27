@@ -1,0 +1,16 @@
+{
+  "name": "stock-skills",
+  "owner": {
+    "name": "fire-alpha"
+  },
+  "metadata": {
+    "description": "股票/加密/富途生态分析 skill 套件 — 富途 OpenAPI 行情 + Tavily 新闻 + Hyperliquid 链上 funding + 多 agent 辩论决策",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "stock-skills",
+      "source": "./"
+    }
+  ]
+}
