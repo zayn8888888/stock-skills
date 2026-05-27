@@ -6,83 +6,20 @@
 
 ## classify_rotation 完整代码（A 股）
 
-**数据来源优先级**：
-1. **富途 `request_history_kline`（推荐，主力）**：稳定，已验证 INDUSTRY + CONCEPT 788 个板块全量可用。代码格式 `SH.LIST0xxx`，通过板块名模糊匹配从 BK 代码映射（见下方 `bk_to_futu_code`）。
-2. **东财 `em_get_board_kline`（备用）**：`push2his` 单点，高峰期频繁限流，已降为次选。
+**数据来源**：东财历史 K 线（`em_get_board_kline(bk_code, weeks=4)`）。
 
-> ⚠️ **注意**：富途与东财的板块指数绝对涨幅会有差异（成分股构成和加权方式不同），但**方向一致**——L1.5 只需要判断涨/跌方向，绝对值以东财 L1 的 f109 为准。
-
-### 富途板块 K 线（主力）
-
-```python
-from futu import OpenQuoteContext, KLType, AuType, RET_OK
-from datetime import datetime, timedelta
-import pandas as pd
-
-# 第一步：构建 BK代码 → 富途plate_code 的映射表（每次扫描开始时执行一次）
-def build_bk_to_futu_map(ctx):
-    """通过板块名模糊匹配，建立东财BK板块名 → 富途SH.LISTxxxx的映射"""
-    ret, con = ctx.get_plate_list(ft.Market.SH, ft.Plate.CONCEPT)
-    ret2, ind = ctx.get_plate_list(ft.Market.SH, ft.Plate.INDUSTRY)
-    all_plates = {}
-    for df in ([con] if ret == RET_OK else []) + ([ind] if ret2 == RET_OK else []):
-        for _, row in df.iterrows():
-            all_plates[row['plate_name']] = row['code']
-    return all_plates  # {'PCB概念': 'SH.LIST0463', '先进封装(Chiplet)': 'SH.LIST23120', ...}
-
-def bk_to_futu_code(bk_name, plate_map):
-    """BK板块名 → 富途代码，支持部分匹配"""
-    if bk_name in plate_map:
-        return plate_map[bk_name]
-    # 部分匹配（东财名通常是富途名的子串，或去掉括号注释后匹配）
-    for futu_name, code in plate_map.items():
-        if bk_name in futu_name or futu_name.split('(')[0].strip() in bk_name:
-            return code
-    return None  # 未找到，降级到东财K线
-
-# 第二步：拉板块历史K线
-def get_plate_kline_futu(ctx, futu_code, weeks=4):
-    """返回 {日期: {'close':..., 'change_rate':...}}"""
-    end = datetime.today()
-    start = end - timedelta(weeks=weeks+1)
-    ret, data, _ = ctx.request_history_kline(
-        futu_code,
-        start=start.strftime('%Y-%m-%d'),
-        end=end.strftime('%Y-%m-%d'),
-        ktype=KLType.K_DAY, autype=AuType.QFQ, max_count=weeks*7)
-    if ret != RET_OK or len(data) == 0:
-        return {}
-    return {row['time_key'][:10]: {'close': row['close'], 'pct': row['change_rate']}
-            for _, row in data.iterrows()}
-```
+> ⚠️ **为什么不用富途替代**：富途 `request_history_kline` 对 A 股板块 K 线本身可用，但富途与东财是两套独立板块体系（BK ↔ SH.LIST），成分股不同、涨幅计算口径不同。更关键的是，热点新概念板块（先进封装/CPO/HBM/玻璃基板）在富途的 `get_plate_stock` 全部报"未知股票"，L3 成分股无法获取，**全链路必须保持东财口径**，不能混用。push2his 限流时走下方三层降级。
 
 ```python
 from itertools import takewhile
 
-def classify_rotation(bk_code, bk_name, ctx=None, plate_map=None):
+def classify_rotation(bk_code, bk_name):
     """拉4周日K线，按周聚合，输出板块轮动性质。
-    优先用富途(ctx+plate_map)，降级到东财K线，再降级到f109/f115估算。
+    push2his 限流时返回 None，调用方走 classify_rotation_fallback。
     """
-    kdata = {}
-    source = 'unknown'
-
-    # 层1：富途 K线（主力）
-    if ctx and plate_map:
-        futu_code = bk_to_futu_code(bk_name, plate_map)
-        if futu_code:
-            kdata = get_plate_kline_futu(ctx, futu_code, weeks=4)
-            source = f'futu({futu_code})'
-
-    # 层2：东财 push2his（备用）
+    kdata = em_get_board_kline(bk_code, weeks=4)  # 失败返回 {}
     if not kdata:
-        kdata = em_get_board_kline(bk_code, weeks=4)
-        source = 'eastmoney-his'
-
-    # 层3：f109/f115 估算（见本文末 限流降级 章节）
-    if not kdata:
-        return None, 'fallback-f109'  # 调用方走 classify_rotation_fallback
-
-    source = source  # noqa — 传到返回结果里标注数据源
+        return None, 'fallback-f109'  # 调用方走降级
     
     # 按自然周分组，计算每周累计涨幅
     week_data = {}
