@@ -4,10 +4,12 @@
 
 ## 包含的 Skill
 
+### 主力 Skill
+
 | Skill | 解决什么问题 | 触发举例 |
 |-------|------------|---------|
 | [`market-scanner/`](market-scanner/) | 大A / HK / US 市场热点板块扫描 + 板块内"尚未过度拉升"候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" / "XX 板块里有没有还没涨透的票" |
-| [`stock-analyzer/`](stock-analyzer/) | 单只股票九维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链 / 事件） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
+| [`stock-analyzer/`](stock-analyzer/) | 单只股票九维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 公告与事件 / 期权链 / 前瞻日历） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
 | [`stock-fundamentals/`](stock-fundamentals/) | 自下而上基本面（商业模式 → 护城河 → 财务 → 估值视角） | "XXX 适不适合长期持有" / "护城河在哪" / "盈利质量怎么样" |
 | [`stock-valuation/`](stock-valuation/) | DCF + 历史 P/E + PEG 定量估值与安全边际区间 | "帮我估一下 XXX 合理价" / "三种方法算算估值区间" |
 | [`event-calendar/`](event-calendar/) | 未来 14 天前瞻事件日历（Finnhub 美国经济+美股财报 / Polymarket 押注 / Tavily 中港政策） | "未来一周有什么大事" / "FOMC 降息概率" / "NVDA 什么时候出财报" |
@@ -15,6 +17,17 @@
 | [`trading-debate/`](trading-debate/) | 多 agent 辩论决策（TradingAgents 七阶段 + ai-hedge-fund 7 大师 + Reflection + 组合层 + 跨标的教训 + 跨市场基准） | "NVDA 给我一次多空辩论" / "用 Buffett+Burry 视角看 700" / "复盘我对 X 的决策" / "NVDA/AAPL/TSLA 哪个该加仓" / "我对半导体股有什么模式问题" |
 | [`crypto-scanner/`](crypto-scanner/) | 加密市场热点赛道扫描（CoinGecko + 热搜 trending + Tavily 叙事 + Hyperliquid 拥挤度），4 阶段筛出候选 | "加密最近什么赛道在涨" / "山寨季开了吗" / "BTC 主导率高吗" / "DeFi/RWA/AI 哪个方向强" |
 | [`crypto-analyzer/`](crypto-analyzer/) | 单只加密资产七维度分析（行情 / 技术 / 链上 / 叙事 / 同类 / 新闻 / 事件日历） | "分析 SOL" / "HYPE 链上 funding 怎样" / "ETH 值不值得买" |
+
+### 辅助 Skill（被主力 Skill 自动调用，无需手动触发）
+
+| Skill | 用途 | 调用方 |
+|-------|------|--------|
+| [`futu-news-search/`](futu-news-search/) | 富途官方新闻/公告/研报原始列表（HTTP API，无需 OpenD） | stock-analyzer 维度 7c |
+| [`futu-stock-digest/`](futu-stock-digest/) | AI 结构化解读单股新闻，输出 bullish/bearish/neutral 方向判断（HTTP API，无需 OpenD） | stock-analyzer 维度 7b |
+| [`futu-comment-sentiment/`](futu-comment-sentiment/) | 富途牛牛社区情绪聚合（HTTP API，无需 OpenD；注意已知 keyword bug） | stock-analyzer 维度 7e |
+| [`futu-capital-anomaly/`](futu-capital-anomaly/) | 资金流向异动检测（`get_financial_unusual`，需 OpenD） | stock-analyzer 维度 4 |
+| [`futu-derivatives-anomaly/`](futu-derivatives-anomaly/) | 期权/牛熊证衍生品异动（`get_derivative_unusual`，需 OpenD + AI行情权限） | stock-analyzer 维度 8 快通道 |
+| [`futu-technical-anomaly/`](futu-technical-anomaly/) | 技术面量化异动信号（`get_technical_unusual`，需 OpenD） | stock-analyzer 维度 2 |
 
 **链式协作建议**：
 - scanner 扫出候选 → **analyzer** 多维扫一遍
@@ -60,7 +73,9 @@ cd ~/stock-skills
 ./scripts/install.sh stock-valuation
 ```
 
-可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `hyperliquid-perps` / `trading-debate` / `crypto-scanner` / `crypto-analyzer`。
+**主力 skill**：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `hyperliquid-perps` / `trading-debate` / `crypto-scanner` / `crypto-analyzer`
+
+**辅助 skill**（stock-analyzer 子模块）：`futu-news-search` / `futu-stock-digest` / `futu-comment-sentiment` / `futu-capital-anomaly` / `futu-derivatives-anomaly` / `futu-technical-anomaly`
 
 ### 自定义安装目录
 
@@ -106,7 +121,7 @@ SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capit
 
 ### stock-fundamentals 额外依赖
 
-- 近 7 天新闻快扫依赖社区 **`futu-stock-digest`** skill（SKILL 内约定；无需 OpenD）。
+- 近 7 天新闻快扫依赖 **`futu-stock-digest`** skill（已内置于本仓库；无需 OpenD）。
 
 ### event-calendar 额外依赖（可选但推荐）
 
@@ -171,7 +186,7 @@ NVDA + 700 + 茅台 该怎么排            # v0.5 跨市场：市值加权基�
 
 ## 文档
 
-- [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股八维度分析流程
+- [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股九维度分析流程
 - [`stock-analyzer/references/`](stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
 - [`stock-fundamentals/SKILL.md`](stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架
 - [`market-scanner/SKILL.md`](market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
