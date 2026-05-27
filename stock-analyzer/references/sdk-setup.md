@@ -1,39 +1,35 @@
 # 富途 API 接入
 
-## 方式 A：futuapi 脚本集
+## 脚本路径
 
-安装了 `futuapi` skill 或自建脚本目录时直接用：
+所有命令统一走 `futuapi` 脚本集，安装路径 `~/.claude/skills/futuapi/scripts/`，由 `install-futu-opend` skill 配套安装 OpenD + SDK。
+
 ```bash
-python3 skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
-```
-脚本路径替换为实际位置（`~/.claude/skills/futuapi/scripts/` 或 `skills/futuapi/scripts/`）。
-
-## 方式 B：futu-api SDK 直装（`pip install futu-api`）
-
-```python
-import futu as ft
-quote_ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
-# 调用对应方法（见下方对照表）
-quote_ctx.close()
+python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 ```
 
-## 命令 → SDK 对照表
+## 脚本 → 底层 SDK 方法对照（调试参考）
 
-| 原始脚本命令 | SDK 替代调用 |
+平时无需直接调 SDK；该表仅在调试或脚本未覆盖时使用。
+
+| 脚本命令 | 底层 SDK 调用 |
 |------------|------------|
-| `get_snapshot.py <CODE>` | `quote_ctx.get_market_snapshot(['<CODE>'])` |
-| `get_kline.py <CODE> --ktype 1d --num 30` | `quote_ctx.request_history_kline('<CODE>', start=..., end=..., ktype=ft.KLType.K_DAY)` → **三值解包** `(ret, data, _)` |
-| `get_capital_flow.py <CODE>` | `quote_ctx.get_capital_flow('<CODE>')` |
-| `get_capital_distribution.py <CODE>` | `quote_ctx.get_capital_distribution('<CODE>')` |
-| `subscribe.py <CODE> --types ORDER_BOOK` | `quote_ctx.subscribe(['<CODE>'], [ft.SubType.ORDER_BOOK])`，之后 `time.sleep(0.3)` 再拉 |
-| `get_orderbook.py <CODE> --num 10` | `quote_ctx.get_order_book('<CODE>', num=10)` |
-| `get_owner_plate.py <CODE>` | `quote_ctx.get_owner_plate(['<CODE>'])` |
-| `get_plate_stock.py <PLATE> --limit 20` | `quote_ctx.get_plate_stock('<PLATE>')` |
-| `get_option_expiration_date.py <CODE>` | `quote_ctx.get_option_expiration_date('<CODE>')` |
-| `get_option_chain.py <CODE> --start X --end Y` | `quote_ctx.get_option_chain('<CODE>', start='X', end='Y')` → **两值解包** `(ret, data)`，`data.option_type` 列区分 CALL/PUT |
-| `get_stock_quote.py <OPT_CODES>` | 先 `subscribe(codes, [ft.SubType.QUOTE])`，再 `quote_ctx.get_stock_quote(codes)` |
+| `get_snapshot.py <CODE>` | `get_market_snapshot(['<CODE>'])` |
+| `get_kline.py <CODE> --ktype 1d --num 30` | `request_history_kline('<CODE>', start=..., end=..., ktype=KLType.K_DAY)` → **三值解包** `(ret, data, _)` |
+| `get_capital_flow.py <CODE>` | `get_capital_flow('<CODE>')` |
+| `get_capital_distribution.py <CODE>` | `get_capital_distribution('<CODE>')` |
+| `subscribe.py <CODE> --types ORDER_BOOK` | `subscribe(['<CODE>'], [SubType.ORDER_BOOK])`，之后 `time.sleep(0.3)` 再拉 |
+| `get_orderbook.py <CODE> --num 10` | `get_order_book('<CODE>', num=10)` |
+| `get_owner_plate.py <CODE>` | `get_owner_plate(['<CODE>'])` |
+| `get_plate_stock.py <PLATE> --limit 20` | `get_plate_stock('<PLATE>')` |
+| `get_option_expiration_date.py <CODE>` | `get_option_expiration_date('<CODE>')` |
+| `get_option_chain.py <CODE> --start X --end Y` | `get_option_chain('<CODE>', start='X', end='Y')` → **两值解包** `(ret, data)`，`data.option_type` 列区分 CALL/PUT |
+| `get_stock_quote.py <OPT_CODES>` | 先 `subscribe(codes, [SubType.QUOTE])`，再 `get_stock_quote(codes)` |
+| `get_valuation_detail.py <CODE>` | `get_valuation_detail('<CODE>')` |
+| `get_research_rating_summary.py <CODE>` | `get_research_rating_summary('<CODE>')` |
+| `get_financials_statements.py <CODE> --num 8` | `get_financials_statements('<CODE>', num=8)` → 返回 **dict 不是 DataFrame**，用 `data.get('report_list', [])` |
 
-> **已知坑**：`get_ticker` 方法不存在，逐笔数据需通过订阅推送；`request_history_kline` 是三值解包，不是两值；`get_financials_statements` 返回 **dict 不是 DataFrame**，禁止调 `.to_dict()` / `.columns`，直接用 `data.get('report_list', [])`。
+> **已知坑**：`get_ticker` 方法不存在，逐笔数据需通过订阅推送；`request_history_kline` 三值解包；`get_financials_statements` 返回 dict，禁止调 `.to_dict()` / `.columns`。
 
 ## 新 API A 股覆盖矩阵（实测 SH.600519 茅台）
 

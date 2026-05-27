@@ -15,7 +15,7 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 
 ## 前置依赖
 
-富途 OpenAPI（需 OpenD）支持两种接入方式——完整 SDK 方法对照表、代码格式、已知坑见 [references/sdk-setup.md](references/sdk-setup.md)。
+富途 OpenAPI（需 OpenD）脚本集安装在 `~/.claude/skills/futuapi/scripts/`，命令→SDK 对照表见 [references/sdk-setup.md](references/sdk-setup.md)。
 
 ## 执行契约
 
@@ -29,31 +29,29 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 
 ### 维度 1：基础行情（必做）
 ```bash
-python3 skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 ```
 提取：现价 / 开盘 / 最高 / 最低 / 昨收 / 成交量 / 成交额 / 涨跌幅 / 振幅。
 
 ### 维度 2：技术走势（必做）
 ```bash
-python3 skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 30 --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 30 --json
 ```
 重点：近 30 日高低点 / 当前相对位置 / 是否破位 / 量价配合 / 短期均线关系。额外触发 `futu-technical-anomaly` skill 拿量化技术信号清单，与人工解读交叉校验。
 
 ### 维度 3：估值与基本面（必做）
 
-**Step A**：`python3 skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json`  
+**Step A**：`python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json`  
 提取：PE-TTM / PB / 股息率 / 总市值 / 流通市值 / 52 周高低 / 换手率。
 
 **Step B（并行，需 OpenD）**：
-```python
-import futu as ft
-ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
-ret, vdata = ctx.get_valuation_detail('<CODE>')   # ✅ 全市场（含A股）
-ret2, rdata = ctx.get_research_rating_summary('<CODE>')  # ✅ 美股/港股；A股未知，失败时跳过
-ctx.close()
-# vdata['trend']['valuation_percentile'] 历史百分位 | ['forward_value'] 前瞻 PE
-# rdata['inst_rating_summary_list'] 机构评级列表
+```bash
+python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_research_rating_summary.py <CODE> --json
 ```
+读取要点：
+- `get_valuation_detail` JSON → `data.trend.valuation_percentile`（历史百分位）/ `data.trend.forward_value`（前瞻 PE）
+- `get_research_rating_summary` JSON → `inst_rating_summary_list`（机构评级列表）
 **降级规则**：
 - `get_valuation_detail`：全市场可用（含 A 股），OpenD 不可用时跳过
 - `get_research_rating_summary`：A 股不确定，失败时跳过，Tavily 补 `"<公司名> 分析师评级 目标价"`
@@ -63,8 +61,8 @@ ctx.close()
 
 ### 维度 4：资金流向（必做）
 ```bash
-python3 skills/futuapi/scripts/quote/get_capital_flow.py <CODE> --json
-python3 skills/futuapi/scripts/quote/get_capital_distribution.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_flow.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_distribution.py <CODE> --json
 ```
 额外触发 `futu-capital-anomaly` skill（港股买卖经纪商榜 + 卖空异动）。
 
@@ -72,15 +70,15 @@ python3 skills/futuapi/scripts/quote/get_capital_distribution.py <CODE> --json
 
 ### 维度 5：盘口与成交（必做）
 ```bash
-python3 skills/futuapi/scripts/subscribe/subscribe.py <CODE> --types ORDER_BOOK TICKER
-python3 skills/futuapi/scripts/quote/get_orderbook.py <CODE> --num 10 --json
+python3 ~/.claude/skills/futuapi/scripts/subscribe/subscribe.py <CODE> --types ORDER_BOOK TICKER
+python3 ~/.claude/skills/futuapi/scripts/quote/get_orderbook.py <CODE> --num 10 --json
 ```
 重点：买卖盘深度对比 / 近 30 笔成交方向占比 / 大单集中度。
 
 ### 维度 6：同行对比（必做）
 ```bash
-python3 skills/futuapi/scripts/quote/get_owner_plate.py <CODE> --json
-python3 skills/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> --limit 20 --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_owner_plate.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> --limit 20 --json
 ```
 选 2-3 家业务相近、市值相近的同行，对比 PE-TTM / PB / 股息率 / 当日涨跌幅。
 

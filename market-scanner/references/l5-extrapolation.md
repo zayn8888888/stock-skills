@@ -37,11 +37,11 @@
 
 ```bash
 # 对每个外推板块拉 5 日 / 10 日涨幅 + 资金流
-python3 skills/futuapi/scripts/quote/get_plate_list.py <MKT> --type INDUSTRY --json | grep <PLATE_NAME>
-python3 skills/futuapi/scripts/quote/get_plate_list.py <MKT> --type CONCEPT --json | grep <PLATE_NAME>
+python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_list.py <MKT> --type INDUSTRY --json | grep <PLATE_NAME>
+python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_list.py <MKT> --type CONCEPT --json | grep <PLATE_NAME>
 # 对外推个股
-python3 skills/futuapi/scripts/quote/get_kline.py <STOCK_CODE> --ktype 1d --num 15 --json
-python3 skills/futuapi/scripts/quote/get_capital_flow.py <STOCK_CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <STOCK_CODE> --ktype 1d --num 15 --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_flow.py <STOCK_CODE> --json
 ```
 
 | 状态 | 判定标准 | 含义 |

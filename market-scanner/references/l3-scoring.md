@@ -8,53 +8,54 @@
 # 东财拿成分股列表（含今日涨幅 + 5日涨幅 + 今日主力净流入）
 stocks = em_get_board_stocks(bk_code, limit=50)
 # → 直接有 today_pct, 5d_pct, main_flow_yi 三个关键字段
+```
+对候选股用富途补充 PE / 市值 / 10 日涨幅（东财无 10 日字段）：
 
-# 再对候选股用富途补充 PE / 市值 / 10日涨幅（东财无10日字段）
-ctx.get_market_snapshot([s['futu_code'] for s in stocks])     # PE/市值/52周高低
-ctx.request_history_kline(code, start=..., end=..., ...)       # 精确10日涨幅
-ctx.get_capital_flow(code, period_type='DAY', start='...')     # 3日主力净流入详情
+```bash
+# PE/市值/52周高低
+python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+# 精确 10 日涨幅
+python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 12 --json
+# 3 日主力净流入详情
+python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_flow.py <CODE> --period-type 2 --json
 ```
 
 ### HK / US：质量阀门加速路径（get_stock_screen）
 
-板块成分股 > 30 只时，用 `get_stock_screen` **把质量阀门前移**，直接拿已过滤的成分股列表，减少后续逐个 snapshot 的调用量。完整用法与解码函数见 [api-futu.md](api-futu.md#条件选股-v2get_stock_screen)。
+板块成分股 > 30 只时，用 `get_stock_screen` **把质量阀门前移**，直接拿已过滤的成分股列表，减少后续逐个 snapshot 的调用量。脚本封装了请求构造和结果解码，只需写 JSON config。完整 config schema、单位约定、约束见 [api-futu.md](api-futu.md#条件选股-v2get_stock_screen)。
 
-```python
-from futu.quote.stock_screen_const import ScrMarket, ScrSortDir, SimpleField, SimpleProperty, BasicProperty
+```bash
+python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_screen.py \
+  --config /tmp/screen_<MKT>_quality.json --page-count 50 --json
+```
 
-req = ft.StockScreenRequest()
-req.page_count = 50
+JSON config 模板（`HK` 阈值；US 把 `MARKET_CAP` 改 `500000000`、`PRICE` 改 `3.0`、`MARKET` 改 `["US"]`）：
 
-# ── 按市场筛（板块维度用 add_plate，但 add_plate 的板块代码格式待确认）
-req.add_simple_field(field=SimpleField.MARKET, values=[ScrMarket.HK])   # 或 ScrMarket.US
-
-# ── 质量阀门（对应硬阀门表格）
-HK_THRESHOLDS = {'market_cap': 3_000_000_000.0, 'price': 1.0}
-US_THRESHOLDS = {'market_cap': 500_000_000.0,   'price': 3.0}
-
-req.add_simple_property(name=SimpleProperty.MARKET_CAP, lower=thresholds['market_cap'])
-req.add_simple_property(name=SimpleProperty.PE_ANNUAL,  lower=0.01)   # PE > 0，排亏损
-req.add_simple_property(name=SimpleProperty.PRICE,      lower=thresholds['price'])
-
-req.add_retrieve_basic(name=BasicProperty.CODE)
-req.add_retrieve_basic(name=BasicProperty.NAME)
-req.add_retrieve_simple(name=SimpleProperty.MARKET_CAP)
-req.add_retrieve_simple(name=SimpleProperty.PE_ANNUAL)
-req.add_retrieve_simple(name=SimpleProperty.PE_TTM)
-req.add_retrieve_simple(name=SimpleProperty.PB)
-
-req.add_sort(direction=ScrSortDir.DESC, property_type='simple',
-             property_params={'name': int(SimpleProperty.MARKET_CAP)})
-
-ret, total, rows = ctx.get_stock_screen(req)   # ⚠️ 三值解包
-stocks = decode_screen_rows(rows)              # 见 api-futu.md 解码函数
+```json
+{
+  "filters": [
+    {"type": "simple_field", "field": "MARKET", "values": ["HK"]},
+    {"type": "simple_property", "name": "MARKET_CAP", "lower": 3000000000.0},
+    {"type": "simple_property", "name": "PE_ANNUAL", "lower": 0.01},
+    {"type": "simple_property", "name": "PRICE", "lower": 1.0}
+  ],
+  "retrieves": [
+    {"type": "basic", "name": "CODE"}, {"type": "basic", "name": "NAME"},
+    {"type": "simple", "name": "MARKET_CAP"}, {"type": "simple", "name": "PE_ANNUAL"},
+    {"type": "simple", "name": "PE_TTM"}, {"type": "simple", "name": "PB"}
+  ],
+  "sorts": [
+    {"direction": "DESC", "property_type": "simple",
+     "property_params": {"name": "MARKET_CAP"}}
+  ]
+}
 ```
 
 **加速路径后仍需补拉**（`get_stock_screen` 不含以下字段）：
-- `request_history_kline` → 5日/10日涨幅（动量因子）
-- `get_capital_flow` → 近 3 日主力净流入（资金因子）
+- `get_kline.py` → 5 日 / 10 日涨幅（动量因子）
+- `get_capital_flow.py` → 近 3 日主力净流入（资金因子）
 
-**降级条件**：`get_stock_screen` 报错 / OpenD 不可用 → 回退到原始路径（`get_plate_stock` → `get_market_snapshot` 逐个过滤）。
+**降级条件**：`get_stock_screen` 报错 / OpenD 不可用 → 回退到原始路径（`get_plate_stock.py` → `get_snapshot.py` 逐个过滤）。
 
 ## 质量阀门（硬条件，不过直接剔除）
 

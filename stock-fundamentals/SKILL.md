@@ -15,9 +15,10 @@ description: 自下而上基本面研究助手。对单只股票进行商业模�
 ## 数据工具
 
 ### 行情数据（futuapi）
+
 ```bash
-python3 skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
-python3 skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json
 ```
 
 ### 财务与基本面数据（分层数据源）
@@ -25,30 +26,19 @@ python3 skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json
 **优先级**：Futu 结构化接口 → Tavily 搜索兜底。
 
 #### 层 1：Futu 结构化接口（并行执行，需 OpenD）
-```python
-import futu as ft
-ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
-
-# 财务三大表
-# ⚠️ 返回类型是 dict，不是 DataFrame——禁止调 .to_dict() / .columns / .head()
-# ⚠️ 返回 key 是 report_list，不是 statement_list
-# ❌ A股返回 report_list=[]（ret==0 但无数据），直接用层 2 替代
-ret, data = ctx.get_financials_statements('<CODE>', num=8)
-reports = data.get('report_list', [])   # 每条含 yoy / qoq，直接可用
-
-# 估值分位数 — ✅ 全市场含A股
-ret2, vdata = ctx.get_valuation_detail('<CODE>')
-# vdata['trend']['valuation_percentile'] 历史百分位 | ['forward_value'] 前瞻 PE
-# vdata['profit_growth_rate'] 盈利 vs 市值增速对比
-
-# 股东持股 — ❌ A股明确报错"只支持港股美股"，A股直接跳过
-ret3, sdata = ctx.get_shareholders_overview('<CODE>')
-
-# 分红历史 — ✅ 全市场含A股
-ret4, ddata = ctx.get_corporate_actions_dividends('<CODE>')
-
-ctx.close()
+```bash
+# 财务三大表（A 股返回 report_list=[]，降层 2 Tavily）
+python3 ~/.claude/skills/futuapi/scripts/quote/get_financials_statements.py <CODE> --num 8 --json
+# 估值分位数（全市场含 A 股）
+python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
+# 股东持股（A 股报错，仅港美股）
+python3 ~/.claude/skills/futuapi/scripts/quote/get_shareholders_overview.py <CODE> --json
+# 分红历史（全市场含 A 股）
+python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_dividends.py <CODE> --json
 ```
+JSON 字段提取要点：
+- 财务三大表 → `report_list[]`，每条含 `yoy / qoq`
+- 估值 → `trend.valuation_percentile`（历史百分位）/ `trend.forward_value`（前瞻 PE）/ `profit_growth_rate`（盈利 vs 市值增速）
 **各接口 A 股支持情况**：
 
 | 接口 | A 股 | 降级 |

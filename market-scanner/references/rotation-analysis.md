@@ -70,19 +70,13 @@ def classify_rotation(bk_code, bk_name):
 
 ## 港美股适用方式
 
-港美股板块 K 线直接支持周度对比，数据来源不同，逻辑相同：
+港美股板块 K 线直接支持周度对比，数据来源不同，逻辑相同——用 `get_kline.py` 拉日 K 线，按周聚合：
 
-```python
-def hkus_plate_weekly(ctx, plate_code, weeks=4):
-    end = datetime.today()
-    start = end - timedelta(weeks=weeks+1)
-    ret, data, _ = ctx.request_history_kline(
-        plate_code, start=start.strftime('%Y-%m-%d'), end=end.strftime('%Y-%m-%d'),
-        ktype=KLType.K_DAY, autype=AuType.QFQ, max_count=100)
-    if ret != RET_OK: return {}
-    daily = dict(zip(data['time_key'].str[:10], data['close'].tolist()))
-    # 按周聚合（同 em_get_board_kline 的逻辑）...
+```bash
+# 拉 weeks+1 周的日 K 线
+python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <PLATE_CODE> --ktype 1d --num $((weeks*5+5)) --json
 ```
+返回 JSON 的 `data[]` 每条含 `time_key / close`，提取后按 `time_key[:10]` → ISO 周分组，套用上方 `classify_rotation` 同款的 `weekly_rets / consec / accelerating` 判定逻辑即可。
 
 ## A 股 / 港股 / 美股 脉冲周期差异
 

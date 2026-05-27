@@ -16,29 +16,23 @@ description: 股票定量估值计算器。接受股票名称或代码，用三�
 ## Step 1：并行拉取数据
 
 #### 1a. 富途行情（当前价格 + PE）
+
 ```bash
-python3 skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
-# 或 SDK：ctx.get_market_snapshot(['<CODE>'])
+python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 ```
 
 #### 1b. 财务数据（分层，优先 Futu → 兜底 Tavily）
 
 **层 1：Futu 结构化**（美股/港股，需 OpenD）
-```python
-import futu as ft
-ctx = ft.OpenQuoteContext(host='127.0.0.1', port=11111)
-ret, fdata = ctx.get_financials_statements('<CODE>', num=12)
-# ⚠️ 返回类型是 dict，不是 DataFrame——禁止调 .to_dict() / .columns / .head()
-# ⚠️ 返回 key 是 report_list，不是 statement_list；A股返回空列表，降层 2
-reports = fdata.get('report_list', [])
-# 每条含 field_id=8048(稀释EPS) / 8037(净利润) / yoy / qoq
-
-ret2, vdata = ctx.get_valuation_detail('<CODE>')
-# trend['current_value'/'forward_value'/'average_value'] PE 当前/前瞻/均值
-# trend['avg_minus_1_stddev'/'avg_plus_1_stddev']        均值 ±1σ（历史低/高 PE 参考）
-# trend['valuation_percentile']                          当前 PE 百分位（0~1）
-ctx.close()
+```bash
+# 财务报表（A 股返回 report_list=[]，降层 2）
+python3 ~/.claude/skills/futuapi/scripts/quote/get_financials_statements.py <CODE> --num 12 --json
+# 估值（全市场含 A 股）
+python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
 ```
+JSON 字段提取要点：
+- 财务 → `report_list[].field_id`：`8048`(稀释EPS) / `8037`(净利润)；每条含 `yoy / qoq`
+- 估值 → `trend.current_value / forward_value / average_value`（PE 当前/前瞻/均值）/ `trend.avg_minus_1_stddev / avg_plus_1_stddev`（均值 ±1σ）/ `trend.valuation_percentile`（当前 PE 百分位 0~1）
 **降层规则**：
 - `get_financials_statements`：A 股返回空 → 层 2 Tavily 补 FCF/EPS
 - `get_valuation_detail`：A 股**可用**，继续执行（PE 百分位直接用）
