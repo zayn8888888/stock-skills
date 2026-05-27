@@ -8,10 +8,13 @@
 - PCR、IV 异动、期权大单、期权情绪综合信号
 - 港股：牛熊证街货比例 + 街货价格区间（旧流程拿不到）
 
+> ⚠️ **`futu-derivatives-anomaly` 权限说明**：该 skill 底层调用 `get_derivative_unusual`，属于富途 **AI行情** 增值接口，需单独订阅。普通账户返回错误码 **-12301（DATA_UNAVAILABLE）**，不代表账户没有期权权限。
+
 **何时仍需走 Step 1-3**：
 - 用户问机构布局/对冲流（需看具体 strike OI 分布）
 - 出现单一 strike 极端堆积疑虑
 - 快通道返回"无异常"但用户坚持
+- **⚡ 快通道返回任何错误码（包括 -12301）** → 不降级到 Tavily，直接走 Step 1-3（`get_option_chain` + `get_option_volatility` + `get_option_exercise_probability` 用的是基础期权行情权限，与 AI行情 接口独立）
 
 ## Step 1：取期权到期日
 
@@ -32,7 +35,12 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_option_expiration_date.py <CO
 ## Step 2：取期权链
 
 ```bash
+# 取多个到期日（start ≤ end）
 python3 ~/.claude/skills/futuapi/scripts/quote/get_option_chain.py <CODE> --start <EXPIRY1> --end <EXPIRY2> --json
+
+# 取单个到期日（两种等价写法）
+python3 ~/.claude/skills/futuapi/scripts/quote/get_option_chain.py US.FUTU --expiry 2026-06-05 --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_option_chain.py US.FUTU --start 2026-06-05 --end 2026-06-05 --json
 ```
 
 **扫描范围**：默认 ±10%/15% 不够，机构保护位/sell-put 锚定常在深度 OTM。原则：**由数据决定，不由默认值决定**。

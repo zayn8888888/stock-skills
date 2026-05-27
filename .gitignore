@@ -17,3 +17,5 @@
 .env.local
 
 narrative_monnitor/
+
+test/

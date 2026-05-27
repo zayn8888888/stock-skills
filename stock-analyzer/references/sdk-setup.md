@@ -43,6 +43,28 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 
 > `get_valuation_detail` 返回 **dict**（非 DataFrame），包含 `valuation_type`（整数）、`trend.current_value`、`trend.valuation_percentile`、`trend.historical_items[]` 等字段，共 7 种 valuation_type。
 
+## 已知字段缺陷与替代方案
+
+| 字段 | 缺陷 | 替代方案 |
+|------|------|---------|
+| `high_price_52weeks` / `low_price_52weeks` | 美股返回 0 | 用 `get_kline.py <CODE> --ktype 1d --num 252 --json` 自算 52 周高低 |
+| `pe_ratio` vs `pe_ttm_ratio` | 美股两者数值相同，无法区分静态/TTM | 美股以 `pe_ttm_ratio` 为准；A 股/港股两字段含义需结合财报日判断 |
+| `valuation_percentile` | 语义未经官方文档确认（窗口期/方向未定义），不可直接用于结论 | 通过 `historical_items[]` 时序数据自行计算：统计 `current_value` 高于/低于历史序列的比例来确定方向和分位 |
+
+> ⚠️ `valuation_percentile` 使用禁令：禁止将该字段直接写入报告结论（如"80% 分位 = 高估"）。必须先通过 `historical_items[]` 序列验证字段方向，确认后才可引用，否则标注"语义待验证，不引用"。
+
+## OrderBook 量字段单位
+
+`get_orderbook.py` 返回的 Bid/Ask 列表格式为 `[价格, 数量, 委托笔数, {}]`，**数量的单位因市场而异**：
+
+| 市场 | 数量单位 | 备注 |
+|------|---------|------|
+| 美股 | **股（shares）** | 直接读取，如 `2139` = 2139 股 |
+| 港股 | **手（lot）** | 需查 lot_size 换算：`数量 × lot_size = 股数` |
+| A 股 | **手（100 股/手）** | `数量 × 100 = 股数` |
+
+> 报告中引用盘口数字时必须注明单位，并换算为"股数"或"名义金额"后再解读大小。
+
 ## 富途代码格式
 
 - **港股**：`HK.XXXXX`（5 位数字补零，如 `HK.00700` 腾讯）
@@ -51,3 +73,5 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 - **A 股深市**：`SZ.XXXXXX`（6 位，如 `SZ.000858` 五粮液）
 - **期权代码**：交给 `resolve_option_code.py` 解析，不要手工拼
 - 不确定时用 Tavily 确认一次，不要猜错代码后继续往下拉数据
+
+> ⚠️ **裸 ticker 会报错**：所有脚本均要求带市场前缀。`get_snapshot.py FUTU` 直接报错，必须用 `get_snapshot.py US.FUTU`。Step 0 拿到用户输入的 ticker 后立刻补全前缀，后续调用统一用带前缀的格式。

@@ -44,7 +44,7 @@ _SNAPSHOT_BATCH_SIZE = 400  # 接口限制：每次请求最多 400 个代码
 
 def _parse_snapshot_row(row):
     """解析单条快照行为字典"""
-    return {
+    rec = {
         "code": safe_get(row, "code", default="N/A"),
         "name": safe_get(row, "name", default=""),
         "last_price": safe_float(safe_get(row, "last_price", default=0)),
@@ -54,10 +54,46 @@ def _parse_snapshot_row(row):
         "prev_close": safe_float(safe_get(row, "prev_close_price", default=0)),
         "volume": safe_int(safe_get(row, "volume", default=0)),
         "turnover": safe_float(safe_get(row, "turnover", default=0)),
+        "change_rate": safe_float(safe_get(row, "change_rate", default=0)),
         "bid": safe_float(safe_get(row, "bid_price", default=0)),
         "ask": safe_float(safe_get(row, "ask_price", default=0)),
         "price_spread": safe_float(safe_get(row, "price_spread", default=0)),
+        "update_time": safe_get(row, "update_time", default=""),
+        "suspension": bool(safe_get(row, "suspension", default=False)),
     }
+    # 盘前（pre-market）—— 仅美股；有数据时 pre_price 非零
+    pre_price = safe_float(safe_get(row, "pre_price", default=0))
+    if pre_price:
+        rec["pre_price"] = pre_price
+        rec["pre_high_price"] = safe_float(safe_get(row, "pre_high_price", default=0))
+        rec["pre_low_price"] = safe_float(safe_get(row, "pre_low_price", default=0))
+        rec["pre_volume"] = safe_int(safe_get(row, "pre_volume", default=0))
+        rec["pre_turnover"] = safe_float(safe_get(row, "pre_turnover", default=0))
+        rec["pre_change_val"] = safe_float(safe_get(row, "pre_change_val", default=0))
+        rec["pre_change_rate"] = safe_float(safe_get(row, "pre_change_rate", default=0))
+        rec["pre_amplitude"] = safe_float(safe_get(row, "pre_amplitude", default=0))
+    # 盘后（after-hours）—— 仅美股
+    after_price = safe_float(safe_get(row, "after_price", default=0))
+    if after_price:
+        rec["after_price"] = after_price
+        rec["after_high_price"] = safe_float(safe_get(row, "after_high_price", default=0))
+        rec["after_low_price"] = safe_float(safe_get(row, "after_low_price", default=0))
+        rec["after_volume"] = safe_int(safe_get(row, "after_volume", default=0))
+        rec["after_turnover"] = safe_float(safe_get(row, "after_turnover", default=0))
+        rec["after_change_val"] = safe_float(safe_get(row, "after_change_val", default=0))
+        rec["after_change_rate"] = safe_float(safe_get(row, "after_change_rate", default=0))
+    # 夜盘（overnight）—— 仅美股
+    overnight_price = safe_float(safe_get(row, "overnight_price", default=0))
+    if overnight_price:
+        rec["overnight_price"] = overnight_price
+        rec["overnight_high_price"] = safe_float(safe_get(row, "overnight_high_price", default=0))
+        rec["overnight_low_price"] = safe_float(safe_get(row, "overnight_low_price", default=0))
+        rec["overnight_volume"] = safe_int(safe_get(row, "overnight_volume", default=0))
+        rec["overnight_turnover"] = safe_float(safe_get(row, "overnight_turnover", default=0))
+        rec["overnight_change_val"] = safe_float(safe_get(row, "overnight_change_val", default=0))
+        rec["overnight_change_rate"] = safe_float(safe_get(row, "overnight_change_rate", default=0))
+        rec["overnight_amplitude"] = safe_float(safe_get(row, "overnight_amplitude", default=0))
+    return rec
 
 
 def get_snapshot(codes, output_json=False):
@@ -90,9 +126,16 @@ def get_snapshot(codes, output_json=False):
             print("市场快照")
             print("=" * 70)
             for r in records:
-                print(f"\n  {r['code']}  {r['name']}")
-                print(f"    最新: {r['last_price']}  开盘: {r['open']}  最高: {r['high']}  最低: {r['low']}  昨收: {r['prev_close']}")
-                print(f"    成交量: {r['volume']}  成交额: {r['turnover']}  买一: {r['bid']}  卖一: {r['ask']}  价差: {r['price_spread']}")
+                susp = "  [停牌]" if r.get("suspension") else ""
+                print(f"\n  {r['code']}  {r['name']}{susp}  {r.get('update_time', '')}")
+                print(f"    最新: {r['last_price']}  涨跌: {r['change_rate']:+.2f}%  开盘: {r['open']}  最高: {r['high']}  最低: {r['low']}  昨收: {r['prev_close']}")
+                print(f"    成交量: {r['volume']}  成交额: {r['turnover']}  买一: {r['bid']}  卖一: {r['ask']}")
+                if "pre_price" in r:
+                    print(f"    盘前: {r['pre_price']}  ({r['pre_change_rate']:+.2f}%)  高: {r['pre_high_price']}  低: {r['pre_low_price']}  量: {r['pre_volume']}")
+                if "after_price" in r:
+                    print(f"    盘后: {r['after_price']}  ({r['after_change_rate']:+.2f}%)  高: {r['after_high_price']}  低: {r['after_low_price']}  量: {r['after_volume']}")
+                if "overnight_price" in r:
+                    print(f"    夜盘: {r['overnight_price']}  ({r['overnight_change_rate']:+.2f}%)  高: {r['overnight_high_price']}  低: {r['overnight_low_price']}  量: {r['overnight_volume']}")
             print("\n" + "=" * 70)
 
     except Exception as e:

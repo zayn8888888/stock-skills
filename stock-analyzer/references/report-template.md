@@ -5,7 +5,7 @@
 ```markdown
 ## 📊 <股票名称>（<CODE>）多维分析
 
-**数据时点**：YYYY-MM-DD HH:MM（交易中/收盘后/盘前）
+**数据时点**：YYYY-MM-DD HH:MM HKT（ET HH:MM，盘前/盘中/盘后/美股休市）
 
 ---
 

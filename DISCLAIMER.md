@@ -2,7 +2,7 @@
 
 ## 中文
 
-本项目（`stock-analyzer-skill`）是一个面向 Claude Code 的 prompt 集合（Skill），目的是协助用户自行整理和理解公开行情信息。
+本项目（`stocks-skill`）是一个面向 Claude Code 的 prompt 集合（Skill），目的是协助用户自行整理和理解公开行情信息。
 
 **本项目不是：**
 

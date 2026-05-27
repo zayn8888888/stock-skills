@@ -22,10 +22,30 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 **硬约束，不满足不出报告**：
 
 1. **九个维度全部执行**。维度 1-7 必做；维度 8 对美股/港股必做，A 股明确标注"本市场无期权，跳过"；维度 9 必做，event-calendar 未安装时降级并标注
-2. **能并行的工具一次性并行调用**，数据齐全后统一输出报告
-3. **输出前按 [references/checklist.md](references/checklist.md) 自检**
+2. **能并行的工具一次性并行调用**，数据齐全后统一输出报告。**并行批次仅放同质、低风险调用**（如同时拉 5 只同行快照）；参数未验证或可能出错的调用单独一批，不与其他调用混排，防止连锁 cancel
+3. **任何被 cancel / 报错的工具调用，必须立即重跑一次**；如确实无法执行，报告中明确标 `❌ 未执行（原因：...）`；禁止用"订阅限制"/"执行中"/"无镜像"等模糊话术替代未真正执行的调用
+4. **每个维度结尾加数据完整性自检**：列出本维度所有工具 + 调用结果（✅成功 / ❌失败原因 / ⏭️跳过原因）
+5. **每张表、每段精细数据必须标来源**：格式 `[来源: 脚本名]` 或 `[来源: Tavily "<关键词>"]`；缺来源标签的数字禁止出现在报告中
+6. **输出前按 [references/checklist.md](references/checklist.md) 自检**
 
 ## 分析流程（九维度）
+
+### ⚡ Step 0：代码格式标准化（必做，**单独执行，不与任何其他调用并行**）
+
+> **这是最常见的连锁失败根因**：用裸 ticker 调脚本会报格式错误，同批其余调用全部 cancel。
+
+1. **将用户输入的 ticker 补全为富途格式**（在脑子里做，不需要调工具）：
+   - 纯英文字母 1-5 位 → `US.<TICKER>`（`FUTU` → `US.FUTU`，`NVDA` → `US.NVDA`）
+   - 港股 → `HK.XXXXX`（5 位数字补零，小米 `01810` → `HK.01810`）
+   - A 股 → `SH.XXXXXX`（沪）或 `SZ.XXXXXX`（深）
+
+2. **单独运行一次快照验证**，确认代码格式和 OpenD 连通性后再展开所有并行：
+   ```bash
+   python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
+   ```
+   - ✅ 成功 → 后续所有调用统一使用 `<NORMALIZED_CODE>`
+   - ❌ 报格式错误 → 停止，向用户确认代码
+   - ❌ 连接失败 → 停止，提示启动 OpenD
 
 ### 维度 1：基础行情（必做）
 ```bash
@@ -33,11 +53,23 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 ```
 提取：现价 / 开盘 / 最高 / 最低 / 昨收 / 成交量 / 成交额 / 涨跌幅 / 振幅。
 
+**盘前/盘后/夜盘（美股专属，有数据时必须展示）**：JSON 里出现 `pre_price` / `after_price` / `overnight_price` 字段（非零）时，逐段列出价格、涨跌幅、高低点、成交量。A 股/港股无这些字段，跳过即可。
+
 ### 维度 2：技术走势（必做）
 ```bash
 python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 30 --json
 ```
-重点：近 30 日高低点 / 当前相对位置 / 是否破位 / 量价配合 / 短期均线关系。额外触发 `futu-technical-anomaly` skill 拿量化技术信号清单，与人工解读交叉校验。
+
+拿到 K 线后，**先执行异动强制扫描，再做常规分析**：
+
+> **⚠️ 异动强制扫描**：检查近 30 日是否存在「单日绝对涨跌幅 > 15% 且量比 > 5x」事件。若有：
+> 1. **暂停后续所有维度**，并行调用：
+>    - `get_corporate_actions_stock_splits.py <CODE> --json`（排除拆股）
+>    - `get_corporate_actions_dividends.py <CODE> --json`（排除特别股息）
+>    - Tavily：`<公司中文名> <YYYY-MM-DD> 暴跌 OR 暴涨 OR 催化`（days=14）
+> 2. 调查结论写入报告后，**继续执行剩余维度**；所有后续维度（估值/资金/技术）的数字均须显式标注"含断层日 \<日期\>"并附调查结论。
+
+常规分析重点：近 30 日高低点 / 当前相对位置 / 是否破位 / 量价配合 / 短期均线关系。额外触发 `futu-technical-anomaly` skill 拿量化技术信号清单，与人工解读交叉校验。
 
 ### 维度 3：估值与基本面（必做）
 
@@ -82,11 +114,34 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> -
 ```
 选 2-3 家业务相近、市值相近的同行，对比 PE-TTM / PB / 股息率 / 当日涨跌幅。
 
-### 维度 7：新闻与事件（回看，必做）
+### 维度 7：公告与事件（回看，必做）
 
-并行调用四类源：`futu-news-search`（官方动态）/ `futu-comment-sentiment`（社区情绪，注意已知 keyword bug）/ Tavily 监管做空 / Tavily 市场结构。
+五个子模块顺序执行：
 
-关键词用**中文公司名**；零返回走 fallback 链；价格异动 ≥5% 必做反向追溯；报告末尾必须列"未发现"显式证伪。
+**7a 结构化公告（OpenAPI，并行拉 6 个脚本，必做）**
+```bash
+python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_buybacks.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_dividends.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_stock_splits.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_research_rating_summary.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_insider_trade_list.py <CODE> --json
+python3 ~/.claude/skills/futuapi/scripts/quote/get_shareholders_holding_changes.py <CODE> --json
+```
+A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_shareholders_holding_changes` 可能不支持，失败标 ❌ 跳过。
+
+**7b AI 新闻解读（`futu-stock-digest` skill，必做）**
+拿结构化结论：方向判断（bullish/bearish/neutral）+ 关键信号摘要，供后续综合研判消费。
+
+**7c 原始新闻（`futu-news-search` skill，必做）**
+补全原始链接列表，供溯源防 hallucination；关键词用**中文公司名**；零返回走 fallback 链。
+
+**7d 软新闻（Tavily，必做）**
+并行至少 2 条：`<公司名> 调查 做空 short report`（days=60）+ `<公司名> analyst rating downgrade upgrade`。
+
+**7e 社区情绪（`futu-comment-sentiment` skill，可选）**
+注意已知 keyword bug；调用后须做对照测试，命中 bug 切 Tavily 雪球替代。
+
+价格异动 ≥5% 必做反向追溯；报告末尾必须列"未发现"显式证伪。
 
 **完整规程、futu-comment-sentiment bug 处理、fallback 链、歧义词对策、反向追溯模板见 [references/news-search.md](references/news-search.md)**。
 
@@ -104,8 +159,10 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> -
 
 ## 输出格式
 
+> **时间戳规则**：行情时点同时标 HKT 和 ET（HKT−12h=EDT / HKT−13h=EST）。盘前/盘中/盘后按 ET 判断：盘前 ET 04:00–09:30 / 盘中 ET 09:30–16:00 / 盘后 ET 16:00–20:00 / 美股休市 ET 20:00–04:00。
+
 ```markdown
-## 📊 <名称>(<CODE>) 多维分析 · YYYY-MM-DD HH:MM
+## 📊 <名称>(<CODE>) 多维分析 · YYYY-MM-DD HH:MM HKT（ET HH:MM，<盘前/盘中/盘后/美股休市>）
 
 ### 1. 行情速览  ### 2. 技术面  ### 3. 估值水平
 ### 4. 资金面   ### 5. 盘口情绪  ### 6. 同行对比

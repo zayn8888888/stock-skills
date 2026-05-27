@@ -1,17 +1,34 @@
-# 维度 7 新闻与事件（回看）详细规程
+# 维度 7 公告与事件（回看）详细规程
 
-> 📍 **分工**：维度 7 看**已发生**的新闻/公告/做空报告/情绪；维度 9 看**未来 14 天**的可证伪事件。
+> 📍 **分工**：维度 7 看**已发生**的公告/新闻/做空报告/情绪；维度 9 看**未来 14 天**的可证伪事件。
 
-> ⚠️ `futu-news-search` 和 `futu-comment-sentiment` 是 **HTTP API，与 OpenD 完全无关**——OpenD 离线也能跑。禁止以"OpenD 离线"为由跳过。
+> ⚠️ `futu-news-search`、`futu-stock-digest`、`futu-comment-sentiment` 是 **HTTP API，与 OpenD 完全无关**——OpenD 离线也能跑。禁止以"OpenD 离线"为由跳过。
 
-## 四类信号源（并行覆盖）
+## 五个子模块（7a-7e）
 
-| 信号源 | 优先工具 |
-|--------|---------|
-| **官方动态**（财报/公告/回购/管理层） | `futu-news-search`（中文覆盖优于 Tavily）；Tavily `news` topic 补英文 |
-| **投资人与社交媒体**（雪球/X/散户情绪） | `futu-comment-sentiment` 拿牛牛社区；Tavily `general` 补人物动作词 |
-| **监管与做空**（诉讼/调查/做空报告） | Tavily：公司名 + "调查 做空 short report 停牌"，days=60 |
-| **市场结构**（港股南向/沽空/大行评级；美股 13F/评级） | Tavily 代码 + 市场专属术语；港股南向/沽空已在维度 4 获取，这里补媒体口径 |
+| 子模块 | 工具 | 必做 |
+|--------|------|------|
+| **7a 结构化公告** | `get_corporate_actions_*` + `get_research_rating_summary` + `get_insider_trade_list` + `get_shareholders_holding_changes`（6 脚本并行） | ✅ 必做 |
+| **7b AI 新闻解读** | `futu-stock-digest` skill | ✅ 必做 |
+| **7c 原始新闻** | `futu-news-search` skill | ✅ 必做 |
+| **7d 软新闻** | Tavily（监管/做空/大行评级） | ✅ 必做 |
+| **7e 社区情绪** | `futu-comment-sentiment` skill | 可选 |
+
+### 7a：结构化公告
+
+6 个脚本并行拉取，覆盖公告类事件的事实基础：
+- `get_corporate_actions_buybacks.py`：回购计划/完成情况
+- `get_corporate_actions_dividends.py`：真实股息历史（替代 Tavily 估算）
+- `get_corporate_actions_stock_splits.py`：拆合股（异动排查第一道）
+- `get_research_rating_summary.py`：机构评级 + 目标价（港美股）
+- `get_insider_trade_list.py`：内部人交易
+- `get_shareholders_holding_changes.py`：大股东增减持
+
+### 7b：AI 新闻解读（futu-stock-digest）
+
+`futu-stock-digest` 调用富途 HTTP 新闻 API，AI 提炼：方向判断（bullish/bearish/neutral）+ 关键信号（3 条证据链）。输出供 agent 消费，不直接展示给用户。
+
+### 7c-7e：原始新闻 + 软新闻 + 社区情绪（原四类信号源）
 
 ## 关键词规则
 
