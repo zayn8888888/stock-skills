@@ -423,7 +423,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 **完整规范见 `references/reflection.md`**（已在执行前必读块加载）。两个动作：
 
 **8a. 阶段 0 之前**（决策开始前）：
-- **必须显式调用 `Glob` / `Read` 工具**检索 memory 目录 `/Users/admin/.claude/projects/.../memory/`，匹配 `trading-debate-decision-{ticker}-*.md` 文件
+- **必须显式调用 `Glob` / `Read` 工具**检索当前会话的 Claude Code memory 目录（`~/.claude/projects/<会话编码目录>/memory/`），匹配 `trading-debate-decision-{ticker}-*.md` 文件
 - ❌ 禁止凭印象说"我记得有 / 没有"——必须真读文件
 - 命中且决策 ≥ 3 个月前但未反思 → 提示用户"是否先做反思再开新决策"
 - 命中已反思的 → 把"教训"作为上下文注入阶段 6 PM prompt

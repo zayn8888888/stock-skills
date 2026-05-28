@@ -17,6 +17,21 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 
 富途 OpenAPI（需 OpenD）脚本集安装在 `~/.claude/skills/futuapi/scripts/`，命令→SDK 对照表见 [references/sdk-setup.md](references/sdk-setup.md)。
 
+### 外部 skill 依赖（需单独安装，非本仓库内置）
+
+| skill | 用于维度 | 必须/可选 | 降级方案 |
+|-------|---------|---------|---------|
+| `futu-technical-anomaly` | 维度 2 技术走势 | 可选 | 跳过量化技术信号，仅做人工解读 |
+| `futu-capital-anomaly` | 维度 4 资金流向 | 可选 | 跳过港股买卖经纪商榜 + 卖空异动 |
+| `futu-news-search` | 维度 7 新闻与事件 | 强烈推荐 | Tavily 单源兜底，覆盖度下降 |
+| `futu-comment-sentiment` | 维度 7 新闻与事件 | 可选 | 跳过社区情绪，注意已知 keyword bug |
+| `futu-derivatives-anomaly` | 维度 8 期权链 | 可选 | 直接走 Step 1-3 完整扫描 |
+| `hyperliquid-perps` | 维度 4 资金流向（美股） | 可选 | 美股标的无链上 funding 数据 |
+| `event-calendar` | 维度 9 事件日历 | 强烈推荐 | Tavily 单源降级并标注 |
+| Tavily MCP | 维度 3/7/9 | 强烈推荐 | 无 Tavily 时对应维度降级或跳过 |
+
+以上社区 skill（`futu-*`）通常随 `futuapi` 相关 skill 包分发，安装后放入 `~/.claude/skills/` 即可。
+
 ## 执行前必读（收到任务后第一步，不与任何分析并行）
 
 ```bash

@@ -11,11 +11,10 @@ description: 加密资产七维度深度分析助手。基于 CoinGecko Demo API
 
 ```bash
 BASE="https://api.coingecko.com/api/v3"
-CG_KEY="${COINGECKO_DEMO_KEY:-}"  # 从 ~/.zshenv 读取
 
 # ⚠️ DNS 绕过：部分网络环境本地 DNS 将 api.coingecko.com 解析到错误 IP
 # 每条 curl 命令必须加：--resolve "api.coingecko.com:443:104.20.41.132"
-# 有 Demo key：加 -H "x-cg-demo-api-key: $CG_KEY"（100次/分）
+# 有 Demo key：加 -H "x-cg-demo-api-key: $COINGECKO_DEMO_KEY"（100次/分）
 # 无 key：省略 header，降级到公共端点（~3次/分，请求间需间隔）
 ```
 
@@ -56,22 +55,56 @@ curl "$BASE/coins/{id}?localization=false&tickers=false&community_data=true&deve
 curl "$BASE/coins/{id}/market_chart?vs_currency=usd&days=90" $HEADER
 ```
 
-用 Python 或 jq 内联计算：
-- 14 日 RSI（>70 超买 / <30 超卖）
-- 7 日均价 vs 30 日均价（判断金叉/死叉）
-- 7 日最高/最低（支撑阻力参考）
-- 90 日趋势描述（上升/下降/震荡区间）
+用以下 Python 片段内联计算（market_chart 响应存为变量 `data`）：
+
+```python
+import json, statistics
+
+data = json.loads("""<market_chart API 响应>""")
+prices = [p[1] for p in data["prices"]]
+
+# 14 日 RSI
+def rsi(series, n=14):
+    deltas = [series[i+1] - series[i] for i in range(len(series)-1)]
+    gains = [max(d, 0) for d in deltas[-n:]]
+    losses = [abs(min(d, 0)) for d in deltas[-n:]]
+    avg_g = sum(gains) / n
+    avg_l = sum(losses) / n
+    if avg_l == 0:
+        return 100
+    rs = avg_g / avg_l
+    return round(100 - 100 / (1 + rs), 1)
+
+rsi14 = rsi(prices)
+# >70 超买 / <30 超卖
+
+# 7 日均价 vs 30 日均价（金叉/死叉）
+ma7  = statistics.mean(prices[-7:])
+ma30 = statistics.mean(prices[-30:])
+cross = "金叉（上涨信号）" if ma7 > ma30 else "死叉（下跌信号）"
+
+# 7 日高低（支撑阻力）
+week_high = max(p[1] for p in data["prices"][-7:])
+week_low  = min(p[1] for p in data["prices"][-7:])
+
+# 90 日趋势
+first30_avg = statistics.mean(prices[:30])
+last30_avg  = statistics.mean(prices[-30:])
+trend = "上升" if last30_avg > first30_avg * 1.05 else ("下降" if last30_avg < first30_avg * 0.95 else "震荡")
+
+print(f"RSI14={rsi14} | MA7={ma7:.4f} vs MA30={ma30:.4f}（{cross}）| 7日区间 {week_low:.4f}~{week_high:.4f} | 90日趋势：{trend}")
+```
 
 ### 维度 3：链上信号（Hyperliquid）
 
 ```bash
-~/.claude/skills/hyperliquid-perps/scripts/lookup.sh <TICKER> --json 2>/dev/null
+"${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh" <TICKER> --json 2>/dev/null
 ```
 
 - 无镜像（多数小币）：标注"该币无 Hyperliquid 链上镜像"后跳过
 - 有镜像：输出 fundingAprNow / OI / 链上价 vs CoinGecko 价差 / 24h 链上成交量
 
-**拥挤度规则**：APR < +20% → 未拥挤 ✅ / +20~+100% → 多头建仓 ⚠️ / >+100% → 极度拥挤 🚨
+**拥挤度规则**：APR < +20% → 未拥挤 ✅ / +20~+100% → 多头偏强（正常上涨段）⚠️ / >+100% → 极度拥挤 🚨（与 hyperliquid-perps 等级表一致）
 
 **流动性闸门**：OI < 1M USD 或日成交 < 1M USD → 标注"链上信号参考意义有限"
 
@@ -115,7 +148,7 @@ curl "$BASE/coins/markets?vs_currency=usd&category={category_id}&order=market_ca
 
 ## 输出规范
 
-- 价格用 USD 后缀，市值用 B/M 简写，不用 $ 符号（防 KaTeX 冲突）
+- 价格用 USD 后缀，市值用 B/M 简写，**本 skill 强制不用 $ 符号**（Claude Code 终端 Markdown 渲染下 `$XX` 可能被 KaTeX 吞掉，加密资产价格数字小数位多，更易触发）
 - 所有 API 数据标注拉取时间（UTC）
 
 （报告模板、指标解读、数据源 API 已在执行前必读块加载）

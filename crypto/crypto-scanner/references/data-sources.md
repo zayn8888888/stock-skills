@@ -62,7 +62,7 @@ sparkline_in_7d.price[]              7日价格数组（计算均量用）
 
 ## Hyperliquid 链上数据
 
-脚本：`~/.claude/skills/hyperliquid-perps/scripts/lookup.sh <TICKER> --json`
+脚本：`"${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh" <TICKER> --json`
 
 仅用于阶段 2 打分中的"链上拥挤度"因子。无镜像时直接跳过该因子（不扣分）。
 

@@ -77,7 +77,7 @@ Read references/data-sources.md     # Hyperliquid /info 端点完整 API 规格
 | `prevDayPx` | 24h 前价格 | |
 | `chgPct` | 24h 涨跌（%） | 链上 24/7 涨跌，可能领先现货 |
 | `fundingHourly` | 当前每小时资金费率 | 正 = 多头付空头 |
-| `fundingApr` | 年化（hourly × 24 × 365） | 极值预警：> 50% 多头拥挤；< -30% 空头拥挤 |
+| `fundingApr` | 年化（hourly × 24 × 365） | 极值预警：> +100% 极度多头拥挤；< -100% 极度空头拥挤（详见下文等级表） |
 | `oiBase` | 持仓量（合约单位） | |
 | `oiNotionalUsd` | 持仓名义美元值 | **流动性闸门** |
 | `dayNtlVlmUsd` | 24h 名义成交（美元） | **流动性闸门** |

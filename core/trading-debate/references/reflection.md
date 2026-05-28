@@ -5,7 +5,7 @@
 ## 设计动机
 
 TradingAgents 用 LangGraph state 持久化反思，本 skill 没那个基础设施。但 Claude Code 有：
-- **memory 系统**：`/Users/admin/.claude/projects/.../memory/` 下的 markdown 文件，每次会话自动加载
+- **memory 系统**：`~/.claude/projects/<会话编码目录>/memory/` 下的 markdown 文件，每次会话自动加载
 - **MEMORY.md 索引**：进入会话时自动读，相关 memory 触发详情
 
 把反思塞进 memory，等于实现了"跨会话学习"。
