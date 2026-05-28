@@ -12,7 +12,19 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 - **TauricResearch/TradingAgents**（LangGraph + 多角色辩论）：流程主干（七阶段）、5 档评级、Risk 三方辩论
 - **virattt/ai-hedge-fund**（投资大师 signal 集合）：可选大师风格 agent（巴菲特 / 林奇 / Burry / Druckenmiller / Munger 等）
 
-详细架构说明参见 `references/framework-reference.md`。
+详细架构说明见 `references/framework-reference.md`（已在执行前必读块加载）。
+
+## 执行前必读（收到任务后第一步，不与任何阶段并行）
+
+```bash
+Read references/framework-reference.md    # 七阶段架构完整说明（TradingAgents 对照）
+Read references/master-styles.md          # 7 个大师 agent 完整 prompt 模板（v0.2）
+Read references/role-prompts.md           # Bull/Bear/Risk/RM/Trader/PM 角色 prompt 细节
+Read references/reflection.md             # 阶段 8 决策存档 + 历史召回完整规范（v0.3）
+Read references/portfolio-layer.md        # 阶段 P1-P4 多标的组合层完整规范（v0.4）
+Read references/cross-ticker-lessons.md   # 阶段 L1 跨标的反思教训聚合完整规范（v0.5）
+Read references/multi-market.md           # 阶段 M1 跨市场基准选择完整规范（v0.5）
+```
 
 ## 核心原则
 
@@ -59,7 +71,7 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 ## 执行流程（七阶段）
 
-完整 prompt 模板参见 `references/role-prompts.md`。本节只列流程骨架。
+完整 prompt 模板见 `references/role-prompts.md`（已在执行前必读块加载）。本节只列流程骨架。
 
 ### 阶段 0a：启动前 skill 确认（**新增硬约束 — 防止默认套餐偷懒**）
 
@@ -259,7 +271,7 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
 
 **默认不跑**。用户明确要求"用 X 视角"或"凑齐对冲基金团队"或"模拟 Buffett 怎么看 / Burry 怎么看"时启用。
 
-**完整 prompt 模板见 `references/master-styles.md`**（v0.2 已实现，7 个大师）。
+**完整 prompt 模板见 `references/master-styles.md`**（已在执行前必读块加载）。
 
 #### 内置大师与适用场景
 
@@ -408,7 +420,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 8：决策存档 + 历史召回（v0.3 跨会话 Reflection）
 
-**完整规范见 `references/reflection.md`**。两个动作：
+**完整规范见 `references/reflection.md`**（已在执行前必读块加载）。两个动作：
 
 **8a. 阶段 0 之前**（决策开始前）：
 - **必须显式调用 `Glob` / `Read` 工具**检索 memory 目录 `/Users/admin/.claude/projects/.../memory/`，匹配 `trading-debate-decision-{ticker}-*.md` 文件
@@ -430,7 +442,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 P1-P4：多标的组合层（v0.4，可选）
 
-**完整规范见 `references/portfolio-layer.md`**。仅当用户明确提交多个候选标的时启用：
+**完整规范见 `references/portfolio-layer.md`**（已在执行前必读块加载）。仅当用户明确提交多个候选标的时启用：
 
 | 阶段 | 内容 | 硬约束 |
 |-----|------|-------|
@@ -445,7 +457,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 L1：跨标的反思教训聚合（v0.5，自动）
 
-**完整规范见 `references/cross-ticker-lessons.md`**。在阶段 8a（历史召回）时自动检查：
+**完整规范见 `references/cross-ticker-lessons.md`**（已在执行前必读块加载）。在阶段 8a（历史召回）时自动检查：
 
 - **必须显式调用 `Glob` 工具**列出所有 `trading-debate-decision-*.md` 文件，**Read** 已反思的决策——禁止凭印象说"我记得有 N 条"
 - 该 ticker 所属行业 / 主题已有 ≥ 3 条已反思决策 → 自动跑教训聚合
@@ -461,7 +473,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 M1：跨市场基准选择（v0.5，自动）
 
-**完整规范见 `references/multi-market.md`**。仅当组合候选含 ≥ 2 个市场（美 / 港 / A 股）时自动启用：
+**完整规范见 `references/multi-market.md`**（已在执行前必读块加载）。仅当组合候选含 ≥ 2 个市场（美 / 港 / A 股）时自动启用：
 
 | 问题 | 解法 |
 |-----|------|

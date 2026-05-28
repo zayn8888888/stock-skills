@@ -13,6 +13,17 @@ description: 前瞻事件日历助手。聚合三个数据源——Finnhub（美
 4. **流动性门槛**：Polymarket 市场 24h vol ≥ $50,000 才采用
 5. **不出买卖指令**：日历是输入，不是结论
 
+## 执行前必读（收到任务后第一步）
+
+```bash
+Read references/finnhub.md          # Finnhub 经济日历 + 财报日历 API 详细用法
+Read references/polymarket.md       # Polymarket Gamma API 详细用法
+Read references/caller-interface.md # 被 market-scanner / stock-analyzer 调用时的接口规格
+Read references/data-sources.md     # 三个数据源完整 API 规格（Finnhub/Polymarket/Tavily）
+Read references/query-templates.md  # 中港政策 Tavily 关键词模板
+Read references/report-template.md  # 完整报告模板与表格硬规则
+```
+
 ## Finnhub API Key 检查
 
 ⚠️ Claude Code Bash 工具是 non-interactive non-login shell，默认不读 `~/.zshrc`，用以下脚本先检查：
@@ -46,11 +57,11 @@ fi
 
 ## 数据源执行顺序（并行）
 
-1. **Finnhub**（美国经济日历 + 美股财报）→ 详见 [references/finnhub.md](references/finnhub.md)
-2. **Polymarket**（高流动性宏观押注 + 经济数据子表）→ 详见 [references/polymarket.md](references/polymarket.md)
-3. **Tavily**（中港政策兜底）→ 详见 [references/caller-interface.md](references/caller-interface.md)
+1. **Finnhub**（美国经济日历 + 美股财报）
+2. **Polymarket**（高流动性宏观押注 + 经济数据子表）
+3. **Tavily**（中港政策兜底）
 
-被 market-scanner / stock-analyzer 调用时的接口规格见 [references/caller-interface.md](references/caller-interface.md)。
+（各数据源 API 用法、查询模板、接口规格已在执行前必读块加载）
 
 ## 输出格式
 

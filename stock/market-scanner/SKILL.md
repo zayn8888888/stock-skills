@@ -28,6 +28,18 @@ description: 市场热点板块扫描 + 产业链外推器。A股用东方财富
 
 - **hyperliquid-perps skill**（可选，**仅美股维度**）：用于 L2 链上拥挤度与 L3 funding 因子评分。**港股板块不适用**（链上港股镜像 OI < 10 万 USD，信号无效）；**A 股不适用**（无链上镜像）。未安装时跳过链上维度。
 
+## 执行前必读（收到任务后第一步，不与任何扫描并行）
+
+```bash
+Read references/api-eastmoney.md      # BK 代码表、完整代码、NOISE_KEYWORDS 过滤列表
+Read references/api-futu.md           # 方法对照表、港美股板块 K 线代码、资金流 DAY fallback 规则
+Read references/rotation-analysis.md  # L1.5 轮动时序详细代码与港美股差异
+Read references/l3-scoring.md         # L3 候选打分详细打分表与各市场差异
+Read references/l5-extrapolation.md   # L5 产业链外推详细逻辑与输出格式
+Read references/report-template.md    # 完整报告模板
+Read references/pitfalls.md           # 常见陷阱详细说明
+```
+
 ## 扫描范围
 
 港股（HK）+ 美股（US）+ A股（CN）。用户可显式指定单一市场，默认并行扫三个市场并分开出报告。新加坡 / 日本暂不支持。

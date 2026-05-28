@@ -16,6 +16,14 @@ description: Hyperliquid 链上永续合约镜像数据助手。基于 Hyperliqu
 4. **跨 dex 一致性校验**：同一标的（如 NVDA）在 4 个 dex 都有镜像时，先看 oracle price 偏差 —— 大于 0.5% 视为异常
 5. **不出买卖指令**：funding 极值/OI 突变是观察信号，不是结论，最终决策权交给用户与 trading-debate
 
+## 执行前必读（收到任务后第一步）
+
+```bash
+Read references/asset-mapping.md    # 完整资产类别映射（美股/指数/商品/FX/港股/Pre-IPO）
+Read references/report-template.md  # 完整输出报告模板
+Read references/data-sources.md     # Hyperliquid /info 端点完整 API 规格
+```
+
 ## 前置依赖
 
 ### 必需
@@ -149,7 +157,7 @@ curl -s -X POST https://api.hyperliquid.xyz/info \
 
 ## 资产类别覆盖速查
 
-> 完整映射详见 `references/asset-mapping.md`
+> （资产映射已在执行前必读块加载）
 
 | 类别 | 主 dex | 代表标的 | 流动性 |
 |---|---|---|---|
@@ -165,7 +173,7 @@ curl -s -X POST https://api.hyperliquid.xyz/info \
 
 ## 输出报告模板
 
-> 完整模板见 `references/report-template.md`
+> （报告模板已在执行前必读块加载）
 >
 > **⚠️ 数字格式硬规则**：禁止用 `$` 前缀（`230.84 USD` 在 Claude Code 终端会被 KaTeX 渲染吞掉，输出成 `0.84`）。**统一用 `USD` 后缀**：`230.84 USD`、`125.8M USD`、`OI ≥ 1M USD`。
 

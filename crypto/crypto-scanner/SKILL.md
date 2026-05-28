@@ -22,6 +22,14 @@ CG_KEY="${COINGECKO_DEMO_KEY:-}"  # 从 ~/.zshenv 读取
 # 无 key：省略 header，降级到公共端点（~3次/分，需在请求间加间隔）
 ```
 
+## 执行前必读（收到任务后第一步）
+
+```bash
+Read references/report-template.md   # 完整报告模板
+Read references/sector-mapping.md    # 赛道 ID 与分类映射
+Read references/data-sources.md      # CoinGecko API 速查
+```
+
 ## 阶段 0：宏观锚定
 
 并行拉取全局数据与宏观事件：
@@ -127,11 +135,7 @@ BTC 数据来自阶段 0 的 market_chart，Nasdaq 趋势从 Tavily 搜索获取
 
 ## 输出结构
 
-见 [references/report-template.md](references/report-template.md)
-
-赛道 ID 与分类映射见 [references/sector-mapping.md](references/sector-mapping.md)
-
-数据源 API 速查见 [references/data-sources.md](references/data-sources.md)
+（报告模板、赛道映射、数据源 API 已在执行前必读块加载）
 
 ## 协作关系
 

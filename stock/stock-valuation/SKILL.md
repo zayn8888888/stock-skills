@@ -13,6 +13,13 @@ description: 股票定量估值计算器。接受股票名称或代码，用三�
 
 将用户输入映射为富途代码：美股 `US.AAPL` / 港股 `HK.00700` / A 股 `SH.600519`。
 
+## 执行前必读（代码标准化后立即执行）
+
+```bash
+Read references/calculation-methods.md   # DCF/PE/PEG 完整计算步骤、公式、敏感性分析
+Read references/china-adr-pitfalls.md    # 中概股 ADR 专项陷阱（PDD/BABA/BIDU 等）
+```
+
 ## Step 1：并行拉取数据
 
 #### 1a. 富途行情（当前价格 + PE）

@@ -30,6 +30,14 @@ curl "$BASE/search?query=HYPE" $HEADER \
 
 取 `market_cap_rank` 最小的匹配项。若 symbol 与输入完全一致则优先采用。
 
+## 执行前必读（收到任务后第一步）
+
+```bash
+Read references/report-template.md          # 完整报告模板
+Read references/metrics-interpretation.md   # 指标含义解读
+Read references/data-sources.md             # CoinGecko + Hyperliquid API 速查
+```
+
 ## 七维度分析流程
 
 每个维度独立拉取。**硬约束：失败必须显式标注"维度 X 数据不可用，原因：XX"，不允许静默跳过。**
@@ -110,11 +118,7 @@ curl "$BASE/coins/markets?vs_currency=usd&category={category_id}&order=market_ca
 - 价格用 USD 后缀，市值用 B/M 简写，不用 $ 符号（防 KaTeX 冲突）
 - 所有 API 数据标注拉取时间（UTC）
 
-完整报告模板见 [references/report-template.md](references/report-template.md)
-
-指标含义解读见 [references/metrics-interpretation.md](references/metrics-interpretation.md)
-
-数据源 API 速查见 [references/data-sources.md](references/data-sources.md)
+（报告模板、指标解读、数据源 API 已在执行前必读块加载）
 
 ## 协作关系
 

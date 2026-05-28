@@ -17,6 +17,14 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 
 富途 OpenAPI（需 OpenD）脚本集安装在 `~/.claude/skills/futuapi/scripts/`，命令→SDK 对照表见 [references/sdk-setup.md](references/sdk-setup.md)。
 
+## 执行前必读（收到任务后第一步，不与任何分析并行）
+
+```bash
+Read references/methodology.md          # 各维度判断逻辑
+Read references/metrics-interpretation.md  # 指标解读与常见陷阱
+Read references/report-template.md     # 完整报告模板
+```
+
 ## 执行契约
 
 **硬约束，不满足不出报告**：
@@ -26,7 +34,7 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 3. **任何被 cancel / 报错的工具调用，必须立即重跑一次**；如确实无法执行，报告中明确标 `❌ 未执行（原因：...）`；禁止用"订阅限制"/"执行中"/"无镜像"等模糊话术替代未真正执行的调用
 4. **每个维度结尾加数据完整性自检**：列出本维度所有工具 + 调用结果（✅成功 / ❌失败原因 / ⏭️跳过原因）
 5. **每张表、每段精细数据必须标来源**：格式 `[来源: 脚本名]` 或 `[来源: Tavily "<关键词>"]`；缺来源标签的数字禁止出现在报告中
-6. **输出前按 [references/checklist.md](references/checklist.md) 自检**
+6. **输出前必须 `Read references/checklist.md` 逐项自检，不满足不出报告**
 
 ## 分析流程（九维度）
 
@@ -143,15 +151,22 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 
 价格异动 ≥5% 必做反向追溯；报告末尾必须列"未发现"显式证伪。
 
-**完整规程、futu-comment-sentiment bug 处理、fallback 链、歧义词对策、反向追溯模板见 [references/news-search.md](references/news-search.md)**。
+**维度 7 开始前必须 `Read references/news-search.md`**（fallback 链、futu-comment-sentiment bug 处理、歧义词对策、反向追溯模板均在此）。
 
 ### 维度 8：期权链（美股/港股必做，无期权市场明确标注跳过）
 
-先调 `futu-derivatives-anomaly` skill（快通道）；再按需走 Step 1-3 完整扫描（取到期日 → 取期权链 → 批量订阅拉 OI/IV/Greeks）。
+**两阶段强制流程**：
 
-扫描范围由数据决定（港股 ±20%，美股 ±15% 起步）；每批 ≤12 合约；必须用 `get_stock_quote.py` 不是 `get_snapshot.py`。
+**阶段一**：先调 `futu-derivatives-anomaly` skill（快通道）。
 
-**完整规程、到期日选择策略、核心指标、单一 strike 极端堆积识别见 [references/options-chain.md](references/options-chain.md)**。
+**阶段二**：以下任一情形**必须立即走 Step 1-3 完整扫描**（取到期日 → 取期权链 → 批量订阅拉 OI/IV/Greeks），不得降级到 Tavily：
+- 快通道返回任何错误码（含 -12301 DATA_UNAVAILABLE）
+- 快通道返回"无异常"但用户追问机构布局/对冲流
+- 出现单一 strike 极端堆积疑虑
+
+扫描范围由数据决定（港股 ±20%，美股 ±15% 起步）；每批 ≤12 合约；必须用 `get_stock_quote.py` 不是 `get_snapshot.py`。禁止用"订阅限制"/"数据截断"等话术替代未真正执行的 Step 1-3 调用。
+
+**维度 8 开始前必须 `Read references/options-chain.md`**（Step 1-3 完整命令、到期日选择策略、核心指标、单一 strike 极端堆积识别均在此）。
 
 ### 维度 9：事件日历（前瞻，必做）
 
