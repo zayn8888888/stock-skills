@@ -29,9 +29,9 @@ Read references/report-template.md     # 完整报告模板
 
 **硬约束，不满足不出报告**：
 
-1. **九个维度全部执行**。维度 1-7 必做；维度 8 对美股/港股必做，A 股明确标注"本市场无期权，跳过"；维度 9 必做，event-calendar 未安装时降级并标注
+1. **九个维度全部覆盖**——核心维度全量展开，非核心维度可压缩为一行结论。维度 1-7 必做；维度 8 对美股/港股必做，A 股明确标注"本市场无期权，跳过"（也算覆盖）；维度 9 必做，event-calendar 未安装时降级并标注
 2. **能并行的工具一次性并行调用**，数据齐全后统一输出报告。**并行批次仅放同质、低风险调用**（如同时拉 5 只同行快照）；参数未验证或可能出错的调用单独一批，不与其他调用混排，防止连锁 cancel
-3. **任何被 cancel / 报错的工具调用，必须立即重跑一次**；如确实无法执行，报告中明确标 `❌ 未执行（原因：...）`；禁止用"订阅限制"/"执行中"/"无镜像"等模糊话术替代未真正执行的调用
+3. **核心维度调用报错必须重跑（最多 3 次，3 次后标注原因继续）**；非核心维度报错标注 ❌ 跳过并从 Tavily 补一行；维度 8 对 A 股可以是一行"本市场不支持期权，跳过"（也算覆盖）；禁止用"订阅限制"/"执行中"/"无镜像"等模糊话术替代未真正执行的调用
 4. **每个维度结尾加数据完整性自检**：列出本维度所有工具 + 调用结果（✅成功 / ❌失败原因 / ⏭️跳过原因）
 5. **每张表、每段精细数据必须标来源**：格式 `[来源: 脚本名]` 或 `[来源: Tavily "<关键词>"]`；缺来源标签的数字禁止出现在报告中
 6. **输出前必须 `Read references/checklist.md` 逐项自检，不满足不出报告**
@@ -54,6 +54,18 @@ Read references/report-template.md     # 完整报告模板
    - ✅ 成功 → 后续所有调用统一使用 `<NORMALIZED_CODE>`
    - ❌ 报格式错误 → 停止，向用户确认代码
    - ❌ 连接失败 → 停止，提示启动 OpenD
+
+### Step 0.5：意图路由（必做，代码验证通过后执行）
+
+判断用户意图，选择执行路径：
+
+| 触发词 | 路径 |
+|--------|------|
+| "分析 / 帮我看看 / 怎么样" | **全景分析**：九维度全量 + 标准综合研判 |
+| "能买吗 / 该加仓 / 该减仓 / 现在上车" | **决策导向**：九维度全量 + 综合研判升级为加权版（含核心矛盾权重 + 置信度 + 证伪条件 + 有效期） |
+| "估值贵吗 / 技术面怎样 / 资金在进还是出" | **单点深挖**：只跑相关 2-3 维度 + 同行对比 |
+
+意图不明时默认全景分析。
 
 ### 维度 1：基础行情（必做）
 ```bash
@@ -162,16 +174,23 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> -
 
 五个子模块顺序执行：
 
-**7a 结构化公告（OpenAPI，并行拉 6 个脚本，必做）**
+**7a 结构化公告（两级，非全部必做）**
+
+**Tier 1（必做，并行）**：
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_buybacks.py <CODE> --json
 python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_dividends.py <CODE> --json
 python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_stock_splits.py <CODE> --json
 python3 ~/.claude/skills/futuapi/scripts/quote/get_research_rating_summary.py <CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_insider_trade_list.py <CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_shareholders_holding_changes.py <CODE> --json
 ```
-A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_shareholders_holding_changes` 可能不支持，失败标 ❌ 跳过。
+
+**Tier 2（有触发线索才做）**：触发线索来自维度 2 的异动强制扫描结论：
+- 维度 2 发现 K 线异动 + 无拆股/股息解释 → 查 `get_corporate_actions_buybacks.py`（是否有回购支撑）
+- Tavily / news-search 报道高管减持 → 查 `get_insider_trade_list.py`
+- Tavily / news-search 报道持股变动 → 查 `get_shareholders_holding_changes.py`
+
+维度 2 → 维度 7 传导：维度 2 的异动调查结论必须在维度 7 开始前可用（通过上下文传递，不要重跑 Tavily）。维度 2 未触发异动 → Tier 2 三个脚本全部标注"无触发线索，跳过"。
+
+A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_shareholders_holding_changes` 可能不支持，失败直接标 ❌，不走 fallback 链。
 
 **7b AI 新闻解读（`futu-stock-digest` skill，必做）**
 拿结构化结论：方向判断（bullish/bearish/neutral）+ 关键信号摘要，供后续综合研判消费。
