@@ -256,6 +256,8 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 - [ ] 如果是续接复用，`data_source` 字段是否标了"reused from"？
 - [ ] `data_gaps` 是否列出了所有缺失维度？（不允许藏起来）
 - [ ] 若启用大师团，是否核对了每个大师的"条件性必须 skill"是否真有数据传入其 prompt？（数据传入失败时该大师必须改为"跳过"，不允许含糊给 neutral）
+- [ ] **stock-analyzer 内部子 skill 是否全部已调用？** 检查：`futu-technical-anomaly`（维度 2）/ `futu-capital-anomaly`（维度 4）/ `futu-stock-digest`（维度 7b）/ `futu-news-search`（维度 7c）— 若 `data_gaps` 里出现"子 skill 未逐个触发"字样，立即停下回到 stock-analyzer 对应维度补调，不允许带着 data_gaps 继续辩论
+- [ ] `news_report` 字段是否包含来自 `futu-stock-digest` 的方向判断（bullish/bearish/neutral），而非仅 Tavily 搜索结果？
 
 **任何一条没做到，停下来补齐，禁止进入阶段 1**。
 
@@ -271,6 +273,7 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
 | "stock-fundamentals/stock-valuation 未独立 Skill 触发" | **立即** Skill() 调用补齐，不是写在 caveat 里就算了 |
 | "已有公开 consensus / Tavily 搜索结果可以替代" | 跳过该大师，不允许代理 |
 | "数据采集时间紧 / token 预算" | 用户选了 A 全调 = 已接受成本，agent 无权代为缩减 |
+| "futu-stock-digest / futu-news-search / futu-capital-anomaly / futu-technical-anomaly：stock-analyzer 子 skill 未逐个触发" | 立即停下，对 stock-analyzer 补调缺失的子 skill（`Skill()` 调用），不允许把"未触发"写进 `data_gaps` 继续辩论 |
 
 **触发条件**：
 - agent 在阶段 0 任何输出里包含"降级"、"有限版"、"代理"、"省略"、"足够直接进入"等词 → 停下，回看阶段 0a 清单，补调遗漏 skill

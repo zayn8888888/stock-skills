@@ -77,7 +77,7 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --
 >    - Tavily：`<公司中文名> <YYYY-MM-DD> 暴跌 OR 暴涨 OR 催化`（days=14）
 > 2. 调查结论写入报告后，**继续执行剩余维度**；所有后续维度（估值/资金/技术）的数字均须显式标注"含断层日 \<日期\>"并附调查结论。
 
-常规分析重点：近 30 日高低点 / 当前相对位置 / 是否破位 / 量价配合 / 短期均线关系。额外触发 `futu-technical-anomaly` skill 拿量化技术信号清单，与人工解读交叉校验。
+常规分析重点：近 30 日高低点 / 当前相对位置 / 是否破位 / 量价配合 / 短期均线关系。**必须调用** `Skill("futu-technical-anomaly")` 拿量化技术信号清单，与人工解读交叉校验（不可用 Python K 线脚本替代，不可省略）。
 
 **相对强度（与常规分析并行拉取基准 K 线）**：
 
@@ -124,7 +124,7 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_research_rating_summary.py <C
 python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_flow.py <CODE> --json
 python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_distribution.py <CODE> --json
 ```
-额外触发 `futu-capital-anomaly` skill（港股买卖经纪商榜 + 卖空异动）。
+**必须调用** `Skill("futu-capital-anomaly")`（港股买卖经纪商榜 + 卖空异动，不可用 get_capital_flow.py 替代，不可省略）。
 
 **美股标的额外调用 `hyperliquid-perps` skill**（链上 24/7 多空偏向）：OI ≥ 1M USD 正常引用；< 100k 跳过。funding APR > +100% = 极度多头拥挤，< -100% = 极度空头拥挤。港股除 BABA 外 OI < 100k，A 股无镜像，均跳过。
 
@@ -207,6 +207,26 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 ### 维度 9：事件日历（前瞻，必做）
 
 调用 `event-calendar` skill：`from=今天, to=今天+14天, symbols=[<CODE>], region=US/HK/BOTH`。未安装时 Tavily 单源降级并标注。宏观节点按标的属性筛选（半导体加芯片出口管制、中概股加 PBOC + 中美贸易等）。
+
+## ⚠️ 输出前子 skill 完整性自检（所有维度执行完毕后、输出报告前必做）
+
+填写以下表格。⛔ 的行必须**立即补调**，补调完成后标 ✅，才能继续输出报告：
+
+| 维度 | 必调 skill | 状态 | 合法 N/A 条件 |
+|------|-----------|------|--------------|
+| 维度 2 | `futu-technical-anomaly` | □ ✅ / ⛔ | 无（必须调用） |
+| 维度 4 | `futu-capital-anomaly` | □ ✅ / ⛔ | 无（必须调用） |
+| 维度 4 | `hyperliquid-perps` | □ ✅ / N/A | A 股标的、港股（BABA 除外）可 N/A |
+| 维度 7b | `futu-stock-digest` | □ ✅ / ⛔ | 无（必须调用） |
+| 维度 7c | `futu-news-search` | □ ✅ / ⛔ | 无（必须调用） |
+| 维度 8 | `futu-derivatives-anomaly` | □ ✅ / N/A | OI < 100k 或无期权市场可 N/A；A 股必须 N/A |
+
+**禁止措辞**（出现即停止，立刻补调，不得继续输出）：
+- "因时间约束跳过"
+- "已用 Python 脚本获取了等效数据"
+- "已有 Tavily 结果，无需调 skill"
+- "数据充足，子 skill 不必要"
+- "X skill 未逐个触发"（哪怕写在 data_gaps 里也算偷懒，必须补调）
 
 ## 输出格式
 
