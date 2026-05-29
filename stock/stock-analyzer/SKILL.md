@@ -79,6 +79,26 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --
 
 常规分析重点：近 30 日高低点 / 当前相对位置 / 是否破位 / 量价配合 / 短期均线关系。额外触发 `futu-technical-anomaly` skill 拿量化技术信号清单，与人工解读交叉校验。
 
+**相对强度（与常规分析并行拉取基准 K 线）**：
+
+按市场选择基准代码——美股用 `US.SPY`（若 `get_owner_plate` 板块含 Technology / Semiconductor，改用 `US.QQQ`）；A 股用 `SH.000300`；港股用 `HK.HSI`。
+
+```bash
+python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <BENCHMARK_CODE> --ktype 1d --num 30 --json
+```
+
+计算并输出三行（放在维度 2 末尾，紧凑格式）：
+
+```
+📐 相对强度（5日）
+  vs 基准（SPY/000300/HSI）：股票 ±X.X% / 基准 ±X.X% → 超额 ±X.Xpp
+  vs 板块（维度 6 数据）：  股票 ±X.X% / 板块 ±X.X% → 超额 ±X.Xpp
+  个股 Alpha ≈ ±X.Xpp（市场 + 行业 Beta 已剥离）
+  → 信号：[Alpha>+2pp：个股主导上涨] [Alpha 0±2pp：Beta 驱动] [Alpha<-2pp：跑输板块]
+```
+
+板块数据复用维度 6 已拉的同行涨跌幅中位数；基准 K 线是此处唯一额外调用。
+
 ### 维度 3：估值与基本面（必做）
 
 **Step A**：`python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json`  
@@ -114,6 +134,22 @@ python3 ~/.claude/skills/futuapi/scripts/subscribe/subscribe.py <CODE> --types O
 python3 ~/.claude/skills/futuapi/scripts/quote/get_orderbook.py <CODE> --num 10 --json
 ```
 重点：买卖盘深度对比 / 近 30 笔成交方向占比 / 大单集中度。
+
+**流动性评估**（用快照已有字段，无额外 API）：
+
+```
+日均成交额 = get_snapshot turnover 字段（当日）
+计划仓位金额 = 用户持仓上限（若未提供，默认按组合 5% 估算）
+
+冲击成本预警：if 计划仓位金额 / 日均成交额 > 3%
+  → ⚠️ 冲击成本风险：建仓量约占日均成交 X%，建议分 2-3 日分批建仓
+
+买卖价差预警（港股）：if (卖一价 - 买一价) / 现价 > 1%
+  → ⚠️ 流动性溢价：实际买入成本高于报价约 X bp
+
+港股小票额外标注：if 日均成交额 < HK$2000 万
+  → ⚠️ 港股小票：大仓位冲击成本显著，参考价差≈X bp
+```
 
 ### 维度 6：同行对比（必做）
 ```bash
@@ -166,7 +202,7 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 
 扫描范围由数据决定（港股 ±20%，美股 ±15% 起步）；每批 ≤12 合约；必须用 `get_stock_quote.py` 不是 `get_snapshot.py`。禁止用"订阅限制"/"数据截断"等话术替代未真正执行的 Step 1-3 调用。
 
-**维度 8 开始前必须 `Read references/options-chain.md`**（Step 1-3 完整命令、到期日选择策略、核心指标、单一 strike 极端堆积识别均在此）。
+**维度 8 开始前必须 `Read references/options-chain.md`**（Step 1-3 完整命令、到期日选择策略、核心指标、单一 strike 极端堆积识别、财报临近时的 IV-implied 预期波动幅度计算均在此）。
 
 ### 维度 9：事件日历（前瞻，必做）
 

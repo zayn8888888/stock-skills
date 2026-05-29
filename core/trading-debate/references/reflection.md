@@ -90,7 +90,26 @@ type: project
 ```
 1. 读取历史 memory: trading-debate-decision-{ticker}-{YYYYMMDD}
 2. 拉当前行情 + 决策时点行情，计算 raw_return = (current_price - entry_price) / entry_price
-3. 拉同期 SPY（美股）/ HSI（港股）/ 沪深 300（A 股）回报，计算 alpha_return
+3. 三层 alpha 计算（用已有 K 线数据，禁止编造）：
+
+   层 1 — 绝对收益：raw_return（步骤 2 已算）
+
+   层 2 — 宽基超额：
+     拉同期基准 K 线（美股 US.SPY，港股 HK.HSI，A 股 SH.000300）
+     alpha_vs_market = raw_return - 同期基准收益
+
+   层 3 — 行业超额：
+     拉同期行业基准 K 线（美股半导体用 US.SOXX，消费用 US.XLY，港股科技用 HK.HSTECH；
+     无对应行业基准时跳过，标注「行业基准不适用」）
+     alpha_vs_sector = raw_return - 同期行业基准收益
+
+   层 4（进阶）— Beta 调整 alpha：
+     用已拉的日收益序列计算（取决策日往后 60 日或到今天，取较短者）：
+     Beta = cov(股票日收益, 宽基基准日收益) / var(宽基基准日收益)
+     CAPM 期望收益 = 2.5%(rf) + Beta × (宽基基准区间收益 - 2.5%)
+     capm_alpha = raw_return - CAPM 期望收益
+     示例：Beta=1.8，SPY+15%，CAPM 期望=2.5%+1.8×12.5%=25%，实际+18% → capm_alpha=-7%
+
 4. 用 reflection prompt 生成 2-4 句反思（照搬 TradingAgents 风格）
 5. 更新 memory，标记"已反思"
 ```
@@ -108,8 +127,10 @@ type: project
 
 要具体且简洁。你的输出会被存进决策日志，被未来的分析师重读，每个字都要有价值。
 
-实际原始回报：{raw_return:+.1%}
-相对基准（{benchmark_name}）超额：{alpha_return:+.1%}
+实际原始回报（绝对）：{raw_return:+.1%}
+vs 宽基基准（{benchmark_name}）超额：{alpha_vs_market:+.1%}
+vs 行业基准（{sector_benchmark}）超额：{alpha_vs_sector:+.1%}（不适用时填 N/A）
+Beta 调整 alpha（CAPM）：{capm_alpha:+.1%}（Beta={beta:.2f}）
 
 最终决策原文：
 {final_decision}
