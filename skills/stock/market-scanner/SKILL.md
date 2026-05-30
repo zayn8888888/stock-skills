@@ -232,3 +232,50 @@ L1.5 结束 → 统计「持续主线 + 次级主线↗」≥ 2 个板块：
 - PE 字段跨源不一致 → 首选 `get_stock_info` 的 `pe_ttm`
 - 东财 f115 不是 10 日涨幅 → 10 日用富途 K 线计算
 - 噪音板块污染排行 → NOISE_KEYWORDS 过滤（详见 [references/api-eastmoney.md](references/api-eastmoney.md)）
+
+## Runtime Output Contract
+
+When executed by the Research Runtime agent, this skill MUST produce the following artifacts:
+
+### Required Artifacts
+- **report.md**: Complete market scan report in Markdown format
+- **result.json**: Structured scan result with the following schema:
+  ```json
+  {
+    "ticker": "N/A (market scan)",
+    "market": "CN | HK | US",
+    "skill_name": "market-scanner",
+    "data_timestamp": "ISO 8601",
+    "summary": {
+      "hot_sectors": [...],
+      "candidates": [...],
+      "market_state": "bullish | bearish | neutral"
+    },
+    "data_gaps": []
+  }
+  ```
+- **sources.json**: Data source provenance with the following schema:
+  ```json
+  {
+    "sources": [
+      {
+        "source": "futu",
+        "operation": "quote.snapshot",
+        "status": "ok | degraded | failed",
+        "latency_ms": 122,
+        "observed_at": "ISO 8601",
+        "fetched_at": "ISO 8601",
+        "raw_ref": "sources/futu_snapshot.raw.json"
+      }
+    ],
+    "gaps": []
+  }
+  ```
+
+### Submission
+Artifacts are submitted via the server API:
+```
+POST /api/runs/{run_id}/artifacts
+```
+
+The server validates artifacts against the output contract before marking the run as succeeded.

@@ -299,3 +299,50 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 - 金额用"亿/万"口径，百分比保留 1-2 位小数
 - 关键数据用粗体/表格强化，避免大段文字
 - 用户只追问某一维度时展开该维度，否则按九维度全景输出
+
+## Runtime Output Contract
+
+When executed by the Research Runtime agent, this skill MUST produce the following artifacts:
+
+### Required Artifacts
+- **report.md**: Complete nine-dimension analysis report in Markdown format
+- **result.json**: Structured analysis result with the following schema:
+  ```json
+  {
+    "ticker": "NVDA",
+    "market": "US",
+    "skill_name": "stock-analyzer",
+    "data_timestamp": "ISO 8601",
+    "summary": {
+      "stance": "neutral_bullish | bullish | bearish | neutral",
+      "confidence": 0-100,
+      "key_points": ["..."]
+    },
+    "data_gaps": [{"category": "...", "reason": "..."}]
+  }
+  ```
+- **sources.json**: Data source provenance with the following schema:
+  ```json
+  {
+    "sources": [
+      {
+        "source": "futu",
+        "operation": "quote.snapshot",
+        "status": "ok | degraded | failed",
+        "latency_ms": 122,
+        "observed_at": "ISO 8601",
+        "fetched_at": "ISO 8601",
+        "raw_ref": "sources/futu_snapshot.raw.json"
+      }
+    ],
+    "gaps": []
+  }
+  ```
+
+### Submission
+Artifacts are submitted via the server API:
+```
+POST /api/runs/{run_id}/artifacts
+```
+
+The server validates artifacts against the output contract before marking the run as succeeded.

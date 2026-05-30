@@ -631,4 +631,68 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ---
 
+## Runtime Output Contract
+
+When executed by the Research Runtime agent, this skill MUST produce the following artifacts:
+
+### Required Artifacts
+- **report.md**: Complete seven-stage debate report in Markdown format
+- **result.json**: Structured analysis result with the following schema:
+  ```json
+  {
+    "ticker": "NVDA",
+    "market": "US",
+    "skill_name": "trading-debate",
+    "data_timestamp": "ISO 8601",
+    "summary": {
+      "stance": "neutral_bullish | bullish | bearish | neutral",
+      "confidence": 0-100,
+      "key_points": ["..."]
+    },
+    "data_gaps": [{"category": "...", "reason": "..."}]
+  }
+  ```
+- **sources.json**: Data source provenance with the following schema:
+  ```json
+  {
+    "sources": [
+      {
+        "source": "futu",
+        "operation": "quote.snapshot",
+        "status": "ok | degraded | failed",
+        "latency_ms": 122,
+        "observed_at": "ISO 8601",
+        "fetched_at": "ISO 8601",
+        "raw_ref": "sources/futu_snapshot.raw.json"
+      }
+    ],
+    "gaps": []
+  }
+  ```
+- **decision.json**: Trading decision with the following schema:
+  ```json
+  {
+    "ticker": "NVDA",
+    "market": "US",
+    "rating": "Buy | Overweight | Hold | Underweight | Sell",
+    "confidence": 0-100,
+    "entry_price": 0.00,
+    "stop_loss": 0.00,
+    "target_price": 0.00,
+    "position_size": "X%",
+    "thesis_summary": "<2-4 sentence executive summary>",
+    "review_due_at": "ISO 8601"
+  }
+  ```
+
+### Submission
+Artifacts are submitted via the server API:
+```
+POST /api/runs/{run_id}/artifacts
+```
+
+The server validates artifacts against the output contract before marking the run as succeeded.
+
+---
+
 > **DISCLAIMER**：本 skill 输出仅为基于公开数据的多角色推演，不构成投资建议。最终决策由用户独立承担，且不应将单次辩论结论作为长期持仓依据。LangGraph + 多 agent 辩论会放大 LLM 的过度自信偏差，请把"信心度"读作"模型自评"而非"市场赔率"。
