@@ -73,6 +73,7 @@ export default function Home() {
   const labels = LABELS[language];
   const scrollRef = useRef<HTMLDivElement>(null);
   const [composerContext, setComposerContext] = useState<ComposerContext>({});
+  const [requestPending, setRequestPending] = useState(false);
 
   // ---------------------------------------------------------------------------
   // SSE connection on session change
@@ -142,10 +143,12 @@ export default function Home() {
             }
             // Move streamed text into messages and reset
             clearStreaming();
+            setRequestPending(false);
             window.dispatchEvent(new Event("stock-skills:sessions-updated"));
           }
         } catch {
           clearStreaming();
+          setRequestPending(false);
         }
       },
       "error": (data: string) => {
@@ -166,6 +169,7 @@ export default function Home() {
           });
         }
         clearStreaming();
+        setRequestPending(false);
       },
     };
 
@@ -174,7 +178,7 @@ export default function Home() {
     return () => {
       disconnect();
     };
-  }, [sessionId, connect, disconnect, appendDelta, addToolCall, updateToolCall, addMessage, clearStreaming, setPendingRunId, fetchRunArtifacts, labels.errorPrefix]);
+  }, [sessionId, connect, disconnect, appendDelta, addToolCall, updateToolCall, addMessage, clearStreaming, setPendingRunId, fetchRunArtifacts, labels.errorPrefix, setRequestPending]);
 
   // Sync SSE status to store
   useEffect(() => {
@@ -281,8 +285,9 @@ export default function Home() {
       timestamp: Date.now(),
     });
 
-    // Clear any previous streaming state
+    // Clear any previous streaming state and mark as pending
     clearStreaming();
+    setRequestPending(true);
 
     // Send to API
     authFetch(`/api/sessions/${sid}/messages`, {
@@ -393,6 +398,7 @@ export default function Home() {
           onSend={handleSend}
           onStop={handleStop}
           streaming={isStreaming}
+          disabled={requestPending && !isStreaming}
           context={composerContext}
           onClearContext={handleClearContext}
         />
