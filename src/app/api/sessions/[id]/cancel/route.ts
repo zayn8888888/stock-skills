@@ -3,6 +3,8 @@ import { getDb } from "@/lib/db";
 import { sessions, runs } from "@/lib/db/schema";
 import { validateAuth } from "@/lib/auth/middleware";
 import { eq, and } from "drizzle-orm";
+import { taskRunner } from "@/lib/agent/task-runner";
+import { eventBus } from "@/lib/runtime/event-bus";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -41,6 +43,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     return NextResponse.json({ status: "no_active_run" });
   }
 
+  // Cancel the task via TaskRunner (aborts the AgentLoop)
+  const cancelled = taskRunner.cancel(activeRun.id);
+
   const now = new Date().toISOString();
 
   await db
@@ -54,5 +59,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     })
     .where(eq(runs.id, activeRun.id));
 
-  return NextResponse.json({ status: "cancelled" });
+  eventBus.emit(sessionId, "run.updated", {
+    runId: activeRun.id,
+    status: "cancelled",
+  });
+
+  return NextResponse.json({ status: cancelled ? "cancelled" : "cancelled_late" });
 }

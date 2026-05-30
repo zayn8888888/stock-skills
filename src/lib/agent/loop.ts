@@ -42,6 +42,7 @@ export class AgentLoop {
     eventBus: EventBus,
     sessionId: string,
     runId: string,
+    externalAbortController?: AbortController,
   ) {
     this.client = client;
     this.model = model;
@@ -51,7 +52,7 @@ export class AgentLoop {
     this.eventBus = eventBus;
     this.sessionId = sessionId;
     this.runId = runId;
-    this.abortController = new AbortController();
+    this.abortController = externalAbortController ?? new AbortController();
   }
 
   /**
