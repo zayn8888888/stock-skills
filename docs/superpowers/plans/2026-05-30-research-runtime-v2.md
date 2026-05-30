@@ -1,130 +1,20 @@
-# Research Runtime v2 — Full Implementation Plan
+# Research Runtime v2 — Full Implementation Plan (Next.js)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a local single-user stock research runtime with TypeScript full-stack (Hono server with built-in LLM agent + React web desk), SQLite persistence, SSE streaming, and i18n/dark-mode support.
+**Goal:** Build a local single-user stock research runtime — Next.js full-stack (App Router + built-in AgentLoop + Anthropic SDK), SQLite persistence, SSE streaming, i18n/dark-mode.
 
-**Architecture:** pnpm monorepo with three packages (`shared/`, `server/`, `web/`) plus a `skills/` directory for skill content and agent definitions. Server is Hono + Drizzle ORM + better-sqlite3 + built-in AgentLoop (ReAct pattern, LLM-powered). When a user sends a message, the server creates a run, starts the AgentLoop, and streams results back via SSE — no external agent handoff needed. Data flows through a unified adapter layer (Adapter → raw artifact + canonical Observation → SQLite), and agents consume Domain Views (TickerContext) rather than calling external APIs directly.
+**Architecture:** Single Next.js project. API Route Handlers serve REST + SSE. `src/lib/` holds all server logic (DB, agent, adapters, runtime). React components in `src/components/`. Pages in `src/app/`. Skills and agent definitions in `skills/`. When a user sends a message via the Research Desk, `POST /api/sessions/:id/messages` creates a run and starts the built-in AgentLoop, which streams tool calls and text deltas back via SSE — exactly like Vibe-Trading's architecture but in TypeScript.
 
-**Tech Stack:** Hono, Drizzle ORM, better-sqlite3, Zod, Vercel AI SDK (LLM provider), React 19, Vite 6, Tailwind CSS 4, shadcn/ui, Zustand 5, react-i18next, Vitest, Biome
+**Tech Stack:** Next.js 15, Anthropic SDK, Drizzle ORM, better-sqlite3, Zod, Zustand 5, Tailwind CSS 4, shadcn/ui, react-i18next, Vitest, Biome
 
 **Spec:** `docs/superpowers/specs/2026-05-30-research-runtime-v2-design.md`
 
 ---
 
-## File Structure
+## Phase 0: Skills 归档 + Project Bootstrap
 
-### Root Config
-
-| File | Responsibility |
-|------|---------------|
-| `pnpm-workspace.yaml` | Monorepo workspace definition |
-| `package.json` | Root scripts: dev, test, lint, build |
-| `tsconfig.base.json` | Shared TS config (strict, ES2022) |
-| `biome.json` | Lint + format rules |
-| `.gitignore` | Already updated |
-
-### `skills/` — Skill content + Agent definitions
-
-| File | Responsibility |
-|------|---------------|
-| `skills/README.md` | Skills overview |
-| `skills/agents/stock-analyzer/agent.yaml` | Agent config: workflow_type, required_artifacts, skills[] |
-| `skills/agents/stock-analyzer/prompt.md` | System prompt template |
-| `skills/agents/stock-analyzer/output-contract.json` | result.json JSON Schema |
-| `skills/agents/market-scanner/` | (同结构) |
-| `skills/agents/event-calendar/` | (同结构) |
-| `skills/agents/trading-debate/` | (同结构) |
-| `skills/agents/crypto-research/` | (同结构) |
-| `skills/agents/portfolio-review/` | (同结构) |
-| `skills/core/` | 现有 core/ skills（trading-debate, event-calendar, hyperliquid-perps） |
-| `skills/stock/` | 现有 stock/ skills |
-| `skills/futu/` | 现有 futu/ skills |
-| `skills/crypto/` | 现有 crypto/ skills |
-
-### `shared/` — Cross-package types and schemas
-
-| File | Responsibility |
-|------|---------------|
-| `shared/src/constants.ts` | All enum values as const objects |
-| `shared/src/types.ts` | TypeScript interfaces for all 14 tables + domain views |
-| `shared/src/schemas.ts` | Zod schemas for API request/response validation |
-
-### `server/` — Hono API server with built-in Agent
-
-| File | Responsibility |
-|------|---------------|
-| `server/src/index.ts` | CLI entry |
-| `server/src/config.ts` | Config: analysis root, token, host, port, LLM provider, API keys |
-| `server/src/app.ts` | Hono app assembly |
-| **DB** | |
-| `server/src/db/schema.ts` | Drizzle schema (14 tables) |
-| `server/src/db/index.ts` | DB instance + migration runner |
-| `server/src/db/migrations/` | SQL migration files |
-| **Auth** | |
-| `server/src/auth/token.ts` | Generate/load local session token |
-| `server/src/auth/middleware.ts` | Origin, CSRF, token check |
-| `server/src/auth/upload-guard.ts` | Size, path, type validation |
-| **Runtime** | |
-| `server/src/runtime/event-bus.ts` | Session-scoped SSE event bus (500 buffer, heartbeat) |
-| `server/src/runtime/artifact-writer.ts` | Path boundary + checksum + schema version |
-| `server/src/runtime/run-manager.ts` | Run lifecycle state machine |
-| `server/src/runtime/goal-manager.ts` | Single active goal per session |
-| **Agent** | ← 核心新增 |
-| `server/src/agent/llm-provider.ts` | LLM abstraction: Claude API / OpenAI API / local |
-| `server/src/agent/loop.ts` | ReAct loop: LLM call → tool call → repeat |
-| `server/src/agent/tools.ts` | ToolRegistry: register adapter tools + system tools |
-| `server/src/agent/context.ts` | ContextBuilder: session history + goal + ticker context |
-| `server/src/agent/skill-loader.ts` | Load agent prompt from skills/agents/*/prompt.md |
-| `server/src/agent/progress.ts` | HeartbeatTimer + ProgressEvent emitter |
-| **Data Layer** | |
-| `server/src/adapters/registry.ts` | AdapterRegistry: register/lookup/health check |
-| `server/src/adapters/base.ts` | DataSourceAdapter interface |
-| `server/src/adapters/futu/index.ts` | FutuAdapter |
-| `server/src/adapters/eastmoney/index.ts` | EastmoneyAdapter |
-| `server/src/adapters/hyperliquid/index.ts` | HyperliquidAdapter |
-| `server/src/adapters/finnhub/index.ts` | FinnhubAdapter |
-| `server/src/adapters/polymarket/index.ts` | PolymarketAdapter |
-| `server/src/adapters/tavily/index.ts` | TavilyAdapter |
-| `server/src/adapters/coingecko/index.ts` | CoinGeckoAdapter |
-| `server/src/adapters/fixture/index.ts` | FixtureAdapter (testing) |
-| `server/src/observations/schemas.ts` | Category value schemas (Zod) |
-| `server/src/observations/store.ts` | Observation CRUD (SQLite) |
-| `server/src/observations/freshness.ts` | Freshness policy |
-| `server/src/views/ticker-context.ts` | TickerContext builder (SQLite query) |
-| **API** | |
-| `server/src/api/health.ts` | GET /api/health |
-| `server/src/api/sessions.ts` | Sessions + Messages CRUD (+ triggers agent on POST message) |
-| `server/src/api/goals.ts` | Goals + criteria + evidence |
-| `server/src/api/runs.ts` | Runs lifecycle |
-| `server/src/api/artifacts.ts` | Artifacts upload/download/list |
-| `server/src/api/tickers.ts` | Ticker context |
-| `server/src/api/data-sources.ts` | Source health |
-| `server/src/api/reviews.ts` | Decisions + lessons |
-| `server/src/api/sse.ts` | SSE event stream |
-| `server/src/api/uploads.ts` | File upload |
-| **Tests** | |
-| `server/tests/fixtures/` | Test fixture data |
-| `server/tests/db.test.ts` | Schema + migration |
-| `server/tests/sessions.test.ts` | Sessions + messages API |
-| `server/tests/goals.test.ts` | Goals API |
-| `server/tests/runs.test.ts` | Runs lifecycle |
-| `server/tests/artifacts.test.ts` | Artifact writer |
-| `server/tests/sse.test.ts` | SSE |
-| `server/tests/security.test.ts` | Auth + path traversal |
-| `server/tests/observations.test.ts` | Observation store |
-| `server/tests/agent/loop.test.ts` | Agent loop with mock LLM |
-| `server/tests/adapters/fixture.test.ts` | Fixture adapter |
-
-### `web/` — React frontend
-
-(和之前一样，略)
-
----
-
-## Phase 0: Skills 归档 + Monorepo Bootstrap
-
-### Task 0.1: Skills migration to `skills/` directory
+### Task 0.1: Skills migration to `skills/`
 
 **Files:**
 - Move: `core/` → `skills/core/`
@@ -133,31 +23,21 @@
 - Move: `crypto/` → `skills/crypto/`
 - Modify: `.claude-plugin/plugin.json`
 - Modify: `.claude-plugin/marketplace.json`
-- Modify: `scripts/install.sh`
-- Modify: `scripts/update.sh`
-- Modify: `scripts/uninstall.sh`
+- Modify: `scripts/install.sh`, `scripts/update.sh`, `scripts/uninstall.sh`
 - Modify: `README.md`
 
 - [ ] Create `skills/` directory.
-- [ ] Move `core/` → `skills/core/` (trading-debate, event-calendar, hyperliquid-perps).
-- [ ] Move `stock/` → `skills/stock/` (stock-analyzer, market-scanner, stock-fundamentals, stock-valuation).
-- [ ] Move `futu/` → `skills/futu/` (futuapi, futu-capital-anomaly, futu-derivatives-anomaly, futu-technical-anomaly, futu-comment-sentiment, futu-stock-digest, futu-news-search, install-futu-opend).
-- [ ] Move `crypto/` → `skills/crypto/` (crypto-analyzer, crypto-scanner).
-- [ ] Update `.claude-plugin/plugin.json` — change all `core/`, `stock/`, `futu/`, `crypto/` paths to `skills/core/`, `skills/stock/`, `skills/futu/`, `skills/crypto/`.
-- [ ] Update `.claude-plugin/marketplace.json` — same path updates.
-- [ ] Update `scripts/install.sh` — add `skills/` prefix to all skill directory paths.
-- [ ] Update `scripts/update.sh` — same.
-- [ ] Update `scripts/uninstall.sh` — same.
-- [ ] Update `README.md` — update all relative links (`stock/stock-analyzer/` → `skills/stock/stock-analyzer/`).
-- [ ] Verify: `git status` shows renames, not delete+create.
+- [ ] Move all four skill directories into `skills/`.
+- [ ] Update `.claude-plugin/plugin.json` paths: `core/` → `skills/core/`, etc.
+- [ ] Update `.claude-plugin/marketplace.json` same way.
+- [ ] Update `scripts/install.sh`, `scripts/update.sh`, `scripts/uninstall.sh` — add `skills/` prefix.
+- [ ] Update all relative links in `README.md`.
+- [ ] Verify `git status` shows renames (not delete+create).
 - [ ] Commit:
 
 ```bash
 git add -A
-git commit -m "refactor: move all skills into skills/ directory
-
-Migrate core/, stock/, futu/, crypto/ → skills/.
-Update plugin config, install scripts, and README paths."
+git commit -m "refactor: move all skills into skills/ directory"
 ```
 
 ---
@@ -168,16 +48,12 @@ Update plugin config, install scripts, and README paths."
 - Create: `skills/agents/stock-analyzer/agent.yaml`
 - Create: `skills/agents/stock-analyzer/prompt.md`
 - Create: `skills/agents/stock-analyzer/output-contract.json`
-- Create: `skills/agents/market-scanner/agent.yaml` (+ prompt.md, output-contract.json)
-- Create: `skills/agents/event-calendar/agent.yaml` (+ prompt.md, output-contract.json)
-- Create: `skills/agents/trading-debate/agent.yaml` (+ prompt.md, output-contract.json)
-- Create: `skills/agents/crypto-research/agent.yaml` (+ prompt.md, output-contract.json)
-- Create: `skills/agents/portfolio-review/agent.yaml` (+ prompt.md, output-contract.json)
+- (Same for: market-scanner, event-calendar, trading-debate, crypto-research, portfolio-review)
 
-- [ ] For each agent, create `agent.yaml`:
+- [ ] Create `agent.yaml` for each agent:
 
 ```yaml
-# stock-analyzer example
+# skills/agents/stock-analyzer/agent.yaml
 name: stock-analyzer
 display_name: "个股多维分析"
 workflow_type: data_workflow
@@ -190,130 +66,560 @@ skills:
   - skills/futu/futu-capital-anomaly
   - skills/futu/futu-derivatives-anomaly
   - skills/futu/futu-technical-anomaly
-required_artifacts:
-  - report.md
-  - result.json
-  - sources.json
+required_artifacts: [report.md, result.json, sources.json]
 optional_artifacts: []
-data_sources:
-  - futu
-  - tavily
-  - hyperliquid
+data_sources: [futu, tavily, hyperliquid]
 ```
 
-- [ ] For each agent, create `prompt.md` — extracted from existing SKILL.md core principles + execution contract, adapted for server-side agent execution.
-- [ ] For each agent, create `output-contract.json` — JSON Schema for result.json.
+- [ ] Create `prompt.md` for each agent — extracted from SKILL.md core principles, adapted for server-side execution.
+- [ ] Create `output-contract.json` — JSON Schema for result.json.
 - [ ] Commit:
 
 ```bash
 git add skills/agents/
-git commit -m "feat(skills): add agent definitions for 6 agents with prompts and output contracts"
+git commit -m "feat(skills): add 6 agent definitions with prompts and output contracts"
 ```
 
 ---
 
-### Task 0.3: Monorepo root config
+### Task 0.3: Next.js project initialization
 
 **Files:**
-- Create: `pnpm-workspace.yaml`
-- Create: `package.json` (root)
-- Create: `tsconfig.base.json`
+- Create: `package.json`
+- Create: `next.config.ts`
+- Create: `tsconfig.json`
 - Create: `biome.json`
+- Create: `drizzle.config.ts`
+- Create: `vitest.config.ts`
+- Create: `components.json` (shadcn/ui)
+- Modify: `.gitignore` (already updated)
 
-(Same as original Task 0.1, unchanged)
+- [ ] Initialize Next.js:
 
----
+```bash
+pnpm create next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
+```
 
-### Task 0.4: shared/ package — types, schemas, constants
-
-(Same as original Task 0.2, unchanged)
-
----
-
-### Task 0.5: Server scaffolding — Hono app + config + entry point
-
-**Files:**
-- Create: `server/package.json`
-- Create: `server/tsconfig.json`
-- Create: `server/vitest.config.ts`
-- Create: `server/src/config.ts`
-- Create: `server/src/app.ts`
-- Create: `server/src/index.ts`
-
-(Same as original Task 0.3, but add to `server/package.json` dependencies:)
+Or manually create `package.json`:
 
 ```json
 {
+  "name": "stock-skills",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/lib/db/migrate.ts"
+  },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.2.0",
-    "@ai-sdk/openai": "^1.2.0",
-    "ai": "^4.2.0"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@radix-ui/react-dialog": "^1.1.0",
+    "@radix-ui/react-dropdown-menu": "^2.1.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.0",
+    "@radix-ui/react-tooltip": "^1.1.0",
+    "@tanstack/react-table": "^8.20.0",
+    "better-sqlite3": "^11.8.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "drizzle-orm": "^0.38.0",
+    "i18next": "^24.0.0",
+    "i18next-browser-languagedetector": "^8.0.0",
+    "lucide-react": "^0.460.0",
+    "nanoid": "^5.1.0",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-i18next": "^15.0.0",
+    "react-markdown": "^9.0.0",
+    "rehype-highlight": "^7.0.0",
+    "remark-gfm": "^4.0.1",
+    "sonner": "^2.0.7",
+    "tailwind-merge": "^2.6.0",
+    "zod": "^3.24.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "drizzle-kit": "^0.30.0",
+    "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   }
 }
 ```
 
-These are the Vercel AI SDK packages for LLM provider abstraction (Claude API + OpenAI API).
+- [ ] Create `next.config.ts`:
+
+```typescript
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // Prevent Next.js from bundling better-sqlite3 (it's a native module)
+  serverExternalPackages: ["better-sqlite3"],
+};
+
+export default nextConfig;
+```
+
+- [ ] Create `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules", "analysis", "skills"]
+}
+```
+
+- [ ] Create `biome.json` (same as before).
+- [ ] Create `drizzle.config.ts`:
+
+```typescript
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  schema: "./src/lib/db/schema.ts",
+  out: "./src/lib/db/migrations",
+  dialect: "sqlite",
+  dbCredentials: { url: "./analysis/stock_skills.sqlite" },
+});
+```
+
+- [ ] Create `vitest.config.ts`:
+
+```typescript
+import { defineConfig } from "vitest/config";
+import path from "path";
+
+export default defineConfig({
+  resolve: {
+    alias: { "@": path.resolve(__dirname, "./src") },
+  },
+  test: {
+    globals: true,
+    environment: "node",
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    testTimeout: 10_000,
+  },
+});
+```
+
+- [ ] Run `pnpm install`.
+- [ ] Verify `pnpm dev` starts on `:3000`.
+- [ ] Commit:
+
+```bash
+git add package.json next.config.ts tsconfig.json biome.json drizzle.config.ts vitest.config.ts pnpm-lock.yaml
+git commit -m "chore: initialize Next.js project with Tailwind, Drizzle, Vitest, Biome"
+```
 
 ---
 
-### Task 0.6: Web scaffolding — Vite + React 19 + Tailwind 4 + shadcn/ui
+### Task 0.4: shadcn/ui + Tailwind theme + CSS variables
 
-(Same as original Task 0.4, unchanged)
+**Files:**
+- Create/Modify: `src/app/globals.css`
+- Create: `src/lib/utils.ts`
+
+- [ ] Initialize shadcn/ui:
+
+```bash
+pnpm dlx shadcn@latest init
+```
+
+- [ ] Update `src/app/globals.css` with the spec's dual-theme CSS variables (light + dark, HSL values from spec).
+- [ ] Create `src/lib/utils.ts`:
+
+```typescript
+import { clsx, type ClassValue } from "clsx";
+import { tailwindMerge } from "tailwind-merge";
+
+export function cn(...inputs: ClassValue[]) {
+  return tailwindMerge(clsx(inputs));
+}
+```
+
+- [ ] Verify dark mode toggle works (add `dark` class to `<html>`).
+- [ ] Commit:
+
+```bash
+git add src/app/globals.css src/lib/utils.ts components.json
+git commit -m "feat: initialize shadcn/ui with dual-theme CSS variables (light + dark)"
+```
 
 ---
 
-### Task 0.7: Smoke test
+### Task 0.5: Config + DB schema + migration
 
-(Same as original Task 0.5, unchanged)
+**Files:**
+- Create: `src/lib/config.ts`
+- Create: `src/lib/db/schema.ts`
+- Create: `src/lib/db/index.ts`
+- Create: `src/lib/db/migrate.ts`
+- Generate: `src/lib/db/migrations/`
+
+- [ ] Create `src/lib/config.ts`:
+
+```typescript
+import { resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+
+export interface Config {
+  analysisRoot: string;
+  dbPath: string;
+  token: string;
+  maxUploadBytes: number;
+  llmProvider: "anthropic" | "openai";
+  anthropicApiKey?: string;
+  openaiApiKey?: string;
+}
+
+let _config: Config | null = null;
+
+export function getConfig(): Config {
+  if (_config) return _config;
+
+  const analysisRoot = process.env.STOCK_SKILLS_ANALYSIS_ROOT
+    ?? resolve(process.cwd(), "analysis");
+  const dbPath = resolve(analysisRoot, "stock_skills.sqlite");
+  const token = loadOrCreateToken(analysisRoot);
+
+  if (!existsSync(analysisRoot)) mkdirSync(analysisRoot, { recursive: true });
+  const artifactsDir = resolve(analysisRoot, "artifacts");
+  if (!existsSync(artifactsDir)) mkdirSync(artifactsDir, { recursive: true });
+
+  _config = {
+    analysisRoot,
+    dbPath,
+    token,
+    maxUploadBytes: 50 * 1024 * 1024,
+    llmProvider: (process.env.LLM_PROVIDER as "anthropic" | "openai") ?? "anthropic",
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+    openaiApiKey: process.env.OPENAI_API_KEY,
+  };
+  return _config;
+}
+
+function loadOrCreateToken(analysisRoot: string): string {
+  const envToken = process.env.STOCK_SKILLS_TOKEN;
+  if (envToken) return envToken;
+  const tokenFile = resolve(analysisRoot, ".token");
+  if (existsSync(tokenFile)) return readFileSync(tokenFile, "utf-8").trim();
+  const token = randomBytes(32).toString("hex");
+  writeFileSync(tokenFile, token, "utf-8");
+  return token;
+}
+```
+
+- [ ] Create `src/lib/db/schema.ts` — Drizzle schema for all 14 tables (sessions, messages, research_goals, goal_criteria, goal_evidence, runs, artifacts, run_events, session_events, observations, decisions, lessons, data_sources). Use `sqliteTable`, `text`, `integer`, `real`. Include partial unique index for research_goals.
+- [ ] Create `src/lib/db/index.ts`:
+
+```typescript
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+import { resolve } from "node:path";
+import * as schema from "./schema.js";
+import { getConfig } from "../config.js";
+
+let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
+
+export function getDb() {
+  if (_db) return _db;
+  const config = getConfig();
+  const sqlite = new Database(config.dbPath);
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
+  _db = drizzle(sqlite, { schema });
+  return _db;
+}
+
+export function runMigrations() {
+  const db = getDb();
+  const migrationsFolder = resolve(import.meta.dirname ?? __dirname, "migrations");
+  migrate(db, { migrationsFolder });
+}
+
+export type Database = ReturnType<typeof getDb>;
+```
+
+- [ ] Create `src/lib/db/migrate.ts`:
+
+```typescript
+import { runMigrations } from "./index.js";
+runMigrations();
+console.log("Migrations applied.");
+```
+
+- [ ] Generate migration: `pnpm db:generate`.
+- [ ] Run migration: `pnpm db:migrate`.
+- [ ] Commit:
+
+```bash
+git add src/lib/config.ts src/lib/db/
+git commit -m "feat: add config, Drizzle schema (14 tables), and migration"
+```
 
 ---
 
 ## Phase 1: Foundation
 
-### Task 1.1: Drizzle schema + migration — all 14 tables
+### Task 1.1: Artifact writer
 
-(Same as original Task 1.1, unchanged)
+**Files:**
+- Create: `src/lib/runtime/artifact-writer.ts`
+- Create: `tests/runtime/artifact-writer.test.ts`
+
+- [ ] Write tests: write file under analysis root → succeeds with checksum; path traversal → throws; checksum matches SHA-256.
+- [ ] Implement:
+
+```typescript
+import { createHash } from "node:crypto";
+import { resolve, relative } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { getConfig } from "../config.js";
+
+export function writeArtifact(
+  runDir: string,
+  filename: string,
+  content: string | Buffer,
+): { path: string; checksum: string; sizeBytes: number } {
+  const config = getConfig();
+  const fullPath = resolve(config.analysisRoot, "artifacts", runDir, filename);
+  // Path boundary check
+  const rel = relative(resolve(config.analysisRoot, "artifacts"), fullPath);
+  if (rel.startsWith("..") || rel.startsWith("/")) {
+    throw new Error(`Path traversal detected: ${filename}`);
+  }
+  const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+  mkdirSync(dir, { recursive: true });
+  const buf = typeof content === "string" ? Buffer.from(content) : content;
+  writeFileSync(fullPath, buf);
+  const checksum = createHash("sha256").update(buf).digest("hex");
+  return { path: fullPath, checksum, sizeBytes: buf.length };
+}
+```
+
+- [ ] Run: `pnpm test tests/runtime/artifact-writer.test.ts`
+- [ ] Commit:
+
+```bash
+git add src/lib/runtime/artifact-writer.ts tests/runtime/artifact-writer.test.ts
+git commit -m "feat: implement artifact writer with path boundary and checksum"
+```
 
 ---
 
-### Task 1.2: Artifact writer — path boundary + checksum
+### Task 1.2: Auth middleware
 
-(Same as original Task 1.2, unchanged)
+**Files:**
+- Create: `src/lib/auth/middleware.ts`
+- Create: `src/lib/auth/upload-guard.ts`
+- Create: `tests/auth/security.test.ts`
+
+- [ ] Write security tests: missing token → 401; wrong Origin → 403; missing X-Requested-With → 403; path traversal → 400; blocked extension → 422; oversized → 413.
+- [ ] Implement `middleware.ts` — a helper function that Route Handlers call:
+
+```typescript
+import { NextRequest, NextResponse } from "next/server";
+import { getConfig } from "../config.js";
+
+export function validateAuth(req: NextRequest): NextResponse | null {
+  const config = getConfig();
+  const method = req.method;
+
+  // GET requests pass without auth
+  if (method === "GET" || method === "HEAD") return null;
+
+  // Origin check
+  const origin = req.headers.get("origin");
+  if (origin && !isAllowedOrigin(origin, req)) {
+    return NextResponse.json({ error: "Forbidden: invalid Origin" }, { status: 403 });
+  }
+
+  // CSRF check
+  const xrw = req.headers.get("x-requested-with");
+  if (xrw !== "fetch") {
+    return NextResponse.json({ error: "Forbidden: missing X-Requested-With" }, { status: 403 });
+  }
+
+  // Token check
+  const auth = req.headers.get("authorization");
+  const token = auth?.replace("Bearer ", "");
+  if (!token || token !== config.token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return null; // valid
+}
+
+function isAllowedOrigin(origin: string, req: NextRequest): boolean {
+  const url = new URL(req.url);
+  return origin === `${url.protocol}//${url.host}`;
+}
+```
+
+- [ ] Implement `upload-guard.ts` — size, path boundary, blocked extensions.
+- [ ] Run: `pnpm test tests/auth/security.test.ts`
+- [ ] Commit:
+
+```bash
+git add src/lib/auth/ tests/auth/security.test.ts
+git commit -m "feat: implement auth middleware with Origin, CSRF, token, and upload guard"
+```
 
 ---
 
-### Task 1.3: Auth — token + Origin/CSRF middleware
+### Task 1.3: Runtime — EventBus + RunManager + GoalManager
 
-(Same as original Task 1.3, unchanged)
+**Files:**
+- Create: `src/lib/runtime/event-bus.ts`
+- Create: `src/lib/runtime/run-manager.ts`
+- Create: `src/lib/runtime/goal-manager.ts`
+
+- [ ] Implement EventBus (same design as Vibe-Trading: session-scoped, 500-event buffer, emit/subscribe, `toSSE()` formatting).
+- [ ] Implement RunManager: create run, transition status, record run_events.
+- [ ] Implement GoalManager: create goal (supersede old active), add evidence, update status with expected_goal_id validation.
+- [ ] Commit:
+
+```bash
+git add src/lib/runtime/
+git commit -m "feat: implement EventBus, RunManager, and GoalManager"
+```
 
 ---
 
-### Task 1.4: Health endpoint + wire auth
+### Task 1.4: Health endpoint
 
-(Same as original Task 1.4, unchanged)
+**Files:**
+- Create: `src/app/api/health/route.ts`
+
+- [ ] Implement:
+
+```typescript
+import { NextResponse } from "next/server";
+import { getConfig } from "@/lib/config";
+
+export async function GET() {
+  const config = getConfig();
+  return NextResponse.json({
+    status: "ok",
+    version: "0.1.0",
+    analysis_root: config.analysisRoot,
+  });
+}
+```
+
+- [ ] Test: `curl http://localhost:3000/api/health` returns JSON.
+- [ ] Commit:
+
+```bash
+git add src/app/api/health/route.ts
+git commit -m "feat: add health endpoint"
+```
 
 ---
 
 ## Phase 2: Adapters + Observations
 
-### Task 2.1: Adapter interface + Fixture adapter
+### Task 2.1: Adapter interface + Registry + Fixture adapter
 
 **Files:**
-- Create: `server/src/adapters/base.ts`
-- Create: `server/src/adapters/registry.ts`
-- Create: `server/src/adapters/fixture/index.ts`
-- Create: `server/tests/fixtures/futu_nvda_snapshot.json`
-- Create: `server/tests/adapters/fixture.test.ts`
+- Create: `src/lib/adapters/base.ts`
+- Create: `src/lib/adapters/registry.ts`
+- Create: `src/lib/adapters/fixture/index.ts`
+- Create: `tests/fixtures/futu_nvda_snapshot.json`
+- Create: `tests/adapters/fixture.test.ts`
 
-- [ ] Define `DataSourceAdapter` interface (see spec).
-- [ ] Implement `AdapterRegistry`: register adapters, lookup by name, list all, health check all.
-- [ ] Create fixture adapter with canned data for NVDA quote, kline, news.
-- [ ] Write fixture test: `fixture.fetch()` → raw data; `fixture.normalize()` → valid Observations.
+- [ ] Define `DataSourceAdapter` interface in `base.ts`:
+
+```typescript
+export interface SourceHealth {
+  name: string;
+  status: "healthy" | "degraded" | "down" | "unknown";
+  latency_ms?: number;
+  last_checked_at?: string;
+  last_error?: string;
+}
+
+export interface AdapterRequest {
+  operation: string;
+  ticker?: string;
+  market?: string;
+  params?: Record<string, unknown>;
+}
+
+export interface RawResponse {
+  data: unknown;
+  latency_ms: number;
+  source: string;
+  operation: string;
+  fetched_at: string;
+}
+
+export interface Observation {
+  id: string;
+  ticker: string;
+  market?: string;
+  category: string;
+  source_name: string;
+  observed_at?: string;
+  fetched_at: string;
+  freshness_expires_at?: string;
+  status: "ok" | "degraded" | "unavailable" | "stale" | "failed";
+  payload_json: string;
+  raw_ref?: string;
+  warnings_json?: string;
+}
+
+export interface DataSourceAdapter {
+  name: string;
+  healthCheck(): Promise<SourceHealth>;
+  fetch(request: AdapterRequest): Promise<RawResponse>;
+  normalize(raw: RawResponse): Observation[];
+  capabilities(): string[];
+}
+```
+
+- [ ] Implement AdapterRegistry: `register()`, `get()`, `list()`, `healthCheckAll()`.
+- [ ] Create fixture adapter with canned NVDA data.
+- [ ] Write fixture test.
 - [ ] Commit:
 
 ```bash
-git add server/src/adapters/ server/tests/
-git commit -m "feat(server): add adapter interface, registry, and fixture adapter"
+git add src/lib/adapters/ tests/fixtures/ tests/adapters/
+git commit -m "feat: add adapter interface, registry, and fixture adapter"
 ```
 
 ---
@@ -321,37 +627,35 @@ git commit -m "feat(server): add adapter interface, registry, and fixture adapte
 ### Task 2.2: Observation store + freshness
 
 **Files:**
-- Create: `server/src/observations/schemas.ts`
-- Create: `server/src/observations/store.ts`
-- Create: `server/src/observations/freshness.ts`
-- Create: `server/tests/observations.test.ts`
+- Create: `src/lib/observations/schemas.ts`
+- Create: `src/lib/observations/store.ts`
+- Create: `src/lib/observations/freshness.ts`
+- Create: `tests/observations/store.test.ts`
 
-- [ ] Define category value schemas using Zod (quote, kline, technical, news, event, funding, capital_flow, order_book, options, valuation, financials, benchmark, source_health).
-- [ ] Implement ObservationStore: `insert(observation)`, `query({ticker, category, source, since})`, `getUnexpired(ticker)`.
-- [ ] Implement freshness policy: simple lookup table (quote 4h, kline 1h, news 24h, etc.).
-- [ ] Write tests: insert + query + expired filtering.
+- [ ] Implement category value schemas (Zod): quote, kline, technical, news, event, funding, capital_flow, order_book, options, valuation, financials, benchmark, source_health.
+- [ ] Implement ObservationStore: `insert()`, `query()`, `getUnexpired()`.
+- [ ] Implement freshness policy lookup table.
+- [ ] Write tests.
 - [ ] Commit:
 
 ```bash
-git add server/src/observations/ server/tests/observations.test.ts
-git commit -m "feat(server): add observation store with category schemas and freshness policy"
+git add src/lib/observations/ tests/observations/
+git commit -m "feat: add observation store with category schemas and freshness policy"
 ```
 
 ---
 
-### Task 2.3: Futu adapter (stub) + TickerContext builder
+### Task 2.3: TickerContext builder
 
 **Files:**
-- Create: `server/src/adapters/futu/index.ts`
-- Create: `server/src/views/ticker-context.ts`
+- Create: `src/lib/views/ticker-context.ts`
 
-- [ ] Implement FutuAdapter stub: `healthCheck()` (ping OpenD), `fetch()` (call Python scripts via child_process), `normalize()` (parse JSON → Observations).
-- [ ] Implement TickerContext builder: query SQLite for latest runs, unexpired observations, open decisions, due reviews, data gaps, source health.
+- [ ] Implement: query SQLite for latest runs, unexpired observations, open decisions, due reviews, data gaps, source health → return `TickerContext` object.
 - [ ] Commit:
 
 ```bash
-git add server/src/adapters/futu/ server/src/views/
-git commit -m "feat(server): add Futu adapter stub and TickerContext builder"
+git add src/lib/views/
+git commit -m "feat: add TickerContext builder from SQLite"
 ```
 
 ---
@@ -361,164 +665,180 @@ git commit -m "feat(server): add Futu adapter stub and TickerContext builder"
 ### Task 3.1: Sessions + Messages API
 
 **Files:**
-- Create: `server/src/api/sessions.ts`
-- Create: `server/tests/sessions.test.ts`
+- Create: `src/app/api/sessions/route.ts` (POST/GET)
+- Create: `src/app/api/sessions/[id]/route.ts` (GET/PATCH/DELETE)
+- Create: `src/app/api/sessions/[id]/messages/route.ts` (POST/GET)
+- Create: `src/app/api/sessions/[id]/cancel/route.ts`
+- Create: `tests/api/sessions.test.ts`
 
-- [ ] Implement endpoints: POST/GET/PATCH/DELETE sessions, POST/GET messages, POST cancel.
-- [ ] `POST /api/sessions/:id/messages` creates message AND creates a run (status=queued) if message has `context.ticker` or `context.skill_name`.
-- [ ] Write tests covering full CRUD + message ordering + schema validation.
-- [ ] Mount in `app.ts`.
+- [ ] Implement all endpoints.
+- [ ] `POST /api/sessions/:id/messages` saves message AND creates a run if context has ticker/skill_name.
+- [ ] Write tests covering CRUD + schema validation.
 - [ ] Commit:
 
 ```bash
-git add server/src/api/sessions.ts server/tests/sessions.test.ts
-git commit -m "feat(server): implement sessions + messages API"
+git add src/app/api/sessions/ tests/api/sessions.test.ts
+git commit -m "feat: implement sessions + messages API"
 ```
 
 ---
 
-### Task 3.2: Goals + Criteria + Evidence API
+### Task 3.2: Goals + Evidence API
 
 **Files:**
-- Create: `server/src/runtime/goal-manager.ts`
-- Create: `server/src/api/goals.ts`
-- Create: `server/tests/goals.test.ts`
+- Create: `src/app/api/sessions/[id]/goal/route.ts`
+- Create: `src/app/api/sessions/[id]/goal/evidence/route.ts`
+- Create: `src/app/api/sessions/[id]/goal/status/route.ts`
+- Create: `tests/api/goals.test.ts`
 
-- [ ] Implement goal manager: single active per session, supersede old goal, expected_goal_id validation.
-- [ ] Implement endpoints: POST/GET/PATCH goal, POST evidence, PATCH status.
-- [ ] Write tests: create goal → criteria; stale expected_goal_id → 409; supersede.
+- [ ] Implement goal CRUD + evidence + status.
+- [ ] Write tests: stale expected_goal_id → 409; supersede old goal.
 - [ ] Commit:
 
 ```bash
-git add server/src/runtime/goal-manager.ts server/src/api/goals.ts server/tests/goals.test.ts
-git commit -m "feat(server): implement goals API with single-active-per-session"
+git add src/app/api/sessions/ tests/api/goals.test.ts
+git commit -m "feat: implement goals + evidence API"
 ```
 
 ---
 
-### Task 3.3: Runs lifecycle API
+### Task 3.3: Runs + Artifacts API
 
 **Files:**
-- Create: `server/src/runtime/run-manager.ts`
-- Create: `server/src/api/runs.ts`
-- Create: `server/tests/runs.test.ts`
+- Create: `src/app/api/runs/route.ts`
+- Create: `src/app/api/runs/[id]/route.ts`
+- Create: `src/app/api/runs/[id]/cancel/route.ts`
+- Create: `src/app/api/runs/[id]/artifacts/route.ts`
+- Create: `src/app/api/runs/[id]/report/route.ts`
+- Create: `src/app/api/uploads/route.ts`
+- Create: `tests/api/runs.test.ts`
 
-- [ ] Implement run state machine: data_workflow (queued→running→succeeded) + agent_workflow (queued→running→succeeded, same since agent is internal).
-- [ ] Implement endpoints: POST/GET runs, POST cancel.
-- [ ] Write tests: create run → status=queued; cancel → status=cancelled.
+- [ ] Implement runs lifecycle + artifacts + report + upload.
+- [ ] Write tests.
 - [ ] Commit:
 
 ```bash
-git add server/src/runtime/run-manager.ts server/src/api/runs.ts server/tests/runs.test.ts
-git commit -m "feat(server): implement runs lifecycle API"
+git add src/app/api/runs/ src/app/api/uploads/ tests/api/runs.test.ts
+git commit -m "feat: implement runs + artifacts + upload API"
 ```
 
 ---
 
-### Task 3.4: Artifacts API
+### Task 3.4: Ticker + DataSources + Reviews API
 
 **Files:**
-- Create: `server/src/api/artifacts.ts`
-- Create: `server/src/api/uploads.ts`
+- Create: `src/app/api/tickers/[ticker]/context/route.ts`
+- Create: `src/app/api/tickers/[ticker]/runs/route.ts`
+- Create: `src/app/api/tickers/[ticker]/decisions/route.ts`
+- Create: `src/app/api/tickers/[ticker]/lessons/route.ts`
+- Create: `src/app/api/data-sources/health/route.ts`
+- Create: `src/app/api/data-sources/check/route.ts`
+- Create: `src/app/api/reviews/due/route.ts`
+- Create: `src/app/api/decisions/route.ts`
+- Create: `src/app/api/decisions/[id]/route.ts`
+- Create: `src/app/api/lessons/route.ts`
 
-- [ ] Implement: POST artifacts (inline body), GET artifacts, GET report (markdown), POST uploads (multipart).
-- [ ] Wire upload-guard for size/path/type checks.
+- [ ] Implement all endpoints. Ticker context delegates to TickerContext builder.
 - [ ] Commit:
 
 ```bash
-git add server/src/api/artifacts.ts server/src/api/uploads.ts
-git commit -m "feat(server): implement artifacts + upload API"
+git add src/app/api/tickers/ src/app/api/data-sources/ src/app/api/reviews/ src/app/api/decisions/ src/app/api/lessons/
+git commit -m "feat: implement ticker context, data sources, reviews, decisions, and lessons API"
 ```
 
 ---
 
-### Task 3.5: Ticker context + Data sources + Reviews API
+### Task 3.5: SSE event stream
 
 **Files:**
-- Create: `server/src/api/tickers.ts`
-- Create: `server/src/api/data-sources.ts`
-- Create: `server/src/api/reviews.ts`
+- Create: `src/app/api/sessions/[id]/events/route.ts`
+- Create: `tests/api/sse.test.ts`
 
-- [ ] Implement ticker context: delegates to TickerContext builder.
-- [ ] Implement data sources: list + health status from AdapterRegistry.
-- [ ] Implement reviews: due decisions, create/patch decisions, create lessons.
-- [ ] Commit:
-
-```bash
-git add server/src/api/tickers.ts server/src/api/data-sources.ts server/src/api/reviews.ts
-git commit -m "feat(server): implement ticker context, data sources, and reviews API"
-```
-
----
-
-### Task 3.6: SSE event stream
-
-**Files:**
-- Create: `server/src/runtime/event-bus.ts`
-- Create: `server/src/api/sse.ts`
-- Create: `server/tests/sse.test.ts`
-
-- [ ] Implement EventBus: session-scoped, 500-event replay buffer, emit/subscribe.
-- [ ] Implement SSE endpoint: `GET /api/sessions/:id/events`, Last-Event-ID support, 30s heartbeat.
-- [ ] Write tests: event id present, heartbeat, Last-Event-ID replay, dedupe-safe shape.
-- [ ] Commit:
-
-```bash
-git add server/src/runtime/event-bus.ts server/src/api/sse.ts server/tests/sse.test.ts
-git commit -m "feat(server): implement SSE event stream with replay buffer"
-```
-
----
-
-### Task 3.7: Wire all API routes + integration test
-
-**Files:**
-- Modify: `server/src/app.ts`
-- Create: `server/tests/db.test.ts`
-
-- [ ] Mount all API routes in `app.ts`.
-- [ ] Write integration test: session → message → goal → run → artifact → SSE.
-- [ ] Run: `pnpm --filter server test` — all pass.
-- [ ] Commit:
-
-```bash
-git add server/src/app.ts server/tests/db.test.ts
-git commit -m "feat(server): wire all API routes and add integration tests"
-```
-
----
-
-## Phase 4: Agent Layer（核心新增）
-
-### Task 4.1: LLM Provider abstraction
-
-**Files:**
-- Create: `server/src/agent/llm-provider.ts`
-
-- [ ] Implement LLM provider using Vercel AI SDK:
+- [ ] Implement SSE endpoint using Next.js `ReadableStream`:
 
 ```typescript
-import { anthropic } from "@ai-sdk/anthropic";
-import { openai } from "@ai-sdk/openai";
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const sessionId = params.id;
+  const lastEventId = req.headers.get("Last-Event-ID")
+    ?? req.nextUrl.searchParams.get("Last-Event-ID");
+  const replay = req.nextUrl.searchParams.get("replay");
 
-export type LLMProvider = "anthropic" | "openai";
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const unsubscribe = eventBus.subscribe(sessionId, (event) => {
+        controller.enqueue(encoder.encode(event.toSSE()));
+      });
 
-export function createLLMProvider(provider: LLMProvider, model?: string) {
-  switch (provider) {
-    case "anthropic":
-      return anthropic(model ?? "claude-sonnet-4-20250514");
-    case "openai":
-      return openai(model ?? "gpt-4o");
-  }
+      // Heartbeat every 30s
+      const heartbeat = setInterval(() => {
+        controller.enqueue(encoder.encode(`event: heartbeat\ndata: {}\n\n`));
+      }, 30_000);
+
+      // Replay missed events
+      if (lastEventId) {
+        const missed = eventBus.replay(sessionId, lastEventId);
+        for (const event of missed) {
+          controller.enqueue(encoder.encode(event.toSSE()));
+        }
+      }
+
+      req.signal.addEventListener("abort", () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+        controller.close();
+      });
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
+  });
 }
 ```
 
-- [ ] Config: `server/src/config.ts` reads `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` from env, `LLM_PROVIDER` (default: "anthropic").
+- [ ] Write tests: event id present, heartbeat, Last-Event-ID replay.
 - [ ] Commit:
 
 ```bash
-git add server/src/agent/llm-provider.ts
-git commit -m "feat(server): add LLM provider abstraction with Vercel AI SDK"
+git add src/app/api/sessions/[id]/events/route.ts tests/api/sse.test.ts
+git commit -m "feat: implement SSE event stream with replay buffer and heartbeat"
+```
+
+---
+
+## Phase 4: Agent Layer
+
+### Task 4.1: LLM provider
+
+**Files:**
+- Create: `src/lib/agent/llm-provider.ts`
+
+- [ ] Implement using Anthropic SDK:
+
+```typescript
+import Anthropic from "@anthropic-ai/sdk";
+import { getConfig } from "../config.js";
+
+let _client: Anthropic | null = null;
+
+export function getLLMClient(): Anthropic {
+  if (_client) return _client;
+  const config = getConfig();
+  _client = new Anthropic({ apiKey: config.anthropicApiKey });
+  return _client;
+}
+```
+
+- [ ] Commit:
+
+```bash
+git add src/lib/agent/llm-provider.ts
+git commit -m "feat: add LLM provider (Anthropic SDK)"
 ```
 
 ---
@@ -526,110 +846,83 @@ git commit -m "feat(server): add LLM provider abstraction with Vercel AI SDK"
 ### Task 4.2: Skill loader + Context builder
 
 **Files:**
-- Create: `server/src/agent/skill-loader.ts`
-- Create: `server/src/agent/context.ts`
+- Create: `src/lib/agent/skill-loader.ts`
+- Create: `src/lib/agent/context.ts`
 
-- [ ] Implement SkillLoader:
-
-```typescript
-// Load agent.yaml + prompt.md for a given agent name
-export function loadAgent(name: string): AgentDefinition {
-  const dir = resolve(process.cwd(), "skills/agents", name);
-  const yaml = parse(readFileSync(resolve(dir, "agent.yaml"), "utf-8"));
-  const prompt = readFileSync(resolve(dir, "prompt.md"), "utf-8");
-  const contract = JSON.parse(readFileSync(resolve(dir, "output-contract.json"), "utf-8"));
-  return { ...yaml, prompt, contract };
-}
-```
-
-- [ ] Implement ContextBuilder:
-
-```typescript
-// Build full context for an agent run
-export function buildContext(db, sessionId, goalId, ticker) {
-  return {
-    session_history: db.getMessages(sessionId),
-    goal: goalId ? db.getGoal(goalId) : null,
-    ticker_context: ticker ? buildTickerContext(db, ticker) : null,
-    recent_decisions: ticker ? db.getDecisions(ticker) : [],
-    recent_lessons: ticker ? db.getLessons(ticker) : [],
-  };
-}
-```
-
+- [ ] Implement SkillLoader: read `skills/agents/*/agent.yaml` + `prompt.md` + `output-contract.json`.
+- [ ] Implement ContextBuilder: assemble session history + goal + ticker context + recent decisions/lessons for the agent.
 - [ ] Commit:
 
 ```bash
-git add server/src/agent/skill-loader.ts server/src/agent/context.ts
-git commit -m "feat(server): add skill loader and context builder for agent"
+git add src/lib/agent/skill-loader.ts src/lib/agent/context.ts
+git commit -m "feat: add skill loader and context builder"
 ```
 
 ---
 
-### Task 4.3: Tool registry — adapter tools + system tools
+### Task 4.3: Tool registry
 
 **Files:**
-- Create: `server/src/agent/tools.ts`
+- Create: `src/lib/agent/tools.ts`
 
-- [ ] Implement ToolRegistry with Vercel AI SDK `tool()`:
+- [ ] Implement ToolRegistry using Anthropic SDK `tools` format:
 
 ```typescript
-import { tool } from "ai";
-import { z } from "zod";
+import type { Tool } from "@anthropic-ai/sdk/resources/messages.mjs";
 
-// Adapter tools: each adapter capability becomes an agent tool
-function createAdapterTools(registry: AdapterRegistry, runId: string) {
-  const tools: Record<string, Tool> = {};
+export function createTools(
+  adapterRegistry: AdapterRegistry,
+  artifactWriter: ArtifactWriter,
+  goalManager: GoalManager,
+  runId: string,
+  sessionId: string,
+): Tool[] {
+  const tools: Tool[] = [];
 
-  for (const adapter of registry.list()) {
+  // Adapter tools: each adapter capability → Anthropic tool
+  for (const adapter of adapterRegistry.list()) {
     for (const cap of adapter.capabilities()) {
-      const toolName = `${adapter.name}_${cap}`;
-      tools[toolName] = tool({
+      tools.push({
+        name: `${adapter.name}_${cap.replace(/\./g, "_")}`,
         description: `${adapter.name}: ${cap}`,
-        parameters: z.object({
-          ticker: z.string().optional(),
-          market: z.string().optional(),
-          // ... other params per capability
-        }),
-        execute: async (params) => {
-          const raw = await adapter.fetch({ operation: cap, ...params });
-          // Save raw artifact
-          const { path, checksum } = await artifactWriter.write(...);
-          // Normalize to observations
-          const observations = adapter.normalize(raw);
-          // Save observations to SQLite
-          for (const obs of observations) observationStore.insert(obs);
-          // Log run event
-          eventBus.emit(runId, "tool_result", { tool: toolName, status: "ok" });
-          return { observations, raw_ref: path };
+        input_schema: {
+          type: "object" as const,
+          properties: {
+            ticker: { type: "string", description: "Stock/crypto ticker" },
+            market: { type: "string", description: "Market (US/HK/CN)" },
+          },
         },
       });
     }
   }
 
   // System tools
-  tools["write_artifact"] = tool({
-    description: "Write a report or result artifact for the current run",
-    parameters: z.object({
-      filename: z.string(),
-      content: z.string(),
-      artifact_type: z.enum(["report", "result", "sources", "decision"]),
-    }),
-    execute: async ({ filename, content, artifact_type }) => {
-      return artifactWriter.write(runId, filename, content, { artifact_type, producer: "server" });
+  tools.push({
+    name: "write_artifact",
+    description: "Write a report, result, or other artifact for the current run",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        filename: { type: "string" },
+        content: { type: "string" },
+        artifact_type: { type: "string", enum: ["report", "result", "sources", "decision"] },
+      },
+      required: ["filename", "content", "artifact_type"],
     },
   });
 
-  tools["update_goal_evidence"] = tool({
+  tools.push({
+    name: "update_goal_evidence",
     description: "Record evidence for the current research goal",
-    parameters: z.object({
-      text: z.string(),
-      criterion_id: z.string().optional(),
-      source_name: z.string().optional(),
-      confidence: z.number().optional(),
-    }),
-    execute: async (params) => {
-      return goalManager.addEvidence(goalId, { ...params, run_id: runId });
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        text: { type: "string" },
+        criterion_id: { type: "string" },
+        source_name: { type: "string" },
+        confidence: { type: "number" },
+      },
+      required: ["text"],
     },
   });
 
@@ -637,217 +930,330 @@ function createAdapterTools(registry: AdapterRegistry, runId: string) {
 }
 ```
 
+- [ ] Implement tool execution handler: dispatch to adapters, artifact writer, or goal manager.
 - [ ] Commit:
 
 ```bash
-git add server/src/agent/tools.ts
-git commit -m "feat(server): implement tool registry with adapter + system tools"
+git add src/lib/agent/tools.ts
+git commit -m "feat: implement tool registry with adapter + system tools"
 ```
 
 ---
 
-### Task 4.4: AgentLoop — ReAct loop with streaming
+### Task 4.4: AgentLoop — ReAct with Anthropic streaming
 
 **Files:**
-- Create: `server/src/agent/loop.ts`
-- Create: `server/src/agent/progress.ts`
-- Create: `server/tests/agent/loop.test.ts`
+- Create: `src/lib/agent/loop.ts`
+- Create: `tests/agent/loop.test.ts`
 
-- [ ] Implement AgentLoop using Vercel AI SDK `streamText`:
+- [ ] Implement AgentLoop:
 
 ```typescript
-import { streamText } from "ai";
+import Anthropic from "@anthropic-ai/sdk";
+import { getLLMClient } from "./llm-provider.js";
+import { EventBus } from "../runtime/event-bus.js";
+
+export interface AgentResult {
+  status: "succeeded" | "failed";
+  text?: string;
+  error?: string;
+}
 
 export class AgentLoop {
   constructor(
-    private llm: ReturnType<typeof createLLMProvider>,
-    private tools: Record<string, Tool>,
-    private context: AgentContext,
+    private client: Anthropic,
+    private model: string,
+    private systemPrompt: string,
+    private tools: Anthropic.Tool[],
+    private toolExecutor: (name: string, input: Record<string, unknown>) => Promise<string>,
     private eventBus: EventBus,
+    private sessionId: string,
     private runId: string,
   ) {}
 
-  async run(prompt: string): Promise<AgentResult> {
-    const systemPrompt = this.buildSystemPrompt();
-    const messages = [
-      { role: "system", asystem, content: systemPrompt },
-      ...this.context.session_history.map(m => ({ role: m.role, content: m.content })),
-      { role: "user", content: prompt },
+  async run(userMessage: string, history: Array<{ role: string; content: string }>): Promise<AgentResult> {
+    const messages: Anthropic.MessageParam[] = [
+      ...history.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
+      { role: "user", content: userMessage },
     ];
 
-    const result = streamText({
-      model: this.llm,
-      messages,
-      tools: this.tools,
-      maxSteps: 50,  // max tool call rounds
-      onStepFinish: ({ toolCalls, toolResults, finishReason }) => {
-        // Emit SSE events for each tool call/result
-        for (const tc of toolCalls) {
-          this.eventBus.emit(this.context.sessionId, "tool_call", {
-            tool: tc.toolName, arguments: tc.args, run_id: this.runId,
+    let iterations = 0;
+    const maxIterations = 50;
+
+    while (iterations < maxIterations) {
+      iterations++;
+
+      const response = await this.client.messages.create({
+        model: this.model,
+        max_tokens: 8192,
+        system: this.systemPrompt,
+        messages,
+        tools: this.tools,
+      });
+
+      // Process tool use blocks
+      const toolUseBlocks = response.content.filter(b => b.type === "tool_use");
+      const textBlocks = response.content.filter(b => b.type === "text");
+
+      // Stream text deltas via SSE
+      for (const block of textBlocks) {
+        this.eventBus.emit(this.sessionId, "text_delta", { text: (block as any).text });
+      }
+
+      if (response.stop_reason === "end_turn") {
+        // Agent is done
+        const finalText = textBlocks.map(b => (b as any).text).join("\n");
+        return { status: "succeeded", text: finalText };
+      }
+
+      if (response.stop_reason === "tool_use" && toolUseBlocks.length > 0) {
+        // Execute tools and continue
+        messages.push({ role: "assistant", content: response.content });
+
+        const toolResults: Anthropic.ToolResultBlockParam[] = [];
+        for (const toolBlock of toolUseBlocks) {
+          const tb = toolBlock as Anthropic.ToolUseBlock;
+          this.eventBus.emit(this.sessionId, "tool_call", {
+            tool: tb.name, arguments: tb.input, run_id: this.runId,
           });
+
+          try {
+            const result = await this.toolExecutor(tb.name, tb.input as Record<string, unknown>);
+            this.eventBus.emit(this.sessionId, "tool_result", {
+              tool: tb.name, status: "ok", run_id: this.runId,
+            });
+            toolResults.push({ tool_use_id: tb.id, content: result });
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : String(err);
+            this.eventBus.emit(this.sessionId, "tool_result", {
+              tool: tb.name, status: "error", error: errorMsg, run_id: this.runId,
+            });
+            toolResults.push({ tool_use_id: tb.id, content: `Error: ${errorMsg}`, is_error: true });
+          }
         }
-        for (const tr of toolResults) {
-          this.eventBus.emit(this.context.sessionId, "tool_result", {
-            tool: tr.toolName, status: "ok", run_id: this.runId,
-          });
-        }
-      },
-    });
 
-    // Stream text deltas to SSE
-    for await (const delta of result.textStream) {
-      this.eventBus.emit(this.context.sessionId, "text_delta", { text: delta });
+        messages.push({ role: "user", content: toolResults });
+        continue;
+      }
+
+      break;
     }
 
-    return { status: "succeeded", text: await result.text };
-  }
-
-  private buildSystemPrompt(): string {
-    const agent = loadAgent(this.context.agentName);
-    let prompt = agent.prompt;
-    // Inject context
-    prompt += `\n\n## Current Context\n`;
-    prompt += `Ticker: ${this.context.ticker ?? "N/A"}\n`;
-    prompt += `Market: ${this.context.market ?? "N/A"}\n`;
-    if (this.context.goal) {
-      prompt += `Research Goal: ${this.context.goal.objective}\n`;
-    }
-    if (this.context.ticker_context) {
-      prompt += `Ticker Context:\n${JSON.stringify(this.context.ticker_context, null, 2)}\n`;
-    }
-    return prompt;
+    return { status: "failed", error: "Max iterations reached" };
   }
 }
 ```
 
-- [ ] Implement ProgressEvent emitter for heartbeat and tool progress.
-- [ ] Write tests with mock LLM provider: verify tool calls, SSE events, artifact generation.
+- [ ] Write tests with mock Anthropic client.
 - [ ] Commit:
 
 ```bash
-git add server/src/agent/loop.ts server/src/agent/progress.ts server/tests/agent/loop.test.ts
-git commit -m "feat(server): implement AgentLoop with ReAct pattern and SSE streaming"
+git add src/lib/agent/loop.ts tests/agent/loop.test.ts
+git commit -m "feat: implement AgentLoop with Anthropic SDK streaming and tool use"
 ```
 
 ---
 
-### Task 4.5: Wire Agent into session service — POST /messages triggers agent
+### Task 4.5: Wire Agent into message handler
 
 **Files:**
-- Modify: `server/src/api/sessions.ts`
-- Modify: `server/src/app.ts`
+- Modify: `src/app/api/sessions/[id]/messages/route.ts`
 
-- [ ] Update `POST /api/sessions/:id/messages` handler:
+- [ ] Update `POST` handler:
 
 ```typescript
 // 1. Save user message to DB
-// 2. Determine agent from message context (skill_name or auto-detect from content)
+// 2. Determine agent name from message context
 // 3. Create run (status=running)
-// 4. Build context (session history + goal + ticker context)
-// 5. Load agent prompt
-// 6. Create tools (adapters + system tools)
-// 7. Start AgentLoop as async task
+// 4. Load agent prompt via SkillLoader
+// 5. Build context via ContextBuilder
+// 6. Create tools via createTools()
+// 7. Start AgentLoop as background task (don't await — let SSE stream results)
 // 8. Return message + run_id immediately
 ```
 
-- [ ] Agent loop completion handler:
-
-```typescript
-// On success:
-//   - Save assistant message to DB
-//   - Update run status → succeeded
-//   - Emit SSE: run.updated, done
-// On failure:
-//   - Save error message to DB
-//   - Update run status → failed
-//   - Emit SSE: error
-```
-
-- [ ] Write integration test: send message → agent runs with fixture adapter → artifacts created → SSE events emitted.
+- [ ] Background task completion: save assistant message, update run status, emit SSE events.
 - [ ] Commit:
 
 ```bash
-git add server/src/api/sessions.ts server/src/app.ts
-git commit -m "feat(server): wire AgentLoop into message handler — POST /messages triggers agent"
+git add src/app/api/sessions/[id]/messages/route.ts
+git commit -m "feat: wire AgentLoop into POST /messages — auto-trigger agent on message"
 ```
 
 ---
 
-### Task 4.6: Agent tool progress coalescing + safety timeout
+### Task 4.6: Progress coalescing + safety timeout
 
 **Files:**
-- Modify: `server/src/agent/loop.ts`
-- Modify: `server/src/runtime/event-bus.ts`
+- Modify: `src/lib/agent/loop.ts`
+- Modify: `src/lib/runtime/event-bus.ts`
 
-- [ ] Add progress coalescing: batch rapid `tool_progress` events per animation frame (server-side, throttle to 100ms).
-- [ ] Add safety timeout: if agent loop produces no events for 120s, emit warning; 300s → force cancel.
+- [ ] Add progress throttling: batch rapid events to 100ms intervals.
+- [ ] Add safety timeout: 120s no events → warning; 300s → force cancel.
 - [ ] Commit:
 
 ```bash
-git add server/src/agent/loop.ts server/src/runtime/event-bus.ts
-git commit -m "feat(server): add tool progress coalescing and agent safety timeout"
+git add src/lib/agent/loop.ts src/lib/runtime/event-bus.ts
+git commit -m "feat: add agent progress coalescing and safety timeout"
 ```
 
 ---
 
 ## Phase 5: Web UI
 
-### Task 5.1: Agent store (Zustand) + SSE hook
+### Task 5.1: App Shell + Sidebar + Connection Banner
 
-(Same as original Task 4.1, unchanged)
+**Files:**
+- Create: `src/app/layout.tsx` (modify default)
+- Create: `src/components/layout/AppShell.tsx`
+- Create: `src/components/layout/Sidebar.tsx`
+- Create: `src/components/layout/ConnectionBanner.tsx`
+- Create: `src/hooks/useSSE.ts`
+- Create: `src/hooks/useTheme.ts`
+- Create: `src/stores/agent.ts`
 
----
+- [ ] Implement root layout with providers (i18n, theme, zustand).
+- [ ] Implement AppShell: sidebar (240px/48px collapsible) + main area + connection banner.
+- [ ] Implement Sidebar: nav links (Research Desk, Dashboard, Data Sources, Reviews), sessions list, dark mode toggle, language switcher.
+- [ ] Implement ConnectionBanner: yellow bar on SSE reconnecting.
+- [ ] Implement useSSE hook (reconnect, LRU dedup, Last-Event-ID).
+- [ ] Implement useTheme hook (localStorage + prefers-color-scheme).
+- [ ] Implement Zustand agent store.
+- [ ] Commit:
 
-### Task 5.2: Research Desk — timeline + composer + welcome screen
-
-(Same as original Task 4.2, unchanged)
-
----
-
-### Task 5.3: Context chips + Run card + Artifact card + Goal chip + Source warning
-
-(Same as original Task 4.3, unchanged)
-
----
-
-### Task 5.4: App Shell + Sidebar + Connection Banner
-
-(Same as original Task 4.4, unchanged)
-
----
-
-### Task 5.5: Run Detail page
-
-(Same as original Task 4.5, unchanged)
+```bash
+git add src/app/layout.tsx src/components/layout/ src/hooks/ src/stores/
+git commit -m "feat: implement App Shell, Sidebar, SSE hook, theme, and agent store"
+```
 
 ---
 
-### Task 5.6: Dashboard, Data Sources, Ticker Page, Review Queue
+### Task 5.2: Research Desk page
 
-(Same as original Task 4.6, unchanged)
+**Files:**
+- Modify: `src/app/page.tsx`
+- Create: `src/components/research/Timeline.tsx`
+- Create: `src/components/research/MessageBubble.tsx`
+- Create: `src/components/research/ThinkingTimeline.tsx`
+- Create: `src/components/research/Composer.tsx`
+- Create: `src/components/research/WelcomeScreen.tsx`
+- Create: `src/components/research/ContextChips.tsx`
+- Create: `src/components/research/RunCard.tsx`
+- Create: `src/components/research/ArtifactCard.tsx`
+- Create: `src/components/research/SourceWarning.tsx`
+- Create: `src/components/research/GoalChip.tsx`
+
+- [ ] Implement Research Desk as default page (`/`).
+- [ ] Implement Timeline: message grouping (single vs timeline), merged with run events.
+- [ ] Implement Composer: textarea + Enter/Shift+Enter + Stop + `+` menu.
+- [ ] Implement all research components.
+- [ ] Wire SSE event handlers.
+- [ ] Commit:
+
+```bash
+git add src/app/page.tsx src/components/research/
+git commit -m "feat: implement Research Desk with timeline, composer, and context chips"
+```
 
 ---
 
-### Task 5.7: i18n namespace completion
+### Task 5.3: i18n initialization
 
-(Same as original Task 4.7, unchanged)
+**Files:**
+- Create: `src/i18n/index.ts`
+- Create: `src/i18n/locales/zh-CN/common.json`
+- Create: `src/i18n/locales/zh-CN/research.json`
+- Create: `src/i18n/locales/en-US/common.json`
+- Create: `src/i18n/locales/en-US/research.json`
+
+- [ ] Initialize react-i18next with LanguageDetector, zh-CN default.
+- [ ] Create common + research namespace translations.
+- [ ] Commit:
+
+```bash
+git add src/i18n/
+git commit -m "feat: initialize i18n with zh-CN/en-US common + research namespaces"
+```
+
+---
+
+### Task 5.4: Run Detail page
+
+**Files:**
+- Create: `src/app/runs/[runId]/page.tsx`
+- Create: `src/components/run/ReportTab.tsx`
+- Create: `src/components/run/ResultTab.tsx`
+- Create: `src/components/run/SourcesTab.tsx`
+- Create: `src/components/run/LogsTab.tsx`
+- Create: `src/components/run/TrustPanel.tsx`
+
+- [ ] Implement Run Detail with tabs (Report, Result JSON, Sources, Logs, Trust).
+- [ ] Implement each tab component.
+- [ ] Trust Panel: schema version, checksums, warnings.
+- [ ] Commit:
+
+```bash
+git add src/app/runs/ src/components/run/
+git commit -m "feat: implement Run Detail page with tabs and trust panel"
+```
+
+---
+
+### Task 5.5: Dashboard, Ticker Page, Data Sources, Review Queue
+
+**Files:**
+- Create: `src/app/dashboard/page.tsx`
+- Create: `src/app/tickers/[ticker]/page.tsx`
+- Create: `src/app/data-sources/page.tsx`
+- Create: `src/app/reviews/page.tsx`
+- Create: `src/components/dashboard/RunsTable.tsx`
+- Create: `src/components/dashboard/SourceHealthGrid.tsx`
+- Create: `src/components/dashboard/DueReviewsList.tsx`
+- Create: `src/components/common/DataTable.tsx`
+- Create: `src/components/common/Skeleton.tsx`
+- Create: `src/components/common/ErrorBoundary.tsx`
+
+- [ ] Implement all pages.
+- [ ] Commit:
+
+```bash
+git add src/app/dashboard/ src/app/tickers/ src/app/data-sources/ src/app/reviews/ src/components/dashboard/ src/components/common/
+git commit -m "feat: implement Dashboard, Ticker Page, Data Sources, and Review Queue"
+```
+
+---
+
+### Task 5.6: i18n namespace completion
+
+**Files:**
+- Create: `src/i18n/locales/zh-CN/dashboard.json`
+- Create: `src/i18n/locales/zh-CN/ticker.json`
+- Create: `src/i18n/locales/zh-CN/run.json`
+- Create: `src/i18n/locales/zh-CN/sources.json`
+- Create: `src/i18n/locales/zh-CN/reviews.json`
+- (Same for en-US)
+
+- [ ] Complete all namespace files.
+- [ ] Verify all pages use `useTranslation()`.
+- [ ] Commit:
+
+```bash
+git add src/i18n/
+git commit -m "feat: complete i18n namespaces for all pages"
+```
 
 ---
 
 ## Phase 6: Skill Integration
 
-### Task 6.1: Output Contract docs + sidecar requirements
+### Task 6.1: Output Contract docs
 
 **Files:**
-- Modify: `skills/stock/stock-analyzer/SKILL.md` (append Runtime Output Contract section)
-- Modify: `skills/core/trading-debate/SKILL.md` (append section)
-- Modify: `skills/stock/market-scanner/SKILL.md` (append section)
+- Modify: `skills/stock/stock-analyzer/SKILL.md`
+- Modify: `skills/core/trading-debate/SKILL.md`
+- Modify: `skills/stock/market-scanner/SKILL.md`
 
-- [ ] Append "## Runtime Output Contract" to each skill describing:
-  - Required artifacts and schemas
-  - How the server agent executes this skill
-  - result.json / sources.json format
+- [ ] Append "## Runtime Output Contract" section to each skill.
 - [ ] Commit:
 
 ```bash
@@ -860,21 +1266,15 @@ git commit -m "docs(skills): add Runtime Output Contract to core skills"
 ## Execution Order
 
 ```
-Phase 0: 0.1 → 0.2 → 0.3 → 0.4 → 0.5 → 0.6 → 0.7
-Phase 1: 1.1 → [1.2, 1.3] → 1.4
+Phase 0: 0.1 → 0.2 → 0.3 → 0.4 → 0.5
+Phase 1: [1.1, 1.2] → 1.3 → 1.4
 Phase 2: [2.1, 2.2] → 2.3
-Phase 3: [3.1, 3.2] → 3.3 → [3.4, 3.5, 3.6] → 3.7
+Phase 3: [3.1, 3.2] → 3.3 → [3.4, 3.5]
 Phase 4: [4.1, 4.2] → 4.3 → 4.4 → 4.5 → 4.6
-Phase 5: 5.1 → [5.2, 5.4] → 5.3 → [5.5, 5.6] → 5.7
+Phase 5: 5.1 → [5.2, 5.3] → [5.4, 5.5] → 5.6
 Phase 6: 6.1
 ```
 
-**Critical path:** 0.1 → 0.3 → 0.5 → 1.1 → 3.1 → 3.3 → 3.7 → 4.1 → 4.3 → 4.4 → 4.5
+**Critical path:** 0.1 → 0.3 → 0.5 → 1.1 → 1.3 → 3.1 → 3.3 → 4.1 → 4.3 → 4.4 → 4.5
 
-**Estimated tasks:** 30 total, ~6-10 hours with agentic execution.
-
-**Key difference from original plan:**
-- Phase 4 is now the **Agent Layer** — the core of the system
-- `POST /messages` directly triggers the built-in AgentLoop
-- No external agent handoff — server is self-contained (like Vibe-Trading)
-- Agents consume TickerContext via tool calls, never touch external APIs directly
+**Total:** 25 tasks, ~6-10 hours agentic execution.
