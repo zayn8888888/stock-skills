@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/useLanguage";
 import type { ToolCallEntry } from "@/stores/agent";
+
+const LABELS = {
+  en: { toolCalls: "Tool calls" },
+  zh: { toolCalls: "工具调用" },
+} as const;
 
 interface ThinkingTimelineProps {
   toolCalls: ToolCallEntry[];
@@ -32,6 +38,8 @@ function elapsedLabel(toolCall: ToolCallEntry): string | null {
 
 export function ThinkingTimeline({ toolCalls, className }: ThinkingTimelineProps) {
   const [expanded, setExpanded] = useState(false);
+  const { language } = useLanguage();
+  const labels = LABELS[language];
 
   if (toolCalls.length === 0) return null;
 
@@ -51,7 +59,7 @@ export function ThinkingTimeline({ toolCalls, className }: ThinkingTimelineProps
         ) : (
           <ChevronRight className="h-3 w-3" />
         )}
-        <span className="font-medium">Tool calls</span>
+        <span className="font-medium">{labels.toolCalls}</span>
         <span className="text-muted-foreground/70">{summary}</span>
       </button>
 

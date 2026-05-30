@@ -2,17 +2,42 @@
 
 import { TrendingUp, Search, Scale, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/useLanguage";
 
 // ---------------------------------------------------------------------------
 // Example prompts
 // ---------------------------------------------------------------------------
 
 const EXAMPLE_PROMPTS = [
-  { label: "分析 NVDA", icon: TrendingUp, query: "分析 NVDA" },
-  { label: "BTC 市场扫描", icon: Search, query: "BTC 市场扫描" },
-  { label: "AAPL 多空辩论", icon: Scale, query: "AAPL 多空辩论" },
-  { label: "未来一周大事件", icon: Calendar, query: "未来一周大事件" },
+  { key: "nvda", icon: TrendingUp, query: "分析 NVDA" },
+  { key: "btc", icon: Search, query: "BTC 市场扫描" },
+  { key: "aapl", icon: Scale, query: "AAPL 多空辩论" },
+  { key: "events", icon: Calendar, query: "未来一周大事件" },
 ] as const;
+
+const LABELS = {
+  en: {
+    title: "Research Desk",
+    subtitle:
+      "Start a research session by asking a question or picking an example below.",
+    prompts: {
+      nvda: "Analyze NVDA",
+      btc: "BTC market scan",
+      aapl: "AAPL bull/bear debate",
+      events: "Next week's events",
+    },
+  },
+  zh: {
+    title: "研究工作台",
+    subtitle: "输入一个研究问题，或从下面选择一个示例开始。",
+    prompts: {
+      nvda: "分析 NVDA",
+      btc: "BTC 市场扫描",
+      aapl: "AAPL 多空辩论",
+      events: "未来一周大事件",
+    },
+  },
+} as const;
 
 interface WelcomeScreenProps {
   onPromptClick: (query: string) => void;
@@ -20,6 +45,9 @@ interface WelcomeScreenProps {
 }
 
 export function WelcomeScreen({ onPromptClick, className }: WelcomeScreenProps) {
+  const { language } = useLanguage();
+  const labels = LABELS[language];
+
   return (
     <div
       className={cn(
@@ -29,11 +57,10 @@ export function WelcomeScreen({ onPromptClick, className }: WelcomeScreenProps) 
     >
       <div className="text-center">
         <h2 className="text-xl font-semibold text-foreground mb-2">
-          Research Desk
+          {labels.title}
         </h2>
         <p className="text-sm text-muted-foreground max-w-md">
-          Start a research session by asking a question or picking an example
-          below.
+          {labels.subtitle}
         </p>
       </div>
 
@@ -49,7 +76,9 @@ export function WelcomeScreen({ onPromptClick, className }: WelcomeScreenProps) 
             )}
           >
             <prompt.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-            <span className="text-sm text-foreground">{prompt.label}</span>
+            <span className="text-sm text-foreground">
+              {labels.prompts[prompt.key]}
+            </span>
           </button>
         ))}
       </div>

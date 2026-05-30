@@ -10,6 +10,17 @@ export interface AgentMessage {
   content: string;
   timestamp: number;
   toolCalls?: ToolCallEntry[];
+  runId?: string;
+  artifacts?: ArtifactEntry[];
+}
+
+export interface ArtifactEntry {
+  id: string;
+  kind: string;
+  name: string;
+  path?: string | null;
+  content?: string | null;
+  mimeType?: string | null;
 }
 
 export interface ToolCallEntry {
@@ -74,6 +85,9 @@ export interface AgentState {
   // Loading
   sessionLoading: boolean;
 
+  // Pending run (waiting for assistant response)
+  pendingRunId: string | null;
+
   // Actions
   switchSession: (sessionId: string) => void;
   loadHistory: (sessionId: string, messages: AgentMessage[]) => void;
@@ -84,6 +98,8 @@ export interface AgentState {
   clearStreaming: () => void;
   setSSEStatus: (status: "disconnected" | "connected" | "reconnecting") => void;
   setSSERetryAttempt: (attempt: number) => void;
+  setPendingRunId: (runId: string) => void;
+  fetchRunArtifacts: (runId: string) => Promise<void>;
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
@@ -96,6 +112,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   sseStatus: "disconnected",
   sseRetryAttempt: 0,
   sessionLoading: false,
+  pendingRunId: null as string | null,
 
   switchSession: (sessionId: string) => {
     const cached = getCachedSession(sessionId);
@@ -171,6 +188,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         content: state.streamingText,
         timestamp: Date.now(),
         toolCalls: state.toolCalls.length > 0 ? [...state.toolCalls] : undefined,
+        runId: state.pendingRunId ?? undefined,
       };
       const next = [...state.messages, assistantMsg];
       if (state.sessionId) touchSession(state.sessionId, next);
@@ -179,13 +197,54 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         streamingText: "",
         toolCalls: [],
         status: "idle",
+        pendingRunId: null,
       });
     } else {
       set({
         streamingText: "",
         toolCalls: [],
         status: "idle",
+        pendingRunId: null,
       });
+    }
+  },
+
+  setPendingRunId: (runId: string) => {
+    set({ pendingRunId: runId });
+  },
+
+  fetchRunArtifacts: async (runId: string) => {
+    try {
+      const res = await fetch(`/api/runs/${runId}/artifacts`);
+      if (!res.ok) return;
+      const data: Array<{
+        artifact_id?: string;
+        id?: string;
+        kind: string;
+        name: string;
+        path?: string | null;
+        content?: string | null;
+        mime_type?: string | null;
+      }> = await res.json();
+      if (!Array.isArray(data) || data.length === 0) return;
+
+      const artifacts: ArtifactEntry[] = data.map((a) => ({
+        id: a.artifact_id ?? a.id ?? "",
+        kind: a.kind,
+        name: a.name,
+        path: a.path,
+        content: a.content,
+        mimeType: a.mime_type,
+      }));
+
+      // Attach artifacts to the assistant message that has this runId
+      set((s) => ({
+        messages: s.messages.map((msg) =>
+          msg.runId === runId ? { ...msg, artifacts } : msg
+        ),
+      }));
+    } catch {
+      // silently ignore artifact fetch errors
     }
   },
 

@@ -3,9 +3,15 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/useLanguage";
 import { MessageBubble } from "./MessageBubble";
 import { ThinkingTimeline } from "./ThinkingTimeline";
 import type { AgentMessage } from "@/stores/agent";
+
+const LABELS = {
+  en: { turn: "Turn", runs: "run", runsPlural: "runs" },
+  zh: { turn: "回合", runs: "次运行", runsPlural: "次运行" },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Turn grouping
@@ -66,6 +72,8 @@ interface TurnViewProps {
 
 function TurnView({ turn, index, defaultExpanded }: TurnViewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
+  const { language } = useLanguage();
+  const labels = LABELS[language];
 
   const summary = turn.userMessage.content.slice(0, 50);
   const runCount = turn.subsequent.length;
@@ -84,10 +92,10 @@ function TurnView({ turn, index, defaultExpanded }: TurnViewProps) {
             <ChevronRight className="h-3 w-3" />
           )}
           <span>
-            Turn {index + 1}: {summary}
+            {labels.turn} {index + 1}: {summary}
             {summary.length >= 50 ? "..." : ""}{" "}
             <span className="text-muted-foreground/60">
-              ({runCount} run{runCount !== 1 ? "s" : ""})
+              ({runCount} {runCount !== 1 ? labels.runsPlural : labels.runs})
             </span>
           </span>
         </button>

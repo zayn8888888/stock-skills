@@ -11,6 +11,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/useLanguage";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -38,9 +39,9 @@ export interface ComposerProps {
 // ---------------------------------------------------------------------------
 
 const PLUS_MENU_ITEMS = [
-  { key: "upload", label: "Upload", icon: Upload },
-  { key: "attach", label: "Attach context", icon: Paperclip },
-  { key: "goal", label: "Set goal", icon: Target },
+  { key: "upload", labelKey: "upload", icon: Upload },
+  { key: "attach", labelKey: "attach", icon: Paperclip },
+  { key: "goal", labelKey: "goal", icon: Target },
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -48,11 +49,34 @@ const PLUS_MENU_ITEMS = [
 // ---------------------------------------------------------------------------
 
 const WORKFLOW_PRESETS = [
-  { key: "analyze", label: "Analyze" },
-  { key: "debate", label: "Debate" },
-  { key: "scan", label: "Scan" },
-  { key: "review", label: "Review" },
+  { key: "analyze", labelKey: "analyze" },
+  { key: "debate", labelKey: "debate" },
+  { key: "scan", labelKey: "scan" },
+  { key: "review", labelKey: "review" },
 ] as const;
+
+const LABELS = {
+  en: {
+    placeholder: "Ask a research question...",
+    upload: "Upload",
+    attach: "Attach context",
+    goal: "Set goal",
+    analyze: "Analyze",
+    debate: "Debate",
+    scan: "Scan",
+    review: "Review",
+  },
+  zh: {
+    placeholder: "输入研究问题...",
+    upload: "上传",
+    attach: "附加上下文",
+    goal: "设置目标",
+    analyze: "分析",
+    debate: "辩论",
+    scan: "扫描",
+    review: "复盘",
+  },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -67,6 +91,8 @@ export function Composer({
   onClearContext,
   className,
 }: ComposerProps) {
+  const { language } = useLanguage();
+  const labels = LABELS[language];
   const [value, setValue] = useState("");
   const [plusOpen, setPlusOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -106,14 +132,17 @@ export function Composer({
   const handleWorkflowClick = useCallback(
     (workflowKey: string) => {
       const label =
-        WORKFLOW_PRESETS.find((w) => w.key === workflowKey)?.label ?? workflowKey;
+        labels[
+          WORKFLOW_PRESETS.find((w) => w.key === workflowKey)?.labelKey ??
+            "analyze"
+        ];
       // Trigger workflow by sending a special message
       onSend(`/workflow ${workflowKey}`, {
         ...context,
         workflow: label,
       });
     },
-    [onSend, context]
+    [onSend, context, labels]
   );
 
   // Close + menu on outside click
@@ -170,7 +199,7 @@ export function Composer({
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-popover-foreground hover:bg-accent transition-colors"
                 >
                   <item.icon className="h-4 w-4 text-muted-foreground" />
-                  {item.label}
+                  {labels[item.labelKey]}
                 </button>
               ))}
             </div>
@@ -183,7 +212,7 @@ export function Composer({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          placeholder="Ask a research question..."
+          placeholder={labels.placeholder}
           disabled={disabled}
           rows={1}
           className={cn(
@@ -237,7 +266,7 @@ export function Composer({
               "disabled:opacity-50 disabled:cursor-not-allowed"
             )}
           >
-            {wf.label}
+            {labels[wf.labelKey]}
           </button>
         ))}
       </div>

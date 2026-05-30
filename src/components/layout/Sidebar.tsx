@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   BarChart3,
@@ -15,16 +15,17 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/hooks/useTheme";
+import { useLanguage } from "@/hooks/useLanguage";
+import { useAgentStore } from "@/stores/agent";
+import {
+  normalizeSessions,
+  type SessionEntry,
+  type SessionStatus,
+} from "@/lib/sessions";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface SessionEntry {
-  id: string;
-  title: string;
-  status: "running" | "completed" | "failed" | "due_review";
-}
 
 interface OverviewStats {
   running: number;
@@ -37,10 +38,41 @@ interface OverviewStats {
 // ---------------------------------------------------------------------------
 
 const NAV_ITEMS = [
-  { href: "/", label: "Research Desk", icon: FileText },
-  { href: "/data-sources", label: "Data Sources", icon: Database },
-  { href: "/reviews", label: "Reviews", icon: BarChart3 },
+  { href: "/", labelKey: "research", icon: FileText },
+  { href: "/data-sources", labelKey: "sources", icon: Database },
+  { href: "/reviews", labelKey: "reviews", icon: BarChart3 },
 ] as const;
+
+const LABELS = {
+  en: {
+    brand: "Stock Skills",
+    research: "Research Desk",
+    sources: "Data Sources",
+    reviews: "Reviews",
+    overview: "Overview",
+    running: "running",
+    failed: "failed",
+    due: "due",
+    sessions: "Sessions",
+    language: "中文",
+    lightMode: "Light mode",
+    darkMode: "Dark mode",
+  },
+  zh: {
+    brand: "Stock Skills",
+    research: "研究工作台",
+    sources: "数据源",
+    reviews: "复盘",
+    overview: "概览",
+    running: "运行中",
+    failed: "失败",
+    due: "待复盘",
+    sessions: "会话",
+    language: "English",
+    lightMode: "亮色模式",
+    darkMode: "暗色模式",
+  },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -53,7 +85,11 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  const { language, toggleLanguage } = useLanguage();
+  const switchSession = useAgentStore((s) => s.switchSession);
+  const labels = LABELS[language];
 
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [overview, setOverview] = useState<OverviewStats>({
@@ -62,23 +98,40 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
     dueReview: 0,
   });
 
-  // Fetch sessions
-  useEffect(() => {
+  const fetchSessions = useCallback(() => {
     fetch("/api/sessions")
       .then((r) => (r.ok ? r.json() : []))
-      .then((data: SessionEntry[]) => {
-        setSessions(data);
+      .then((data) => {
+        const normalized = normalizeSessions(data);
+        setSessions(normalized);
         setOverview({
-          running: data.filter((s) => s.status === "running").length,
-          failed: data.filter((s) => s.status === "failed").length,
-          dueReview: data.filter((s) => s.status === "due_review").length,
+          running: normalized.filter((s) => s.status === "running").length,
+          failed: normalized.filter((s) => s.status === "failed").length,
+          dueReview: normalized.filter((s) => s.status === "due_review").length,
         });
       })
       .catch(() => {});
   }, []);
 
-  const statusDot = useCallback((status: SessionEntry["status"]) => {
+  // Fetch sessions
+  useEffect(() => {
+    fetchSessions();
+    window.addEventListener("stock-skills:sessions-updated", fetchSessions);
+    return () =>
+      window.removeEventListener("stock-skills:sessions-updated", fetchSessions);
+  }, [fetchSessions]);
+
+  const handleSessionClick = useCallback(
+    (sessionId: string) => {
+      switchSession(sessionId);
+      if (pathname !== "/") router.push("/");
+    },
+    [pathname, router, switchSession],
+  );
+
+  const statusDot = useCallback((status: SessionStatus) => {
     const colors: Record<string, string> = {
+      active: "bg-muted-foreground/50",
       running: "bg-green-500",
       completed: "bg-blue-500",
       failed: "bg-destructive",
@@ -102,7 +155,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       <div className="flex items-center justify-between px-3 py-3 border-b border-sidebar-border">
         {!collapsed && (
           <span className="text-sm font-semibold tracking-tight truncate">
-            Stock Skills
+            {labels.brand}
           </span>
         )}
         <button
@@ -132,10 +185,12 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                   ? "bg-sidebar-accent text-sidebar-primary font-medium"
                   : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
               )}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? labels[item.labelKey] : undefined}
             >
               <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && <span className="truncate">{item.label}</span>}
+              {!collapsed && (
+                <span className="truncate">{labels[item.labelKey]}</span>
+              )}
             </Link>
           );
         })}
@@ -145,20 +200,20 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       {!collapsed && (
         <div className="px-3 py-2 border-t border-sidebar-border">
           <p className="text-xs font-medium text-sidebar-foreground/50 mb-1">
-            Overview
+            {labels.overview}
           </p>
           <div className="flex gap-3 text-xs text-sidebar-foreground/70">
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              {overview.running} running
+              {overview.running} {labels.running}
             </span>
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
-              {overview.failed} failed
+              {overview.failed} {labels.failed}
             </span>
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-              {overview.dueReview} due
+              {overview.dueReview} {labels.due}
             </span>
           </div>
         </div>
@@ -168,12 +223,13 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       {!collapsed && sessions.length > 0 && (
         <div className="flex-1 overflow-y-auto px-2 py-2 border-t border-sidebar-border">
           <p className="px-2 text-xs font-medium text-sidebar-foreground/50 mb-1">
-            Sessions
+            {labels.sessions}
           </p>
           <div className="flex flex-col gap-0.5">
             {sessions.map((session) => (
               <button
                 key={session.id}
+                onClick={() => handleSessionClick(session.id)}
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground text-left truncate"
               >
                 {statusDot(session.status)}
@@ -189,13 +245,14 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
       {/* Bottom controls */}
       <div className="flex flex-col gap-1 px-2 py-2 border-t border-sidebar-border">
-        {/* Language switcher placeholder */}
+        {/* Language switcher */}
         <button
+          onClick={toggleLanguage}
           className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           title={collapsed ? "Language" : undefined}
         >
           <Globe className="h-4 w-4 shrink-0" />
-          {!collapsed && <span>English</span>}
+          {!collapsed && <span>{labels.language}</span>}
         </button>
 
         {/* Theme toggle */}
@@ -210,7 +267,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
             <Moon className="h-4 w-4 shrink-0" />
           )}
           {!collapsed && (
-            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+            <span>{theme === "dark" ? labels.lightMode : labels.darkMode}</span>
           )}
         </button>
       </div>

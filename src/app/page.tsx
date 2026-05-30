@@ -8,21 +8,45 @@ import { Timeline } from "@/components/research/Timeline";
 import { Composer, type ComposerContext } from "@/components/research/Composer";
 import { WelcomeScreen } from "@/components/research/WelcomeScreen";
 import { ContextChips, type ContextChipsData } from "@/components/research/ContextChips";
-import type { AgentMessage, ToolCallEntry } from "@/stores/agent";
-
-// ---------------------------------------------------------------------------
-// Session list types (matches Sidebar)
-// ---------------------------------------------------------------------------
-
-interface SessionEntry {
-  id: string;
-  title: string;
-  status: "running" | "completed" | "failed" | "due_review";
-}
+import type { AgentMessage } from "@/stores/agent";
+import { authFetch } from "@/lib/api/auth-fetch";
+import { useLanguage } from "@/hooks/useLanguage";
 
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+
+const LABELS = {
+  en: {
+    title: "Research Desk",
+    fallbackError: "Request failed",
+    errorPrefix: "Error",
+    processing: "Processing...",
+  },
+  zh: {
+    title: "研究工作台",
+    fallbackError: "请求失败",
+    errorPrefix: "错误",
+    processing: "处理中...",
+  },
+} as const;
+
+function inferTicker(content: string): string | undefined {
+  return content.match(/\b[A-Z]{1,6}\b/)?.[0];
+}
+
+function buildMessageContext(content: string, ctx?: ComposerContext) {
+  const ticker = ctx?.ticker ?? inferTicker(content);
+  const workflowType = ctx?.workflow;
+
+  if (!ticker && !workflowType) return undefined;
+
+  return {
+    ticker,
+    skill_name: ticker ? "stock-analyzer" : undefined,
+    workflow_type: workflowType,
+  };
+}
 
 export default function Home() {
   const {
@@ -30,7 +54,6 @@ export default function Home() {
     sessionId,
     status,
     streamingText,
-    toolCalls,
     sessionLoading,
     switchSession,
     loadHistory,
@@ -41,23 +64,15 @@ export default function Home() {
     clearStreaming,
     setSSEStatus,
     setSSERetryAttempt,
+    setPendingRunId,
+    fetchRunArtifacts,
   } = useAgentStore();
 
   const { connect, disconnect, onStatusChange } = useSSE();
+  const { language } = useLanguage();
+  const labels = LABELS[language];
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [composerContext, setComposerContext] = useState<ComposerContext>({});
-
-  // ---------------------------------------------------------------------------
-  // Session list
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    fetch("/api/sessions")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => setSessions(data))
-      .catch(() => {});
-  }, []);
 
   // ---------------------------------------------------------------------------
   // SSE connection on session change
@@ -80,8 +95,15 @@ export default function Home() {
       },
       "tool_call": (data: string) => {
         try {
-          const parsed = JSON.parse(data) as ToolCallEntry;
-          addToolCall(parsed);
+          const parsed = JSON.parse(data);
+          // Server sends: { runId, toolName, toolId, input }
+          // Store expects: { id, name, status, args }
+          addToolCall({
+            id: parsed.toolId ?? parsed.id,
+            name: parsed.toolName ?? parsed.name,
+            args: typeof parsed.input === "string" ? parsed.input : JSON.stringify(parsed.input ?? {}),
+            status: "running",
+          });
         } catch {
           // ignore malformed events
         }
@@ -89,8 +111,9 @@ export default function Home() {
       "tool_result": (data: string) => {
         try {
           const parsed = JSON.parse(data);
-          if (parsed.id) {
-            updateToolCall(parsed.id, {
+          const id = parsed.toolId ?? parsed.id;
+          if (id) {
+            updateToolCall(id, {
               status: parsed.error ? "error" : "completed",
               result: parsed.result ?? parsed.error,
             });
@@ -100,29 +123,49 @@ export default function Home() {
         }
       },
       "run.created": (data: string) => {
-        // Could display a RunCard inline; for now the event is logged
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.runId) {
+            setPendingRunId(parsed.runId);
+          }
+        } catch {
+          // ignore
+        }
       },
       "run.updated": (data: string) => {
-        // Could update an inline RunCard
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.status === "success" || parsed.status === "failed" || parsed.status === "cancelled") {
+            // Fetch artifacts if run succeeded
+            if (parsed.status === "success" && parsed.runId) {
+              fetchRunArtifacts(parsed.runId);
+            }
+            // Move streamed text into messages and reset
+            clearStreaming();
+            window.dispatchEvent(new Event("stock-skills:sessions-updated"));
+          }
+        } catch {
+          clearStreaming();
+        }
       },
       "error": (data: string) => {
-        // Display error as a system message
         try {
           const parsed = JSON.parse(data);
           addMessage({
             id: crypto.randomUUID(),
             role: "system",
-            content: `Error: ${parsed.message ?? parsed.error ?? data}`,
+            content: `${labels.errorPrefix}: ${parsed.message ?? parsed.error ?? data}`,
             timestamp: Date.now(),
           });
         } catch {
           addMessage({
             id: crypto.randomUUID(),
             role: "system",
-            content: `Error: ${data}`,
+            content: `${labels.errorPrefix}: ${data}`,
             timestamp: Date.now(),
           });
         }
+        clearStreaming();
       },
     };
 
@@ -131,7 +174,7 @@ export default function Home() {
     return () => {
       disconnect();
     };
-  }, [sessionId, connect, disconnect, appendDelta, addToolCall, updateToolCall, addMessage]);
+  }, [sessionId, connect, disconnect, appendDelta, addToolCall, updateToolCall, addMessage, clearStreaming, setPendingRunId, fetchRunArtifacts, labels.errorPrefix]);
 
   // Sync SSE status to store
   useEffect(() => {
@@ -188,34 +231,45 @@ export default function Home() {
       if (!sessionId) {
         // Create a new session first
         try {
-          const res = await fetch("/api/sessions", {
+          const res = await authFetch("/api/sessions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               title: content.slice(0, 60),
             }),
           });
-          if (!res.ok) return;
+          if (!res.ok) {
+            addMessage({
+              id: crypto.randomUUID(),
+              role: "system",
+              content: `${labels.fallbackError}: ${res.status}`,
+              timestamp: Date.now(),
+            });
+            return;
+          }
           const { session_id } = await res.json();
           switchSession(session_id);
-          // Refresh sessions list
-          fetch("/api/sessions")
-            .then((r) => (r.ok ? r.json() : []))
-            .then((data) => setSessions(data))
-            .catch(() => {});
+          window.dispatchEvent(new Event("stock-skills:sessions-updated"));
           // Send message after session is created
           // Use a slight delay to allow SSE connection to establish
           setTimeout(() => {
             sendMessage(session_id, content, ctx);
           }, 300);
-        } catch {
+        } catch (err) {
+          addMessage({
+            id: crypto.randomUUID(),
+            role: "system",
+            content: `${labels.fallbackError}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+            timestamp: Date.now(),
+          });
           return;
         }
       } else {
         sendMessage(sessionId, content, ctx);
       }
     },
-    [sessionId, switchSession]
+    [sessionId, switchSession, addMessage, labels.fallbackError]
   );
 
   function sendMessage(sid: string, content: string, ctx?: ComposerContext) {
@@ -231,24 +285,41 @@ export default function Home() {
     clearStreaming();
 
     // Send to API
-    fetch(`/api/sessions/${sid}/messages`, {
+    authFetch(`/api/sessions/${sid}/messages`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         content,
-        context: ctx?.ticker || ctx?.workflow
-          ? {
-              ticker: ctx.ticker,
-              workflow_type: ctx.workflow,
-            }
-          : undefined,
+        context: buildMessageContext(content, ctx),
       }),
-    }).catch(() => {});
+    }).then((res) => {
+      if (!res.ok) {
+        addMessage({
+          id: crypto.randomUUID(),
+          role: "system",
+          content: `${labels.fallbackError}: ${res.status}`,
+          timestamp: Date.now(),
+        });
+      }
+    }).catch((err) => {
+      addMessage({
+        id: crypto.randomUUID(),
+        role: "system",
+        content: `${labels.fallbackError}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+        timestamp: Date.now(),
+      });
+    });
   }
 
   const handleStop = useCallback(() => {
+    if (sessionId) {
+      authFetch(`/api/sessions/${sessionId}/cancel`, {
+        method: "POST",
+      }).catch(() => {});
+    }
     clearStreaming();
-  }, [clearStreaming]);
+  }, [clearStreaming, sessionId]);
 
   const handlePromptClick = useCallback(
     (query: string) => {
@@ -277,7 +348,13 @@ export default function Home() {
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-border px-6 py-3 shrink-0">
         <FileText className="h-5 w-5 text-primary" />
-        <h1 className="text-lg font-semibold">Research Desk</h1>
+        <h1 className="text-lg font-semibold">{labels.title}</h1>
+        {isStreaming && (
+          <span className="flex items-center gap-1.5 text-xs text-primary ml-2">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {labels.processing}
+          </span>
+        )}
         {sessionId && (
           <span className="text-xs text-muted-foreground font-mono ml-auto">
             {sessionId}

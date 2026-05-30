@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/useLanguage";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,12 +41,9 @@ const CHIP_ICONS: Record<string, typeof TrendingUp> = {
   owner: User,
 };
 
-const CHIP_LABELS: Record<string, string> = {
-  ticker: "Ticker",
-  goal: "Goal",
-  attachment: "Attachment",
-  workflow: "Workflow",
-  owner: "Owner",
+const CHIP_LABELS: Record<string, Record<string, string>> = {
+  en: { ticker: "Ticker", goal: "Goal", attachment: "Attachment", workflow: "Workflow", owner: "Owner" },
+  zh: { ticker: "标的", goal: "目标", attachment: "附件", workflow: "工作流", owner: "所有者" },
 };
 
 // ---------------------------------------------------------------------------
@@ -53,6 +51,8 @@ const CHIP_LABELS: Record<string, string> = {
 // ---------------------------------------------------------------------------
 
 export function ContextChips({ context, onDismiss, className }: ContextChipsProps) {
+  const { language } = useLanguage();
+  const labels = CHIP_LABELS[language];
   const entries = Object.entries(context).filter(
     ([, v]) => v !== undefined && v !== ""
   ) as [keyof ContextChipsData, string][];
@@ -63,7 +63,7 @@ export function ContextChips({ context, onDismiss, className }: ContextChipsProp
     <div className={cn("flex flex-wrap gap-1.5", className)}>
       {entries.map(([key, value]) => {
         const Icon = CHIP_ICONS[key] ?? Target;
-        const label = CHIP_LABELS[key] ?? key;
+        const label = labels[key] ?? key;
 
         return (
           <span

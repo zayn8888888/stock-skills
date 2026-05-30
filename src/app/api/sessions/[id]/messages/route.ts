@@ -13,6 +13,7 @@ import { taskRunner } from "@/lib/agent/task-runner";
 import { getLLMClient, getModelName } from "@/lib/agent/llm-provider";
 import { eventBus } from "@/lib/runtime/event-bus";
 import { registry as adapterRegistry } from "@/lib/adapters/registry";
+import { initAdapters } from "@/lib/adapters/init";
 import * as artifactWriter from "@/lib/runtime/artifact-writer";
 import * as goalManager from "@/lib/runtime/goal-manager";
 
@@ -33,6 +34,9 @@ interface MessageBody {
 export async function POST(req: NextRequest, ctx: RouteCtx) {
   const authErr = validateAuth(req);
   if (authErr) return authErr;
+
+  // Ensure adapters are registered
+  initAdapters();
 
   const { id: sessionId } = await ctx.params;
   const body: MessageBody = await req.json();

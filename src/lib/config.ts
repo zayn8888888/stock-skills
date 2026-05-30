@@ -8,6 +8,7 @@ export interface Config {
   token: string;
   maxUploadBytes: number;
   anthropicApiKey: string;
+  anthropicBaseUrl?: string;
   llmModel: string;
 }
 
@@ -19,11 +20,12 @@ export function getConfig(): Config {
   const analysisRoot = process.env.STOCK_SKILLS_ANALYSIS_ROOT
     ?? path.resolve(process.cwd(), "analysis");
   const dbPath = path.resolve(analysisRoot, "stock_skills.sqlite");
-  const token = loadOrCreateToken(analysisRoot);
 
   if (!existsSync(analysisRoot)) {
     mkdirSync(analysisRoot, { recursive: true });
   }
+  const token = loadOrCreateToken(analysisRoot);
+
   const artifactsDir = path.resolve(analysisRoot, "artifacts");
   if (!existsSync(artifactsDir)) {
     mkdirSync(artifactsDir, { recursive: true });
@@ -35,7 +37,11 @@ export function getConfig(): Config {
     token,
     maxUploadBytes: 50 * 1024 * 1024,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
-    llmModel: process.env.LLM_MODEL ?? "claude-sonnet-4-20250514",
+    anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL,
+    llmModel:
+      process.env.MODEL_ID ??
+      process.env.LLM_MODEL ??
+      "claude-sonnet-4-20250514",
   };
   return _config;
 }

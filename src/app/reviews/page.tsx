@@ -7,6 +7,7 @@ import { BarChart3, Calendar, CheckCircle2, Clock } from "lucide-react";
 import { DataTable } from "@/components/common/DataTable";
 import { Skeleton } from "@/components/common/Skeleton";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { authFetch } from "@/lib/api/auth-fetch";
 import { cn } from "@/lib/utils";
 
 interface Decision {
@@ -179,9 +180,8 @@ export default function ReviewsPage() {
                         <button
                           onClick={() => {
                             if (!lessonDraft.trim()) return;
-                            fetch("/api/lessons", {
+                            authFetch("/api/lessons", {
                               method: "POST",
-                              headers: { "Content-Type": "application/json" },
                               body: JSON.stringify({
                                 session_id: selected.session_id,
                                 category: "strategy",

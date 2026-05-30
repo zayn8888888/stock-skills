@@ -6,7 +6,10 @@ let _client: Anthropic | null = null;
 export function getLLMClient(): Anthropic {
   if (_client) return _client;
   const config = getConfig();
-  _client = new Anthropic({ apiKey: config.anthropicApiKey });
+  _client = new Anthropic({
+    apiKey: config.anthropicApiKey,
+    baseURL: config.anthropicBaseUrl,
+  });
   return _client;
 }
 
