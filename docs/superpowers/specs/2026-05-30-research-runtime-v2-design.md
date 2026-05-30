@@ -67,7 +67,7 @@ v1 spec（同文件名，Python FastAPI 版）定义了数据模型和 API 契�
 
 ### 设计系统
 
-基于 UI/UX Pro Max 分析 + spec 要求，支持 Light / Dark 双主题，默认浅色。使用 shadcn/ui 的 CSS variable token 系统，一套 semantic token 名映射到两组色值。
+基于 UI/UX Pro Max 分析 + spec 要求，支持 Light / Dark 双主题，**默认深色**（金融终端惯例：Bloomberg、TradingView、Binance 均默认 dark）。使用 shadcn/ui 的 CSS variable token 系统，一套 semantic token 名映射到两组色值。
 
 **Light theme 色彩**：
 - 背景：`hsl(0 0% 100%)` / `hsl(210 40% 98%)`
@@ -183,9 +183,7 @@ stock-skills/
     app/                          # Next.js App Router
       layout.tsx                  # 根 layout：providers, i18n, theme
       globals.css                 # Tailwind base + CSS variable themes
-      page.tsx                    # / → Research Desk（默认入口）
-      dashboard/
-        page.tsx                  # /dashboard
+      page.tsx                    # / → Research Desk（默认入口 + sidebar overview）
       tickers/
         [ticker]/
           page.tsx                # /tickers/:ticker
@@ -260,8 +258,9 @@ stock-skills/
         migrations/               # SQL migration files
         index.ts                  # db instance
       agent/
-        llm-provider.ts           # Anthropic SDK 封装
-        loop.ts                   # ReAct loop: LLM call → tool call → repeat
+        llm-provider.ts           # Anthropic SDK 封装（流式）
+        loop.ts                   # ReAct loop: LLM streaming → tool call → repeat
+        task-runner.ts            # 任务队列：并发控制、超时、取消、AbortController
         tools.ts                  # ToolRegistry: adapter tools + system tools
         context.ts                # ContextBuilder: session history + goal + ticker context
         skill-loader.ts           # 加载 skills/agents/*/prompt.md
@@ -310,15 +309,13 @@ stock-skills/
         GoalChip.tsx
         WelcomeScreen.tsx
       run/
-        ReportTab.tsx
-        ResultTab.tsx
-        SourcesTab.tsx
-        LogsTab.tsx
-        TrustPanel.tsx
+        ReportTab.tsx             # markdown report + JSON toggle
+        DataTab.tsx               # sources + artifacts + trust summary bar
+        LogsTab.tsx               # run_events log
       dashboard/
-        RunsTable.tsx
-        SourceHealthGrid.tsx
-        DueReviewsList.tsx
+        RunsTable.tsx             # 也用于 sidebar overview
+        SourceHealthGrid.tsx      # 也用于 sidebar overview
+        DueReviewsList.tsx        # 也用于 sidebar overview
       common/
         DataTable.tsx
         Skeleton.tsx
@@ -808,7 +805,37 @@ error
 ```
 
 每个 event 有 stable `id`、`event`、`data`、`created_at`。
-Server 保持 session-scoped replay buffer（500 events），30 秒 heartbeat。
+
+SSE requirements:
+- Server 保持 session-scoped replay buffer（500 events），30 秒 heartbeat。
+- **Replay buffer 只存状态事件**（`run.created`, `run.updated`, `artifact.created`, `goal.*`, `error`），**不存流式事件**（`text_delta`, `tool_call`, `tool_result`, `thinking_done`）。流式事件断线即失，客户端重连后从 `GET /messages` + `GET /runs` 重建 timeline。
+- 重要事件持久化到 `run_events` 表。
+- 同一 session 同时只允许一个 SSE 连接，后连接替代前一个。
+
+## Agent 执行架构
+
+AgentLoop 不直接放在 Next.js Route Handler 内运行。引入 TaskRunner 模式：
+
+```text
+POST /api/sessions/:id/messages
+  → 保存 message + 创建 run
+  → TaskRunner.enqueue(runId, agentName, context)
+  → 立即返回 200
+
+TaskRunner（进程内任务队列）
+  → 启动 AgentLoop（async，带 AbortController）
+  → AgentLoop 通过 EventBus 推送 SSE 事件
+  → 完成/失败时更新 run status + 保存 assistant message
+```
+
+TaskRunner 特性：
+- `Map<string, AbortController>` 管理活跃任务
+- 并发控制（默认最多 2 个并发 agent）
+- 超时保护（单次 run 最多 10 分钟）
+- 取消支持（`POST /cancel` → AbortController.abort()）
+- 错误收集 + run status 更新
+
+**架构约束**：这是单进程长期运行架构，不做 serverless 部署。
 
 ## Web UI 设计
 
@@ -816,21 +843,23 @@ Server 保持 session-scoped replay buffer（500 events），30 秒 heartbeat。
 
 | 路由 | 页面 | 说明 |
 |------|------|------|
-| `/` | Research Desk | 默认入口 |
-| `/dashboard` | Dashboard | 第二入口 |
+| `/` | Research Desk | 默认入口 + sidebar overview（合并原 Dashboard） |
 | `/tickers/:ticker` | Ticker Page | ticker context |
-| `/runs/:runId` | Run Detail | run 详情 |
+| `/runs/:runId` | Run Detail | run 详情（3 tabs） |
 | `/data-sources` | Data Sources | source health |
 | `/reviews` | Review Queue | due decisions |
+
+Dashboard 不再是独立页面——running/failed/due review 汇总数字展示在 Research Desk sidebar 顶部的 Overview 区。Ticker Page 是跨 session 聚合的正确位置。
 
 ### Research Desk（主页面）
 
 布局：
-- 左侧 App Shell：nav + Sessions list + dark mode toggle + 语言切换，可 collapse（240px → 48px）
-- 中央 Timeline：user message、assistant answer、thinking/tool progress、run card、artifact card、source warning、goal event 混排
+- 左侧 App Shell：nav + Sessions list + Overview 汇总（running/failed/due review）+ dark mode toggle + 语言切换，可 collapse（240px → 48px）
+- 中央 Timeline：以 Turn 为单位折叠（一轮对话 = user message + tool progress + run card + assistant answer，旧 Turn 默认折叠为一行摘要）
 - 底部 Composer：多行 textarea + Enter 发送 + Shift+Enter 换行 + Stop
-- Composer `+` menu：Upload、New Research Goal、Analyze、Debate、Review、Agent Workflow
-- Composer 上方 Context chips：active ticker、goal progress、attachment、workflow、owner
+- Composer `+` 菜单：Upload document、Attach ticker context、Set research goal（仅输入增强动作，最多 3 项）
+- Composer 下方 Workflow 按钮行：`[Analyze]` `[Debate]` `[Scan]` `[Review]` 横排 pill 按钮，点击设置 context chip 后用户输入具体指令
+- Composer 上方 Context chips：active ticker、goal progress、attachment、selected workflow、current owner
 
 空 session：显示示例 prompt grid（不做 hero）。
 
@@ -838,8 +867,7 @@ Streaming：heartbeat/tool progress 展示；90 秒无事件时提示 timeout �
 
 Session list：
 - 每个 session 显示 status dot（green/yellow/red）
-- hover-reveal rename 和 delete
-- 两步 delete（点删除 → Confirm）
+- 右键 context menu（rename / archive / delete）替代 hover-reveal
 - active session 高亮
 
 ### Timeline 渲染
@@ -865,15 +893,18 @@ tool, status, stage, message, current, total, elapsed_s, run_id, source_name
 
 ### Run Detail
 
-Tab 切换：Report | Result JSON | Sources | Logs | Artifacts | Trust
+Tab 切换：**Report** | **Data** | **Logs**
 
-Trust panel：
+- **Report**：默认 tab，渲染 report.md。顶部 "JSON" toggle 按钮可切换到 result.json 结构化视图。
+- **Data**：合并 Sources + Artifacts + Trust。表格展示所有 artifacts（含 sources/*.raw.json），checksum 和 provenance 作为可展开行。Trust 信息（schema version, generated_at, data sources, warnings）作为 Data tab 顶部 summary bar。
+- **Logs**：展示 run_events 日志。
+
+Trust panel 内容嵌入 Data tab summary bar：
 - Schema version
 - Generated at
 - Data sources list
 - Warnings
 - Artifact checksums（SHA-256 截断显示：`first12...last6`）
-- Reproducibility
 
 ### Dashboard
 
@@ -1031,18 +1062,18 @@ Trust panel：
 ## 验收标准
 
 1. 能启动全栈（`pnpm dev`），server + web 在同一进程 `:3000`。
-2. 默认入口 `/` 是 Research Desk。
+2. 默认入口 `/` 是 Research Desk（含 sidebar overview 汇总）。
 3. 能创建 session、发送 message、agent 自动执行、刷新后仍能看到 session timeline。
 4. 能创建 research goal、追加 evidence、展示 criteria/evidence progress。
 5. 能创建 run，并写 SQLite 与 artifacts。
-6. POST /messages 自动触发内置 AgentLoop 推理。
+6. POST /messages 通过 TaskRunner 触发内置 AgentLoop 推理（流式调用 Anthropic API）。
 7. 能从 fixture source 生成 Observation。
 8. 能通过 API 查询 ticker context。
-9. Research Desk 能展示 session list、timeline、context chips、tool progress 和 run card。
-10. SSE 能推送 run/tool/goal/artifact 事件；断线重连能通过 Last-Event-ID 恢复。
-11. Run Detail 能展示 Report / Result JSON / Sources / Logs，并展示 trust panel + artifact checksum。
-12. 安全测试覆盖缺 token、错误 Origin、path traversal、超大 artifact、非法 artifact type。
+9. Research Desk 能展示 session list、timeline（Turn 折叠）、context chips、tool progress 和 run card。
+10. SSE 能推送 run/tool/goal/artifact 事件；断线重连能通过 Last-Event-ID 恢复状态事件。
+11. Run Detail 能展示 Report（含 JSON toggle）/ Data（sources + artifacts + trust summary）/ Logs。
+12. 安全测试覆盖 path traversal 和超大 artifact。
 13. `/analysis/`、`.next/`、`node_modules/` 已加入 `.gitignore`。
-14. Light/Dark 主题可通过 sidebar toggle 切换。
+14. Dark/Light 主题可通过 sidebar toggle 切换，默认 dark。
 15. 中英文可通过 sidebar 语言切换器切换，UI chrome 文本均走 i18n。
 16. Dark 主题下所有文字对比度 ≥ 4.5:1（WCAG AA）。
