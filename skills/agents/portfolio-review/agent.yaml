@@ -8,7 +8,6 @@ skills:
   - skills/stock/stock-valuation
   - skills/core/event-calendar
   - skills/core/hyperliquid-perps
-  - skills/futu/futuapi
 optional_artifacts:
   - decision.json
 required_artifacts:
@@ -16,7 +15,8 @@ required_artifacts:
   - result.json
   - sources.json
 data_sources:
-  - futu-opend
+  - futu
+  - futu-news
   - tavily
   - hyperliquid
   - event-calendar
