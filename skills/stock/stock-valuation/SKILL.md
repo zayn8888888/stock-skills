@@ -9,11 +9,52 @@ description: 股票定量估值计算器。接受股票名称或代码，用三�
 
 把估值"黑盒"变成"玻璃盒"——每一个数字从哪里来、为什么这么算、假设是否合理，全部透明呈现。
 
-## Step 0：代码标准化
+## 数据工具
 
-将用户输入映射为富途代码：美股 `US.AAPL` / 港股 `HK.00700` / A 股 `SH.600519`。
+所有行情与财务数据通过以下 capability 工具获取（工具自动处理连接与鉴权，无需手动配置 OpenD）：
 
-## 执行前必读（代码标准化后立即执行）
+| 工具 | 用途 | 参数 | 示例 |
+|------|------|------|------|
+| `get_quote_snapshot` | 实时行情快照（价格、PE、市值等） | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
+| `get_quote_kline` | K 线数据 | `{ ticker, market, params: { num } }` | `{ ticker: "00700", market: "HK", params: { num: 30 } }` |
+| `get_capital_flow` | 资金流向 | `{ ticker, market }` | `{ ticker: "600519", market: "SH" }` |
+| `get_valuation_detail` | 估值详情（PE 百分位、前瞻 PE 等） | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
+| `get_financial_statements` | 财务报表（EPS、净利润等） | `{ ticker, market, params: { num } }` | `{ ticker: "BABA", market: "US", params: { num: 8 } }` |
+| `get_shareholders_overview` | 股东概况 | `{ ticker, market }` | `{ ticker: "PDD", market: "US" }` |
+| `get_corporate_dividends` | 分红派息记录 | `{ ticker, market }` | `{ ticker: "00700", market: "HK" }` |
+| `get_options_chain` | 期权链 | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
+| `get_plate_list` | 板块列表 | `{ market, params: { plateSetType } }` | `{ market: "HK", params: { plateSetType: 1 } }` |
+| `get_plate_stocks` | 板块成分股 | `{ market, params: { plateCode } }` | `{ market: "SH", params: { plateCode: "BK0001" } }` |
+| `get_quote_depth` | 盘口深度 | `{ ticker, market }` | `{ ticker: "00700", market: "HK" }` |
+| `get_company_info` | 公司基本信息（行业、sector 等） | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
+
+**市场代码**：`US` = 美股，`HK` = 港股，`SH` = 沪市，`SZ` = 深市
+
+**行情字段对照**（proto 字段名）：
+
+| 含义 | proto 字段名 |
+|------|-------------|
+| 最新价 | `curPrice` |
+| 开盘价 | `openPrice` |
+| 最高价 | `highPrice` |
+| 最低价 | `lowPrice` |
+| 昨收价 | `lastClosePrice` |
+| 涨跌幅 | `changeRate` |
+| 换手率 | `turnoverRate` |
+| 总市值 | `marketCap` |
+| 市盈率(TTM) | `pe` |
+| 市净率 | `pb` |
+| 更新时间 | `updateTime` |
+
+## 参数说明
+
+用户输入的股票代码需要拆分为 `ticker` 和 `market` 两个参数：
+- 美股：`ticker: "AAPL"`, `market: "US"`
+- 港股：`ticker: "00700"`, `market: "HK"`
+- A 股沪市：`ticker: "600519"`, `market: "SH"`
+- A 股深市：`ticker: "000001"`, `market: "SZ"`
+
+## 执行前必读（确定 ticker/market 后立即执行）
 
 ```bash
 Read references/calculation-methods.md   # DCF/PE/PEG 完整计算步骤、公式、敏感性分析
@@ -22,7 +63,7 @@ Read references/china-adr-pitfalls.md    # 中概股 ADR 专项陷阱（PDD/BABA
 
 ## Step 0.5：公司类型前置判断（在拉财务数据之前完成）
 
-根据 `get_stock_info` 返回的 `sector` 字段 + 财务特征，按以下优先级顺序匹配（前面匹配即停），决定后续估值模板：
+根据 `get_company_info` 返回的 `sector` 字段 + 财务特征，按以下优先级顺序匹配（前面匹配即停），决定后续估值模板：
 
 | 条件 | 判定类型 | 估值模板 |
 |------|---------|---------|
@@ -37,28 +78,38 @@ Read references/china-adr-pitfalls.md    # 中概股 ADR 专项陷阱（PDD/BABA
 
 ## Step 1：并行拉取数据
 
-#### 1a. 富途行情（当前价格 + PE）
+#### 1a. 实时行情（当前价格 + PE）
 
-```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+```
+get_quote_snapshot({ ticker: "<TICKER>", market: "<MARKET>" })
 ```
 
-#### 1b. 财务数据（分层，优先 Futu → 兜底 Tavily）
+返回字段包含：`curPrice`（最新价）、`pe`（TTM PE）、`pb`、`marketCap`、`turnoverRate` 等。
 
-**层 1：Futu 结构化**（美股/港股，需 OpenD）
-```bash
-# 财务报表（A 股返回 report_list=[]，降层 2）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_financials_statements.py <CODE> --num 12 --json
-# 估值（全市场含 A 股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
+#### 1b. 公司信息（用于 Step 0.5 行业判断）
+
 ```
+get_company_info({ ticker: "<TICKER>", market: "<MARKET>" })
+```
+
+#### 1c. 财务数据（分层，优先 capability 工具 → 兜底 Tavily）
+
+**层 1：结构化数据**（全市场可用）
+```
+# 财务报表（A 股可能返回空，降层 2）
+get_financial_statements({ ticker: "<TICKER>", market: "<MARKET>", params: { num: 8 } })
+
+# 估值详情（全市场含 A 股）
+get_valuation_detail({ ticker: "<TICKER>", market: "<MARKET>" })
+```
+
 JSON 字段提取要点：
 - 财务 → `report_list[].field_id`：`8048`(稀释EPS) / `8037`(净利润)；每条含 `yoy / qoq`
 - 估值 → `trend.current_value / forward_value / average_value`（PE 当前/前瞻/均值）/ `trend.avg_minus_1_stddev / avg_plus_1_stddev`（均值 ±1σ）/ `trend.valuation_percentile`（当前 PE 百分位 0~1）
+
 **降层规则**：
-- `get_financials_statements`：A 股返回空 → 层 2 Tavily 补 FCF/EPS
+- `get_financial_statements`：A 股返回空 → 层 2 Tavily 补 FCF/EPS
 - `get_valuation_detail`：A 股**可用**，继续执行（PE 百分位直接用）
-- OpenD 不可用 → 整个层 1 跳过
 
 **层 2：Tavily 兜底**（4 条并行）
 ```
@@ -72,12 +123,12 @@ JSON 字段提取要点：
 
 | 变量 | 说明 | 优先来源 |
 |------|------|---------|
-| `current_price` | 当前股价 | 富途行情 |
-| `ttm_eps` | TTM 每股收益 | Futu `report_list` field_id=8048 / Tavily |
+| `current_price` | 当前股价 | `get_quote_snapshot` → `curPrice` |
+| `ttm_eps` | TTM 每股收益 | `get_financial_statements` → `report_list` field_id=8048 / Tavily |
 | `eps_growth_rate` | 预期 EPS 增速 | 近 3 期 yoy 均值 + 分析师预测 |
-| `fcf_ttm` | TTM 自由现金流 | Futu `report_list` 经营CF-资本支出 / Tavily |
-| `pe_range` | 历史 P/E 低/均/高 | Futu `get_valuation_detail` trend / Tavily |
-| `shares_outstanding` | 流通股数量 | 富途快照 |
+| `fcf_ttm` | TTM 自由现金流 | `get_financial_statements` → `report_list` 经营CF-资本支出 / Tavily |
+| `pe_range` | 历史 P/E 低/均/高 | `get_valuation_detail` → `trend` / Tavily |
+| `shares_outstanding` | 流通股数量 | `get_quote_snapshot` 返回 |
 
 **数据质量规则**：EPS 为负 → P/E 和 PEG 不适用，标注跳过；FCF 波动 > 30% → 取 3 年均值；缺失数据明确标注替代假设。
 
@@ -96,7 +147,7 @@ JSON 字段提取要点：
 | 方法 | 逻辑 | 关键输入 |
 |------|------|---------|
 | **DCF 现金流折现** | 把未来 FCF 折算回今天 | fcf_ttm / eps_growth_rate / WACC |
-| **P/E 相对估值** | 和自己历史 PE 比 | ttm_eps / pe_range（Futu trend 或 Tavily） |
+| **P/E 相对估值** | 和自己历史 PE 比 | ttm_eps / pe_range（`get_valuation_detail` trend 或 Tavily） |
 | **PEG 成长调整** | 增速校正后的真实估值 | ttm_eps / eps_growth_rate / 合理 PEG 区间 |
 
 ## Step 4：汇总 + 买点
@@ -111,8 +162,8 @@ JSON 字段提取要点：
 ## 输出格式
 
 ```markdown
-## 📊 <公司名>（<CODE>）三维估值报告 · <日期>
-**当前价格**：$XX  |  **当前 TTM PE**：XXx  |  **PE 百分位**：X%（Futu）
+## 📊 <公司名>（<TICKER>.<MARKET>）三维估值报告 · <日期>
+**当前价格**：$XX  |  **当前 TTM PE**：XXx  |  **PE 百分位**：X%
 
 ### 📥 数据输入一览
 | 指标 | 数值 | 数据来源 | 备注 |
@@ -139,3 +190,16 @@ JSON 字段提取要点：
 ## 中概股 / 中国 ADR
 
 处理 PDD / BABA / BIDU 等标的时有专项陷阱（单位跳变 / 汇率时效 / VIE 折价）——见 [references/china-adr-pitfalls.md](references/china-adr-pitfalls.md)。
+
+## 可选增强技能
+
+以下技能可提供额外数据维度，均为可选增强，核心估值计算不依赖它们：
+
+- **futu-technical-anomaly**：技术面异动检测（量价突破、均线交叉等）
+- **futu-capital-anomaly**：资金面异动检测（大单净流入、主力资金异常等）
+- **futu-news-search**：新闻搜索（利好/利空事件驱动）
+- **futu-comment-sentiment**：市场评论情绪分析
+- **futu-derivatives-anomaly**：衍生品异动检测（期权隐含波动率异常等）
+- **futu-stock-digest**：个股综合摘要
+
+核心数据已通过上方的 capability 工具（`get_quote_snapshot`、`get_valuation_detail`、`get_financial_statements` 等）完整覆盖。

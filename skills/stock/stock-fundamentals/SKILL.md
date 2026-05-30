@@ -20,58 +20,81 @@ Read references/four-steps.md  # 四步分析框架完整细节（指标定义�
 
 ## 数据工具
 
-### ⚡ Step 0：代码格式标准化（必做，**单独执行，不与任何其他调用并行**）
+所有行情与财务数据通过以下 capability tools 获取。调用时使用 `ticker` + `market` 分离参数（如 `ticker: "NVDA", market: "US"`）。
 
-1. **将用户输入的 ticker 补全为富途格式**：
-   - 纯英文字母 1-5 位 → `US.<TICKER>`（`AAPL` → `US.AAPL`）
-   - 港股 → `HK.XXXXX`（5 位数字补零，如 `HK.00700`）
-   - A 股 → `SH.XXXXXX`（沪）或 `SZ.XXXXXX`（深）
+| 工具 | 用途 | 必需参数 | 可选参数 |
+|------|------|---------|---------|
+| `get_quote_snapshot` | 实时行情快照（最新价、涨跌幅、成交量等） | `ticker`, `market` | — |
+| `get_company_info` | 公司基本信息（名称、行业、简介等） | `ticker`, `market` | — |
+| `get_financial_statements` | 财务三大表（利润表、资产负债表、现金流量表） | `ticker`, `market` | `params.num`（期数，默认 8） |
+| `get_valuation_detail` | 估值分位数（历史百分位、前瞻 PE） | `ticker`, `market` | — |
+| `get_shareholders_overview` | 股东持股概览（仅港美股） | `ticker`, `market` | — |
+| `get_corporate_dividends` | 分红历史 | `ticker`, `market` | — |
+| `get_quote_kline` | K 线数据 | `ticker`, `market` | `params.num`（根数）、`params.ktype`（周期） |
+| `get_capital_flow` | 资金流向 | `ticker`, `market` | — |
+| `get_quote_depth` | 盘口深度 / 订单簿 | `ticker`, `market` | — |
+| `get_options_chain` | 期权链 | `ticker`, `market` | — |
+| `get_plate_list` | 板块列表 | `market` | `params.plateSetType` |
+| `get_plate_stocks` | 板块成分股 | `market` | `params.plateCode` |
 
-2. **单独运行一次快照验证**，成功后再启动所有并行调用：
-   ```bash
-   python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
-   ```
-   - ✅ 成功 → 后续所有调用统一使用 `<NORMALIZED_CODE>`
-   - ❌ 格式错误 → 停止，向用户确认代码
-   - ❌ 连接失败 → 停止，提示启动 OpenD
+**参数说明**：
+- `ticker`：股票代码，不含市场前缀。美股如 `"NVDA"`，港股如 `"00700"`，A 股如 `"600519"` 或 `"000001"`
+- `market`：市场标识，`"US"` / `"HK"` / `"SH"` / `"SZ"`
 
-### 行情数据（futuapi）
+## 数据获取流程
 
-```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_info.py <NORMALIZED_CODE> --json
+### Step 0：识别 ticker 与 market
+
+将用户输入转换为 `ticker` + `market` 参数：
+- 纯英文字母 1-5 位 → `ticker: "<TICKER>", market: "US"`（如 `AAPL` → `ticker: "AAPL", market: "US"`）
+- 港股 5 位数字 → `ticker: "0XXXX", market: "HK"`（如 `00700` → `ticker: "00700", market: "HK"`）
+- A 股沪市 → `ticker: "6XXXXX", market: "SH"`
+- A 股深市 → `ticker: "0XXXXX" / "3XXXXX", market: "SZ"`
+
+先单独调用 `get_quote_snapshot` 验证代码是否有效，成功后再启动后续并行调用。
+
+### 行情数据
+
+```
+get_quote_snapshot({ ticker, market })
+get_company_info({ ticker, market })
 ```
 
 ### 财务与基本面数据（分层数据源）
 
-**优先级**：Futu 结构化接口 → Tavily 搜索兜底。
+**优先级**：capability tools 结构化接口 → Tavily 搜索兜底。
 
-#### 层 1：Futu 结构化接口（并行执行，需 OpenD）
-```bash
-# 财务三大表（A 股返回 report_list=[]，降层 2 Tavily）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_financials_statements.py <NORMALIZED_CODE> --num 8 --json
-# 估值分位数（全市场含 A 股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <NORMALIZED_CODE> --json
-# 股东持股（A 股报错，仅港美股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_shareholders_overview.py <NORMALIZED_CODE> --json
-# 分红历史（全市场含 A 股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_dividends.py <NORMALIZED_CODE> --json
+#### 层 1：结构化接口（并行执行）
+
 ```
+# 财务三大表（A 股返回 report_list=[]，降层 2 Tavily）
+get_financial_statements({ ticker, market, params: { num: 8 } })
+
+# 估值分位数（全市场含 A 股）
+get_valuation_detail({ ticker, market })
+
+# 股东持股（A 股报错，仅港美股）
+get_shareholders_overview({ ticker, market })
+
+# 分红历史（全市场含 A 股）
+get_corporate_dividends({ ticker, market })
+```
+
 JSON 字段提取要点：
 - 财务三大表 → `report_list[]`，每条含 `yoy / qoq`
 - 估值 → `trend.valuation_percentile`（历史百分位）/ `trend.forward_value`（前瞻 PE）/ `profit_growth_rate`（盈利 vs 市值增速）
+
 **各接口 A 股支持情况**：
 
 | 接口 | A 股 | 降级 |
 |------|------|------|
-| `get_financials_statements` | ❌ 空列表 | → 层 2 Tavily 补财务数据 |
-| `get_valuation_detail` | ✅ 可用 | — |
-| `get_shareholders_overview` | ❌ 明确报错 | A 股跳过，Tavily 补股东结构 |
-| `get_corporate_actions_dividends` | ✅ 可用 | — |
-
-**OpenD 不可用** → 整个层 1 跳过，执行层 2
+| `get_financial_statements` | 空列表 | → 层 2 Tavily 补财务数据 |
+| `get_valuation_detail` | 可用 | — |
+| `get_shareholders_overview` | 明确报错 | A 股跳过，Tavily 补股东结构 |
+| `get_corporate_dividends` | 可用 | — |
 
 #### 层 2：Tavily 搜索兜底（层 1 无数据时，并行）
+
 ```
 1. "<公司名> revenue gross margin net margin trend 2022 2023 2024"
 2. "<公司名> ROIC return on invested capital free cash flow annual"
@@ -79,11 +102,12 @@ JSON 字段提取要点：
 4. "<公司名> PE ratio historical valuation fair value 2024 2025"
 5. "<公司名> risks competition threats bear case"
 ```
-报告"数据来源"行注明使用层级（`Futu 结构化` / `Tavily 搜索`）。
 
-### 近期新闻动态（futu-stock-digest）
+报告"数据来源"行注明使用层级（`结构化接口` / `Tavily 搜索`）。
 
-在四步分析**开始前**，先调用 `futu-stock-digest` skill 扫描近 7 天新闻（无需 OpenD），识别以下红旗信号：
+### 近期新闻动态（futu-stock-digest — 可选增强）
+
+在四步分析**开始前**，先调用 `futu-stock-digest` skill 扫描近 7 天新闻，识别以下红旗信号：
 
 | 信号类型 | 影响维度 |
 |---------|---------|
@@ -92,6 +116,26 @@ JSON 字段提取要点：
 | 竞争对手重大突破 | Step 2 护城河侵蚀 |
 | 管理层异动 | 综合结论风险部分 |
 | 盈利预警 / 上调 | Step 4 估值（更新正常化 FCF） |
+
+> `futu-stock-digest` 为可选增强 skill。若不可用，使用 Tavily MCP 搜索近 7 天新闻作为替代。
+
+## 字段名对照
+
+行情快照返回的 proto 字段名：
+
+| 用途 | proto 字段名 |
+|------|-------------|
+| 最新价 | `curPrice` |
+| 开盘价 | `openPrice` |
+| 最高价 | `highPrice` |
+| 最低价 | `lowPrice` |
+| 昨收价 | `lastClosePrice` |
+| 涨跌幅 | `changeRate` |
+| 换手率 | `turnoverRate` |
+| 总市值 | `marketCap` |
+| 市盈率 (TTM) | `pe` |
+| 市净率 | `pb` |
+| 更新时间 | `updateTime` |
 
 ## 四步分析框架
 
@@ -106,9 +150,9 @@ JSON 字段提取要点：
 
 ## 执行流程
 
-1. **识别代码**：中文名/英文简称 → 富途完整代码
-2. **新闻快扫**：调用 `futu-stock-digest`，识别红旗信号
-3. **并行拉取数据**：Futu 行情 + 财务三大表（或 Tavily 5 条）**同时发出**
+1. **识别代码**：中文名/英文简称 → `ticker` + `market` 参数
+2. **新闻快扫**：调用 `futu-stock-digest`（可选），识别红旗信号；不可用时用 Tavily 搜索替代
+3. **并行拉取数据**：行情快照 + 财务三大表（或 Tavily 5 条）**同时发出**
 4. **检查数据质量**：PE 异常？FCF 有一次性项目？新闻红旗与静态分析矛盾？
 5. **填充四步框架**：按 Step 1→4 顺序，每步结论有数据支撑，与新闻红旗交叉对照；Step 1 完成商业模式识别后，按类型展开单位经济学（见下方）
 6. **输出报告**：按下方模板，证伪视角，"近期重要事件"不可省略
@@ -128,9 +172,9 @@ JSON 字段提取要点：
 ## 输出格式
 
 ```markdown
-## 📋 <公司名>（<CODE>）基本面研究报告 · <日期>
+## <公司名>（<CODE>）基本面研究报告 · <日期>
 **分析结论（一句话）**：[公司是什么、护城河强弱、当前估值水平]
-**数据来源**：[Futu 结构化 / Tavily 搜索]
+**数据来源**：[结构化接口 / Tavily 搜索]
 
 ### 1. 商业模式
 ### 2. 护城河（类型 / 宽窄评级 / 关键证据 / 主要威胁）
@@ -149,22 +193,22 @@ JSON 字段提取要点：
 | 指标 | 当前值 | 历史均值 | 历史区间 |
 |------|--------|---------|---------|
 | TTM P/E | | | |
-| Forward P/E（Futu 前瞻 PE）| | | |
+| Forward P/E（前瞻 PE）| | | |
 | FCF Yield | | | |
 
-**PE 百分位**（Futu `valuation_percentile`）：X% 分位 → [低估区 / 合理 / 高估区]
+**PE 百分位**（`valuation_percentile`）：X% 分位 → [低估区 / 合理 / 高估区]
 **安全边际**：当前价格 $XX，目标买点区间 $XX–$XX
 
-### 📰 近期重要事件（futu-stock-digest）
+### 近期重要事件（futu-stock-digest 或 Tavily）
 | 时间 | 事件 | 影响 | 影响维度 |
 
-### 💡 综合结论
+### 综合结论
 - **多头逻辑**：- **空头逻辑**：- **近期催化剂**：- **风险提示**：
 - **行动建议**：[持有 / 观察等待买点 / 深入研究 X 点再决定]（不给买卖指令）
 
-### 🚨 卖出监控触发条件（持有期间定期检查）
+### 卖出监控触发条件（持有期间定期检查）
 - **基本面止损**：① 护城河侵蚀（核心业务毛利率连续 2 季下滑 >3pp，或主要客户流失公告）；② 盈利质量恶化（FCF/净利润 < 0.6 连续 2 季）；③ 管理层非计划重大变动（CEO/CFO 离职）；④ 竞争格局突变（主要竞争对手重大技术突破 / 颠覆性替代品出现）
-- **机会成本换仓**：仅适用于组合视角——当其他候选标的综合评级高出本标的 ≥ 2 档时，触发相对吸引力复审
+- **机会成本换仓**：仅适用于组合视角——当其他候选标的综合评级高出本标的 >= 2 档时，触发相对吸引力复审
 - **价格止损**：见 trading-debate Trader 的 `stop_loss`（技术破位止损，非本 skill 管辖）
 ```
 

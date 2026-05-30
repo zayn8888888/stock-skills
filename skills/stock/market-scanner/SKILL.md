@@ -1,13 +1,68 @@
 ---
 name: market-scanner
-description: 市场热点板块扫描 + 产业链外推器。A股用东方财富 HTTP API（486个概念板块全量）+ 富途资金流；HK/US 用富途 OpenAPI + Tavily。先扫出当前 Top 5 热点板块（含 4 周轮动时序，区分持续主线 vs 脉冲热点），再扫板块内 3-5 候选个股，最后做产业链传导外推。触发场景：(1) "市场最近啥热点 / 哪个板块在涨 / 资金在炒什么 / A股最近什么板块热"；(2) "帮我找下一个热点 / 板块轮动到哪了 / XX 还没涨透的票 / 和前几周比涨的是什么"；(3) "AI 当前热点是 XXX，下一个会传到哪"。明确非目标：不给买卖指令、不出"必涨/必跌"结论、不覆盖新加坡 / 日本市场。
+description: 市场热点板块扫描 + 产业链外推器。A股用东方财富 HTTP API（486个概念板块全量）+ 富途资金流；HK/US 用富途 capability tools + Tavily。先扫出当前 Top 5 热点板块（含 4 周轮动时序，区分持续主线 vs 脉冲热点），再扫板块内 3-5 候选个股，最后做产业链传导外推。触发场景：(1) "市场最近啥热点 / 哪个板块在涨 / 资金在炒什么 / A股最近什么板块热"；(2) "帮我找下一个热点 / 板块轮动到哪了 / XX 还没涨透的票 / 和前几周比涨的是什么"；(3) "AI 当前热点是 XXX，下一个会传到哪"。明确非目标：不给买卖指令、不出"必涨/必跌"结论、不覆盖新加坡 / 日本市场。
 ---
 
 # 市场热点扫描
 
+## Data Tools（可用工具清单）
+
+以下 capability tools 替代原来的 Python 脚本调用。所有工具自动处理连接，无需手动配置 OpenD 或安装依赖。
+
+### 个股行情与深度
+
+| 工具 | 用途 | 参数 |
+|------|------|------|
+| `get_quote_snapshot` | 实时行情快照（价格/涨幅/成交额/市值/PE/PB 等） | `{ ticker, market }` |
+| `get_quote_kline` | 历史 K 线（日/周/月） | `{ ticker, market, params: { num: 30 } }` — num 控制返回条数 |
+| `get_quote_depth` | 订单簿深度（买五卖五） | `{ ticker, market }` |
+| `get_capital_flow` | 历史资金流（最近 36 天） | `{ ticker, market }` — 美股蓝筹频繁返回 0，见 fallback 规则 |
+| `get_valuation_detail` | 估值详情（PE/PB 分位等） | `{ ticker, market }` |
+| `get_financial_statements` | 财务报表 | `{ ticker, market, params: { num: 8 } }` — num 控制返回期数 |
+| `get_shareholders_overview` | 股东概览 | `{ ticker, market }` |
+| `get_corporate_dividends` | 分红派息记录 | `{ ticker, market }` |
+| `get_company_info` | 基本信息（含 pe / 52 周高低 / 换手率） | `{ ticker, market }` — PE 首选此接口 |
+
+### 板块与板块成分股
+
+| 工具 | 用途 | 参数 |
+|------|------|------|
+| `get_plate_list` | 获取板块列表（INDUSTRY / CONCEPT） | `{ market, params: { plateSetType: "CONCEPT" } }` |
+| `get_plate_stocks` | 获取板块成分股 | `{ market, params: { plateCode: "HK.LIST1013" } }` |
+
+### 期权与盘口
+
+| 工具 | 用途 | 参数 |
+|------|------|------|
+| `get_options_chain` | 期权链 | `{ ticker, market }` |
+
+### 参数格式说明
+
+- **ticker**: 纯股票代码，如 `"NVDA"`, `"00700"`, `"600519"`
+- **market**: 市场标识，如 `"US"`, `"HK"`, `"SH"`, `"SZ"`
+- **params**: 可选的额外参数对象
+
+不再使用 `"US.NVDA"` 格式——ticker 和 market 是独立参数。
+
+### Proto 字段对照表（替代原 Futu SDK 字段名）
+
+| 原 Futu SDK 字段 | Proto 字段 | 含义 |
+|-----------------|-----------|------|
+| `last_price` | `curPrice` | 最新价 |
+| `open_price` | `openPrice` | 开盘价 |
+| `high_price` | `highPrice` | 最高价 |
+| `low_price` | `lowPrice` | 最低价 |
+| `prev_close_price` | `lastClosePrice` | 昨收价 |
+| `change_rate` | `changeRate` | 涨跌幅 |
+| `turnover_rate` | `turnoverRate` | 换手率 |
+| `total_market_val` | `marketCap` | 总市值 |
+| `pe_ttm_ratio` | `pe` | 市盈率（TTM） |
+| `pb_ratio` | `pb` | 市净率 |
+| `update_time` | `updateTime` | 更新时间 |
+
 ## 核心原则
 
-1. **发现与验证双通道**：热点来源分两路——① 富途 API（涨幅 / 资金）② Tavily 新闻/社交。**两路都要主动发现**，不能只让新闻做"已上榜板块的验证"，否则会漏掉还在媒体铺垫阶段的跨行业主题（AI 产业链 / HBM / 存储 / 核聚变等）
+1. **发现与验证双通道**：热点来源分两路——① 富途 capability tools（涨幅 / 资金）② Tavily 新闻/社交。**两路都要主动发现**，不能只让新闻做"已上榜板块的验证"，否则会漏掉还在媒体铺垫阶段的跨行业主题（AI 产业链 / HBM / 存储 / 核聚变等）
 2. **扫描为主，受约束外推为辅**：先用数据扫"现在哪些板块热"（L1-L4），再基于产业链传导逻辑外推"热点会传到哪"（L5）。外推**必须落到具体板块/股票 + 必须列反驳点 + 必须用 L1 信号回测**，不允许写"我看好 XX 方向"这类空泛叙事
 3. **多重信号交集**：板块上榜至少需要 A 涨幅 / B 资金 / C 新闻 三者中命中 ≥ 2，单一维度上榜的扔进候补池
 4. **指数可骗人，必用成分股中位数复核**：任何板块涨幅/资金信号都必须用"成分股 5 日涨幅中位数"再校验一次，背离超 5pp 直接标"权重法伪信号"
@@ -20,13 +75,21 @@ description: 市场热点板块扫描 + 产业链外推器。A股用东方财富
 
 - **东方财富 HTTP API（A 股主数据源）**：免费公开接口，无需认证。A 股板块扫描首选，覆盖 486 个概念板块（远超富途 INDUSTRY 的 131 个），f109 字段（5日涨幅）经实测与富途误差 < 0.01%。完整代码、字段说明、BK 代码表、NOISE_KEYWORDS 过滤列表见 [references/api-eastmoney.md](references/api-eastmoney.md)。
 
-- **富途 API（个股深度数据源）**：依赖 OpenD 运行，`pip install futu-api`。负责个股 PE / 市值 / K线 / 资金流深度数据，以及港美股板块 K 线扫描。**A 股大量概念板块 `get_plate_stock` 返回"未知股票"，升级 OpenD 无效，A 股板块扫描一律走东财。** 方法对照表、港美股板块 K 线代码、资金流 DAY fallback 规则见 [references/api-futu.md](references/api-futu.md)。
+- **富途 capability tools（个股深度数据源）**：通过 `get_quote_snapshot`、`get_quote_kline`、`get_capital_flow` 等工具获取个股 PE / 市值 / K线 / 资金流深度数据，以及港美股板块 K 线扫描。**A 股大量概念板块 `get_plate_stocks` 返回"未知股票"，A 股板块扫描一律走东财。** 方法对照表、港美股板块 K 线代码、资金流 DAY fallback 规则见 [references/api-futu.md](references/api-futu.md)。
 
 - **Tavily**：`mcp__plugin_tavily-web-search_tavily-web-search__tavily_search`。强依赖，主题发现（L0）必须靠它，不能降级跳过。
 
 - **event-calendar skill**（可选但强烈推荐）：用于 L2「催化（前瞻）」与 L5 外推的可证伪催化日历。未安装时回退为"仅回看催化"，报告局限里说明。
 
 - **hyperliquid-perps skill**（可选，**仅美股维度**）：用于 L2 链上拥挤度与 L3 funding 因子评分。**港股板块不适用**（链上港股镜像 OI < 10 万 USD，信号无效）；**A 股不适用**（无链上镜像）。未安装时跳过链上维度。
+
+- **可选增强 skills**（以下 skill 提供额外分析维度，未安装时核心数据仍可用）：
+  - `futu-technical-anomaly`：技术面异动检测
+  - `futu-capital-anomaly`：资金面异动检测
+  - `futu-news-search`：新闻搜索增强
+  - `futu-comment-sentiment`：评论情绪分析
+  - `futu-derivatives-anomaly`：衍生品异动检测
+  - `futu-stock-digest`：个股摘要生成
 
 ## 执行前必读（收到任务后第一步，不与任何扫描并行）
 
@@ -44,15 +107,17 @@ Read references/pitfalls.md           # 常见陷阱详细说明
 
 港股（HK）+ 美股（US）+ A股（CN）。用户可显式指定单一市场，默认并行扫三个市场并分开出报告。新加坡 / 日本暂不支持。
 
-**A 股特殊说明**：板块扫描走东财 API；富途代码格式 `SH.600519` / `SZ.000858`；无 Hyperliquid 链上镜像，链上拥挤度维度全部跳过，改用「北向资金净流入 + 超大单资金流」替代。
+**A 股特殊说明**：板块扫描走东财 API；capability tools 参数格式 `ticker: "600519", market: "SH"` 或 `ticker: "000858", market: "SZ"`；无 Hyperliquid 链上镜像，链上拥挤度维度全部跳过，改用「北向资金净流入 + 超大单资金流」替代。
+
+**板块代码参数化**：港美股板块 K 线扫描时，用 `get_plate_list` 获取板块列表，再用 `get_quote_kline` 拉板块 K 线（ticker 填板块代码如 `"LIST1013"`，market 填 `"HK"`）。
 
 ## 时间窗口
 
 | 窗口 | 数据来源 | 用途 |
 |------|---------|------|
-| **5 日涨幅** | 东财 f109 / 富途 K 线 | 当前热度，第一层筛选 Top 20 |
-| **多周时序（近 4 周）** | 东财历史 K 线 / 富途板块 K 线 | 性质判断：持续主线 vs 脉冲热点 |
-| **资金流历史（近 36 天）** | 富途 `get_capital_flow(DAY)` | 机构是否连续 3 周+ 净流入 |
+| **5 日涨幅** | 东财 f109 / `get_quote_kline` | 当前热度，第一层筛选 Top 20 |
+| **多周时序（近 4 周）** | 东财历史 K 线 / `get_quote_kline` | 性质判断：持续主线 vs 脉冲热点 |
+| **资金流历史（近 36 天）** | `get_capital_flow` (DAY) | 机构是否连续 3 周+ 净流入 |
 
 **严禁**用"今日涨幅"作为板块筛选口径；今日回调但多周累计强势的板块同样必须进候选池。A 股涨跌停机制导致日度数据失真，日度噪音 > 信号。
 
@@ -119,9 +184,9 @@ CN 组：A股涨停板块题材 / 北向资金加仓概念 / 东方财富人气�
 
 ### L1 板块热度三重信号
 
-**信号 A（涨幅榜）**：A 股走东财 `em_get_all_boards()` 取 5 日涨幅 Top 20；港美股用富途 `request_history_kline` 对全量板块计算 5d/10d 涨幅取 Top 20。
+**信号 A（涨幅榜）**：A 股走东财 `em_get_all_boards()` 取 5 日涨幅 Top 20；港美股用 `get_quote_kline` 对全量板块计算 5d/10d 涨幅取 Top 20。
 
-**信号 B（资金净流入）**：对候选板块拉成分股资金流，聚合为板块级资金净流入榜 Top 20。美股蓝筹 `get_capital_flow` 返回 0 时启用"成交额 × 涨跌幅"代理，标注「资金代理信号」。
+**信号 B（资金净流入）**：对候选板块拉成分股资金流（`get_capital_flow`），聚合为板块级资金净流入榜 Top 20。美股蓝筹 `get_capital_flow` 返回 0 时启用"成交额 × 涨跌幅"代理，标注「资金代理信号」。
 
 **信号 C（新闻/社交热度）**：对每个候选板块打 3 条并行 Tavily query，统计近 7 日相关新闻条数与正面主题词命中（负面词如"crash / 风险 / 杀跌"命中要反向扣分）。
 
@@ -178,6 +243,14 @@ L1.5 结束 → 统计「持续主线 + 次级主线↗」≥ 2 个板块：
 
 质量阀门先过（流动性 / 市值 / PE 为负 / 停牌新股 / ST），再用 6 因子软打分排序，总分 ≥ 4 进候选，每板块取 3-5 只。详细打分表与各市场差异见 [references/l3-scoring.md](references/l3-scoring.md)。
 
+**获取候选数据示例**：
+```
+get_quote_snapshot({ ticker: "NVDA", market: "US" })       → curPrice, changeRate, marketCap, pe, pb, turnoverRate
+get_quote_kline({ ticker: "NVDA", market: "US", params: { num: 30 } })  → 近 30 日 K 线
+get_capital_flow({ ticker: "NVDA", market: "US" })         → 近 36 天资金流
+get_company_info({ ticker: "NVDA", market: "US" })         → pe（TTM）、52 周高低、换手率
+```
+
 ### [L4] 跨板块收敛（仅当 L3 产出 ≥ 3 候选时展开）
 
 跨板块去重，按总分排序取 Top 3-5，作为最终候选清单。报告末尾明确说：「建议对下列候选调用 stock-analyzer 做八维度深度分析：`stock-analyzer 分析 <CODE1>, <CODE2>, ...`」。
@@ -213,7 +286,7 @@ L1.5 结束 → 统计「持续主线 + 次级主线↗」≥ 2 个板块：
 
 明确告诉用户**无法给出热点清单**，不要硬凑：
 
-- OpenD 未连接 / 板块列表接口失败
+- API 工具调用失败 / 板块列表接口返回错误
 - 当日是节假日 / 半日市（数据信号不足 1 个完整交易日）
 - Tavily 配额打满 → L0 和 C 新闻验证都失败时，只给 A+B 双信号板块并标「新闻维度缺失，样本有限」
 - 全市场 5 日涨幅都为负（系统性杀跌）→「当前市场无热点板块，属防御行情」，不强行推候选
@@ -229,8 +302,8 @@ L1.5 结束 → 统计「持续主线 + 次级主线↗」≥ 2 个板块：
 - 板块指数骗人 → 成分股中位数校验
 - 集中度 = 单票行情 → 直接走 stock-analyzer
 - 美股蓝筹资金流返回 0 → 启用代理，不要判"无资金"
-- PE 字段跨源不一致 → 首选 `get_stock_info` 的 `pe_ttm`
-- 东财 f115 不是 10 日涨幅 → 10 日用富途 K 线计算
+- PE 字段跨源不一致 → 首选 `get_company_info` 返回的 `pe`
+- 东财 f115 不是 10 日涨幅 → 10 日用 `get_quote_kline` 计算
 - 噪音板块污染排行 → NOISE_KEYWORDS 过滤（详见 [references/api-eastmoney.md](references/api-eastmoney.md)）
 
 ## Runtime Output Contract
