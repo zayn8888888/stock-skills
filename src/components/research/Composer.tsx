@@ -170,7 +170,10 @@ export function Composer({
       )}
 
       {/* Input area */}
-      <div className="flex items-end gap-2 rounded-lg border border-border bg-card p-2">
+      <div className={cn(
+        "flex items-end gap-2 rounded-2xl border border-border/60 bg-card p-2",
+        "focus-within:border-primary/40 focus-within:shadow-sm focus-within:shadow-primary/5 transition-all duration-200"
+      )}>
         {/* + Menu */}
         <div className="relative" ref={plusMenuRef} onBlur={handlePlusBlur}>
           <button
