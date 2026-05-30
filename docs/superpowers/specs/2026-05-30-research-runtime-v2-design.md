@@ -29,45 +29,41 @@ v1 spec（同文件名，Python FastAPI 版）定义了数据模型和 API 契�
 
 ## 技术栈
 
-### 后端
+### 全栈框架
 
 | 层 | 选型 | 版本 | 理由 |
 |---|---|---|---|
-| Runtime | Node.js | ≥ 20 | TypeScript 全栈 |
-| HTTP | Hono | latest | 轻量、标准 Fetch API、原生 SSE |
+| 框架 | Next.js (App Router) | 15+ | 全栈一体：API Route Handlers + React UI + SSE，单包部署 |
+| Runtime | Node.js | ≥ 20 | 自托管 `next start`，持久进程支持 SQLite |
 | SQLite | better-sqlite3 | latest | 同步、快、无 native build 问题 |
 | ORM | Drizzle ORM | latest | schema 即 TS 类型、migration 友好、支持 better-sqlite3 |
 | 校验 | Zod | latest | 和 Drizzle 共享 schema，API 入口统一校验 |
-| SSE | Hono 内置 `streamSse()` | — | 不引入额外依赖 |
+| AI | Anthropic SDK (`@anthropic-ai/sdk`) | latest | Claude 官方 SDK，原生支持 tool use + streaming |
 | Auth | 本地 session token + Origin 校验 | — | 无第三方 |
 
-### 前端
+### 前端（Next.js 内置 React）
 
 | 层 | 选型 | 版本 | 理由 |
 |---|---|---|---|
-| 构建 | Vite | 6+ | 快、HMR |
-| 框架 | React | 19 | 参考项目一致 |
-| 路由 | React Router | 7 | 参考项目一致 |
-| 状态 | Zustand | 5 | 参考项目主力 store |
-| 样式 | Tailwind CSS | 4 | utility-first |
+| 状态 | Zustand | 5 | 轻量全局状态（messages, session, streaming） |
+| 样式 | Tailwind CSS | 4 | utility-first，Next.js 原生支持 |
 | 组件库 | shadcn/ui | latest | Radix 原语 + Tailwind，完全可控 |
 | 图标 | lucide-react | latest | shadcn 配套 |
 | 表格 | @tanstack/react-table | latest | Dashboard/Review Queue |
 | Markdown | react-markdown + rehype-highlight + remark-gfm | — | Report 渲染 |
 | Toast | sonner | latest | shadcn 内置 |
-| 代码高亮 | react-syntax-highlighter | — | Run Detail |
-| 图表 | Lightweight Charts (TradingView) | latest | 股票 K 线；Vibe-Trading 用 ECharts，但 Lightweight Charts 更适合金融时序 |
-| i18n | react-i18next + i18next | latest | 成熟、TypeScript 友好、支持 ICU plural/interpolation、lazy load namespaces |
+| 图表 | Lightweight Charts (TradingView) | latest | 股票 K 线 |
+| i18n | react-i18next + i18next | latest | 中英双语 UI chrome |
 
 ### 工具链
 
 | 用途 | 选型 |
 |---|---|
-| Monorepo | pnpm workspace（`server/`、`web/`、`shared/`） |
-| TS 编译 | tsc（后端）、Vite（前端） |
-| Lint | Biome（替代 eslint+prettier） |
-| 测试 | Vitest（前后端统一） |
-| API 测试 | Hono `app.request()`（内置，无需 supertest） |
+| 包管理 | pnpm（单一 package.json） |
+| TS 编译 | Next.js 内置（tsc 仅做类型检查） |
+| Lint | Biome |
+| 测试 | Vitest（统一测试 API routes + 组件） |
+| API 测试 | Next.js test utils + Vitest |
 
 ### 设计系统
 
@@ -158,167 +154,213 @@ web/src/i18n/
 
 ```text
 stock-skills/
-  pnpm-workspace.yaml
-  package.json                    # root scripts: dev, test, lint, build
-  tsconfig.base.json              # shared TS config
-  biome.json                      # lint/format config
+  package.json                    # 单一 package.json（Next.js 全栈）
+  next.config.ts
+  tsconfig.json
+  drizzle.config.ts
+  biome.json
+  tailwind.config.ts
+  components.json                 # shadcn/ui config
+  vitest.config.ts
 
-  shared/
-    package.json
-    tsconfig.json
-    src/
-      types.ts                    # 前后端共享类型
-      schemas.ts                  # Zod schemas（Drizzle + API 共用）
-      constants.ts                # 枚举值、状态机定义
+  skills/                         # 技能内容 + Agent 定义
+    agents/
+      stock-analyzer/
+        agent.yaml                # workflow_type, required_artifacts, skills[]
+        prompt.md                 # 推理 prompt template
+        output-contract.json      # result.json JSON Schema
+      market-scanner/
+      event-calendar/
+      trading-debate/
+      crypto-research/
+      portfolio-review/
+    core/                         # 现有 core skills（迁移后）
+    stock/
+    futu/
+    crypto/
 
-  server/
-    package.json
-    tsconfig.json
-    drizzle.config.ts
-    src/
-      app.ts                      # Hono app assembly
-      config.ts                   # analysis root, token, host, port
-      index.ts                    # 入口 + CLI
+  src/
+    app/                          # Next.js App Router
+      layout.tsx                  # 根 layout：providers, i18n, theme
+      globals.css                 # Tailwind base + CSS variable themes
+      page.tsx                    # / → Research Desk（默认入口）
+      dashboard/
+        page.tsx                  # /dashboard
+      tickers/
+        [ticker]/
+          page.tsx                # /tickers/:ticker
+      runs/
+        [runId]/
+          page.tsx                # /runs/:runId
+      data-sources/
+        page.tsx                  # /data-sources
+      reviews/
+        page.tsx                  # /reviews
+      api/
+        health/
+          route.ts                # GET /api/health
+        sessions/
+          route.ts                # POST/GET /api/sessions
+          [id]/
+            route.ts              # GET/PATCH/DELETE /api/sessions/:id
+            messages/
+              route.ts            # POST/GET /api/sessions/:id/messages
+            events/
+              route.ts            # GET /api/sessions/:id/events (SSE)
+            cancel/
+              route.ts            # POST /api/sessions/:id/cancel
+            goal/
+              route.ts            # POST/GET/PATCH /api/sessions/:id/goal
+              evidence/
+                route.ts          # POST /api/sessions/:id/goal/evidence
+              status/
+                route.ts          # PATCH /api/sessions/:id/goal/status
+        runs/
+          route.ts                # POST/GET /api/runs
+          [id]/
+            route.ts              # GET /api/runs/:id
+            cancel/
+              route.ts            # POST /api/runs/:id/cancel
+            artifacts/
+              route.ts            # POST/GET /api/runs/:id/artifacts
+            report/
+              route.ts            # GET /api/runs/:id/report
+        tickers/
+          [ticker]/
+            context/
+              route.ts            # GET /api/tickers/:ticker/context
+            runs/
+              route.ts            # GET /api/tickers/:ticker/runs
+            decisions/
+              route.ts            # GET /api/tickers/:ticker/decisions
+            lessons/
+              route.ts            # GET /api/tickers/:ticker/lessons
+        data-sources/
+          health/
+            route.ts              # GET /api/data-sources/health
+          check/
+            route.ts              # POST /api/data-sources/check
+        reviews/
+          due/
+            route.ts              # GET /api/reviews/due
+        decisions/
+          route.ts                # POST /api/decisions
+          [id]/
+            route.ts              # PATCH /api/decisions/:id
+        lessons/
+          route.ts                # POST /api/lessons
+        uploads/
+          route.ts                # POST /api/uploads
 
+    lib/                          # 服务端库（API Route + Agent 共用）
+      config.ts                   # analysis root, token, host, port, LLM config
       db/
         schema.ts                 # Drizzle schema（所有表定义）
         migrate.ts                # migration runner
         migrations/               # SQL migration files
         index.ts                  # db instance
-
-      api/
-        health.ts                 # GET /api/health
-        sessions.ts               # sessions + messages CRUD
-        goals.ts                  # research goals + criteria + evidence
-        runs.ts                   # run lifecycle
-        artifacts.ts              # artifact upload/download/list
-        tickers.ts                # ticker context
-        data-sources.ts           # source health
-        reviews.ts                # reviews + lessons + decisions
-        sse.ts                    # SSE event stream endpoint
-        uploads.ts                # file upload
-
-      runtime/
-        event-bus.ts              # session-scoped SSE event bus
-        artifact-writer.ts        # path boundary + checksum + schema version
-        run-manager.ts            # run lifecycle state machine
-        goal-manager.ts           # goal lifecycle + criteria + evidence
-
+      agent/
+        llm-provider.ts           # Anthropic SDK 封装
+        loop.ts                   # ReAct loop: LLM call → tool call → repeat
+        tools.ts                  # ToolRegistry: adapter tools + system tools
+        context.ts                # ContextBuilder: session history + goal + ticker context
+        skill-loader.ts           # 加载 skills/agents/*/prompt.md
+        progress.ts               # HeartbeatTimer + ProgressEvent
       adapters/
-        base.ts                   # adapter interface
-        futu/                     # futu health + snapshot + kline
-        eastmoney/                # eastmoney board scanner
-        hyperliquid/              # hyperliquid perps lookup
-        finnhub/                  # finnhub calendar
-        polymarket/               # polymarket markets
-        tavily/                   # tavily search
-        fixture/                  # fixture adapter for testing
-
+        registry.ts               # AdapterRegistry
+        base.ts                   # DataSourceAdapter interface
+        futu/index.ts
+        eastmoney/index.ts
+        hyperliquid/index.ts
+        finnhub/index.ts
+        polymarket/index.ts
+        tavily/index.ts
+        coingecko/index.ts
+        fixture/index.ts          # 测试用
       observations/
         schemas.ts                # category value schemas
-        normalizer.ts             # raw -> canonical observation
+        store.ts                  # Observation CRUD（SQLite）
         freshness.ts              # freshness policy
-
+      views/
+        ticker-context.ts         # TickerContext builder
+      runtime/
+        event-bus.ts              # session-scoped SSE event bus
+        artifact-writer.ts        # path boundary + checksum
+        run-manager.ts            # run lifecycle state machine
+        goal-manager.ts           # single active goal per session
       auth/
         token.ts                  # local session token
         middleware.ts             # Origin, CSRF, token check
         upload-guard.ts           # size, path, type validation
 
-    tests/
-      fixtures/                   # futu_snapshot.json, hyperliquid_lookup.json, etc.
-      db.test.ts
+    components/                   # React 组件
+      layout/
+        AppShell.tsx              # sidebar + main + connection banner
+        Sidebar.tsx               # nav + sessions list
+        ConnectionBanner.tsx      # SSE reconnect status
+      research/
+        Timeline.tsx              # message + run card + artifact card
+        MessageBubble.tsx
+        ThinkingTimeline.tsx
+        Composer.tsx              # textarea + + menu
+        ContextChips.tsx
+        RunCard.tsx
+        ArtifactCard.tsx
+        SourceWarning.tsx
+        GoalChip.tsx
+        WelcomeScreen.tsx
+      run/
+        ReportTab.tsx
+        ResultTab.tsx
+        SourcesTab.tsx
+        LogsTab.tsx
+        TrustPanel.tsx
+      dashboard/
+        RunsTable.tsx
+        SourceHealthGrid.tsx
+        DueReviewsList.tsx
+      common/
+        DataTable.tsx
+        Skeleton.tsx
+        ErrorBoundary.tsx
+
+    hooks/
+      useSSE.ts                   # SSE hook (reconnect, dedup, heartbeat)
+      useTheme.ts                 # dark mode toggle
+
+    stores/
+      agent.ts                    # Zustand: messages, session, streaming
+
+    i18n/
+      index.ts                    # i18next init
+      locales/
+        zh-CN/
+          common.json
+          research.json
+          dashboard.json
+          ticker.json
+          run.json
+          sources.json
+          reviews.json
+        en-US/
+          (同结构)
+
+  tests/
+    fixtures/                     # 测试数据
+    api/                          # API route tests
       sessions.test.ts
       goals.test.ts
       runs.test.ts
       artifacts.test.ts
       sse.test.ts
       security.test.ts
-      observations.test.ts
-      adapters/
-        futu.test.ts
-        fixture.test.ts
-
-  web/
-    package.json
-    tsconfig.json
-    vite.config.ts
-    tailwind.config.ts
-    components.json               # shadcn/ui config
-    src/
-      main.tsx
-      index.css                   # Tailwind base + CSS variables
-      router.tsx                  # lazy-loaded routes
-
-      lib/
-        api.ts                    # API client + types
-        api-auth.ts               # token storage
-        utils.ts                  # cn() helper
-        formatters.ts             # number/date
-
-      hooks/
-        useSSE.ts                 # SSE hook (reconnect, dedup, heartbeat)
-        useTheme.ts               # dark mode toggle + prefers-color-scheme
-
-      stores/
-        agent.ts                  # Zustand: messages, session, streaming
-
-      types/
-        index.ts                  # frontend types
-
-      i18n/
-        index.ts                  # i18next init + language detector
-        locales/
-          zh-CN/
-            common.json
-            research.json
-            dashboard.json
-            ticker.json
-            run.json
-            sources.json
-            reviews.json
-          en-US/
-            (同结构)
-
-      pages/
-        ResearchDesk.tsx          # 主页：timeline + composer + context chips
-        Dashboard.tsx             # runs summary + source health + due reviews
-        TickerPage.tsx            # ticker context + observations + decisions
-        RunDetail.tsx             # report/result/sources/logs + trust panel
-        DataSources.tsx           # source health table + toggles
-        ReviewQueue.tsx           # due decisions + lesson editor
-
-      components/
-        layout/
-          AppShell.tsx            # sidebar + main + connection banner
-          Sidebar.tsx             # nav + sessions list
-          ConnectionBanner.tsx    # SSE reconnect status
-        research/
-          Timeline.tsx            # message + run card + artifact card + source warning
-          MessageBubble.tsx       # user/assistant/system/tool/event
-          ThinkingTimeline.tsx    # expandable tool call sequence
-          Composer.tsx            # textarea + + menu + context chips
-          ContextChips.tsx        # ticker, goal, attachment, workflow, owner
-          RunCard.tsx             # inline run status card
-          ArtifactCard.tsx        # artifact reference
-          SourceWarning.tsx       # source degradation warning
-          GoalChip.tsx            # goal progress chip
-          WelcomeScreen.tsx       # empty session prompt grid
-        run/
-          ReportTab.tsx           # markdown report
-          ResultTab.tsx           # result.json viewer
-          SourcesTab.tsx          # sources.json + provenance
-          LogsTab.tsx             # run_events log
-          TrustPanel.tsx          # checksums + schema version + warnings
-        dashboard/
-          RunsTable.tsx
-          SourceHealthGrid.tsx
-          DueReviewsList.tsx
-        common/
-          DataTable.tsx           # shadcn-based table
-          Skeleton.tsx
-          ErrorBoundary.tsx
-
-    tests/
+    agent/
+      loop.test.ts
+    adapters/
+      fixture.test.ts
+    observations/
+      store.test.ts
+    components/
       smoke.test.tsx
 
   analysis/                       # runtime data (gitignored)
@@ -335,13 +377,8 @@ stock-skills/
           sources/
             <source>_<operation>.raw.json
 
-  # existing directories (unchanged)
-  core/
-  stock/
-  futu/
-  crypto/
-  scripts/
-  docs/
+  scripts/                        # install/update/uninstall scripts
+  docs/                           # specs + plans
 ```
 
 ## SQLite 数据模型
@@ -900,9 +937,9 @@ Trust panel：
 
 - **Schema tests**：必填字段缺失报错、枚举非法报错、`freshness_expires_at` 晚于 `observed_at`、`raw_ref` 格式校验。
 - **DB tests**：创建 session/message/goal/evidence/run/artifact，验证 foreign key、cascade、unique index。
-- **API tests**（Hono `app.request()`）：
+- **API tests**（Next.js Route Handler 测试 via Vitest + fetch mock）：
   - `POST /api/sessions` → 201 + schema
-  - `POST /api/sessions/:id/messages` → 201 + schema
+  - `POST /api/sessions/:id/messages` → 201 + schema（触发 agent run）
   - `GET /api/sessions/:id/messages` → 200 + array
   - `POST /api/sessions/:id/goal` → 201 + schema
   - `POST /api/sessions/:id/goal/evidence` → 201 + schema
@@ -915,7 +952,7 @@ Trust panel：
   - `GET /api/reviews/due` → 200 + array
 - **SSE tests**：验证 event id 存在、heartbeat 间隔、Last-Event-ID replay、dedupe-safe payload shape。
 - **Security tests**：缺 token → 401、错误 Origin → 403、path traversal → 400、超大上传 → 413、非法 artifact type → 422。
-- **Run lifecycle tests**：data_workflow queued → running → succeeded；agent_workflow waiting_for_agent → running → waiting_for_artifacts → succeeded。
+- **Agent tests**：mock LLM provider → AgentLoop 执行 fixture adapter → 产出 artifacts → SSE events。
 - **Observation tests**：fixture adapter raw → canonical Observation；category schema 校验。
 
 ### 前端测试（Vitest + @testing-library/react）
@@ -930,92 +967,82 @@ Trust panel：
 
 ## 实施阶段
 
-### Phase 0: Project bootstrap
+### Phase 0: Skills 归档 + Project bootstrap
 
 - [x] 更新 `.gitignore`
-- [ ] pnpm workspace + root package.json + tsconfig.base.json + biome.json
-- [ ] `shared/` 包：types.ts + schemas.ts + constants.ts
-- [ ] `server/` 包：Hono app + config + entry point
-- [ ] `web/` 包：Vite + React 19 + Tailwind 4 + shadcn/ui + router
-- [ ] 能跑 `pnpm dev`，server 在 `:3001`，web 在 `:5173`
+- [ ] Skills 迁移到 `skills/` 目录（core/, stock/, futu/, crypto/ → skills/）
+- [ ] Agent 定义（`skills/agents/*/`：agent.yaml + prompt.md + output-contract.json）
+- [ ] Next.js 项目初始化（`package.json` + `next.config.ts` + `tsconfig.json` + `biome.json`）
+- [ ] shadcn/ui + Tailwind 4 初始化
+- [ ] 能跑 `pnpm dev`，server + web 在同一进程 `:3000`
 
 ### Phase 1: Foundation
 
 - [ ] Drizzle schema + migration（所有表）
 - [ ] SQLite instance + db/index.ts
-- [ ] analysis root 配置（`STOCK_SKILLS_ANALYSIS_ROOT` 或 `<repo>/analysis`）
-- [ ] Artifact writer（path boundary + checksum + schema_version + producer）
-- [ ] Local token 生成 + Origin/CSRF middleware
-- [ ] upload-guard（size + path + type）
-- [ ] Health endpoint
+- [ ] analysis root 配置
+- [ ] Artifact writer（path boundary + checksum）
+- [ ] Local token + Origin/CSRF middleware
+- [ ] upload-guard
+- [ ] Health endpoint（`/api/health`）
 
 ### Phase 2: Adapters + Observations
 
-- [ ] Adapter interface（base.ts）
+- [ ] Adapter interface + AdapterRegistry
 - [ ] Fixture adapter（可测试固定数据）
-- [ ] Futu adapter stub（health check + snapshot normalize）
-- [ ] Observation schemas（V1 category value schemas）
-- [ ] Normalizer（raw → canonical）
-- [ ] Freshness policy
+- [ ] Futu adapter stub
+- [ ] Observation schemas + store + freshness policy
 
 ### Phase 3: REST API + SSE
 
-- [ ] Sessions CRUD API
-- [ ] Messages API
+- [ ] Sessions + Messages API（Next.js Route Handlers）
 - [ ] Goals + criteria + evidence API
-- [ ] Runs lifecycle API（含 agent_workflow handoff）
-- [ ] Artifacts API（upload + list + report）
-- [ ] Ticker context API
-- [ ] Data sources health API
-- [ ] Reviews + decisions + lessons API
-- [ ] SSE event stream（event bus + heartbeat + replay）
-- [ ] Run manager（state machine）
-- [ ] Goal manager（single active per session）
+- [ ] Runs lifecycle API
+- [ ] Artifacts API
+- [ ] Ticker context + Data sources + Reviews API
+- [ ] SSE event stream（Next.js ReadableStream + EventBus）
+- [ ] Wire all routes + integration tests
 
-### Phase 4: Web UI
+### Phase 4: Agent Layer
 
-- [ ] App Shell（sidebar + nav + sessions list + connection banner + dark mode toggle + 语言切换）
-- [ ] i18n 初始化（react-i18next + zh-CN/en-US common namespace）
-- [ ] CSS variable 双主题（light + dark，class strategy）
-- [ ] Research Desk（timeline + composer + context chips + + menu）
-- [ ] SSE hook（reconnect + dedup + heartbeat + 90s timeout）
-- [ ] Agent store（Zustand: messages, session, streaming, toolCalls）
-- [ ] Message components（MessageBubble, ThinkingTimeline, RunCard, ArtifactCard, SourceWarning, GoalChip）
-- [ ] Welcome Screen（empty session prompt grid）
-- [ ] Run Detail（tabs: Report / Result / Sources / Logs / Trust）
-- [ ] Dashboard（runs table + source health + due reviews）
-- [ ] Ticker Page（context + observations + decisions + lessons）
-- [ ] Data Sources（health table + toggles）
-- [ ] Review Queue（due decisions + lesson editor）
-- [ ] i18n namespace 补全（research/dashboard/ticker/run/sources/reviews）
+- [ ] LLM provider（Anthropic SDK）
+- [ ] Skill loader + Context builder
+- [ ] Tool registry（adapter tools + system tools）
+- [ ] AgentLoop（ReAct pattern + SSE streaming）
+- [ ] Wire Agent into POST /messages handler
+- [ ] Progress coalescing + safety timeout
 
-### Phase 5: Skill integration
+### Phase 5: Web UI
 
-- [ ] 为 stock-analyzer、market-scanner、trading-debate 增加 Output Contract 说明
-- [ ] sidecar JSON 要求（result.json + sources.json）
-- [ ] Markdown fallback 保留但不弱解析
+- [ ] App Shell + Sidebar + Connection Banner
+- [ ] i18n 初始化 + CSS variable 双主题
+- [ ] Research Desk（timeline + composer + context chips）
+- [ ] SSE hook + Agent store（Zustand）
+- [ ] Message components + Welcome Screen
+- [ ] Run Detail（tabs + trust panel）
+- [ ] Dashboard + Ticker Page + Data Sources + Review Queue
+- [ ] i18n namespace 补全
 
-### Phase 6: Agent workflow
+### Phase 6: Skill integration
 
-- [ ] `GET /api/tickers/:ticker/context` 完整实现
-- [ ] `POST /api/runs/:id/artifacts` agent 写回
-- [ ] `POST /api/decisions` + `POST /api/lessons` decision/review 闭环
+- [ ] Output Contract docs for core skills
+- [ ] sidecar JSON 要求
 
 ## 验收标准
 
-1. 能启动本地 server（`pnpm --filter server dev`）。
-2. 能启动 Web（`pnpm --filter web dev`），默认入口是 Research Desk。
-3. 能创建 session、发送 message、刷新后仍能看到 session timeline。
+1. 能启动全栈（`pnpm dev`），server + web 在同一进程 `:3000`。
+2. 默认入口 `/` 是 Research Desk。
+3. 能创建 session、发送 message、agent 自动执行、刷新后仍能看到 session timeline。
 4. 能创建 research goal、追加 evidence、展示 criteria/evidence progress。
 5. 能创建 run，并写 SQLite 与 artifacts。
-6. Web 发起的 run 能绑定 session/goal。
+6. POST /messages 自动触发内置 AgentLoop 推理。
 7. 能从 fixture source 生成 Observation。
 8. 能通过 API 查询 ticker context。
 9. Research Desk 能展示 session list、timeline、context chips、tool progress 和 run card。
 10. SSE 能推送 run/tool/goal/artifact 事件；断线重连能通过 Last-Event-ID 恢复。
 11. Run Detail 能展示 Report / Result JSON / Sources / Logs，并展示 trust panel + artifact checksum。
 12. 安全测试覆盖缺 token、错误 Origin、path traversal、超大 artifact、非法 artifact type。
-13. `/analysis/`、`.venv/`、`web/node_modules/`、`web/dist/` 已加入 `.gitignore`。
-14. Light/Dark 主题可通过 sidebar toggle 切换，偏好持久化到 localStorage，首次访问读 `prefers-color-scheme`。
-15. 中英文可通过 sidebar 语言切换器切换，所有 UI chrome 文本（nav、button、status、form label、error、empty state、toast）均走 i18n。
-16. Dark 主题下所有文字对比度 ≥ 4.5:1（WCAG AA），teal/amber/red 在暗色下均有调亮处理。
+13. `/analysis/`、`.next/`、`node_modules/` 已加入 `.gitignore`。
+14. Light/Dark 主题可通过 sidebar toggle 切换。
+15. 中英文可通过 sidebar 语言切换器切换，UI chrome 文本均走 i18n。
+16. Dark 主题下所有文字对比度 ≥ 4.5:1（WCAG AA）。

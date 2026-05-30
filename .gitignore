@@ -16,7 +16,27 @@
 .env
 .env.local
 
-narrative_monnitor/
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
 
+# Next.js
+.next/
+out/
+
+# Node
+node_modules/
+
+# Analysis runtime data (not committed)
+/analysis/
+
+# Misc
+narrative_monnitor/
 test/
 .claude
