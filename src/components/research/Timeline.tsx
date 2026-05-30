@@ -128,10 +128,11 @@ function TurnView({ turn, index, defaultExpanded }: TurnViewProps) {
 interface TimelineProps {
   messages: AgentMessage[];
   streamingText?: string;
+  pendingToolCalls?: AgentMessage["toolCalls"];
   className?: string;
 }
 
-export function Timeline({ messages, streamingText, className }: TimelineProps) {
+export function Timeline({ messages, streamingText, pendingToolCalls, className }: TimelineProps) {
   const turns = useMemo(() => groupIntoTurns(messages), [messages]);
 
   // Default: expand the latest 2 turns, collapse older
@@ -147,6 +148,11 @@ export function Timeline({ messages, streamingText, className }: TimelineProps) 
           defaultExpanded={isExpandedDefault(i)}
         />
       ))}
+
+      {/* In-progress tool calls (not yet attached to a message) */}
+      {pendingToolCalls && pendingToolCalls.length > 0 && (
+        <ThinkingTimeline toolCalls={pendingToolCalls} />
+      )}
 
       {/* Streaming assistant response */}
       {streamingText && (

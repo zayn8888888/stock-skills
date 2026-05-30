@@ -31,22 +31,39 @@ export interface ToolCallEntry {
   status: "pending" | "running" | "completed" | "error";
 }
 
+// ── Session cache entry: stores full conversation state ─────────────
+
 interface SessionCacheEntry {
   messages: AgentMessage[];
+  toolCalls: ToolCallEntry[];
+  streamingText: string;
+  pendingRunId: string | null;
   lastAccess: number;
 }
 
 // ---------------------------------------------------------------------------
-// LRU Session Cache (5 entries)
+// LRU Session Cache (10 entries)
 // ---------------------------------------------------------------------------
 
-const MAX_CACHED_SESSIONS = 5;
+const MAX_CACHED_SESSIONS = 10;
 const sessionCache = new Map<string, SessionCacheEntry>();
 
-function touchSession(sessionId: string, messages: AgentMessage[]) {
-  sessionCache.set(sessionId, { messages, lastAccess: Date.now() });
+function cacheSession(
+  sessionId: string,
+  messages: AgentMessage[],
+  toolCalls: ToolCallEntry[] = [],
+  streamingText = "",
+  pendingRunId: string | null = null,
+) {
+  sessionCache.set(sessionId, {
+    messages,
+    toolCalls,
+    streamingText,
+    pendingRunId,
+    lastAccess: Date.now(),
+  });
+  // Evict oldest if over capacity
   if (sessionCache.size > MAX_CACHED_SESSIONS) {
-    // Evict least recently used
     let oldestKey: string | null = null;
     let oldestTime = Infinity;
     for (const [key, entry] of sessionCache) {
@@ -59,11 +76,11 @@ function touchSession(sessionId: string, messages: AgentMessage[]) {
   }
 }
 
-function getCachedSession(sessionId: string): AgentMessage[] | null {
+function getCachedSession(sessionId: string): SessionCacheEntry | null {
   const entry = sessionCache.get(sessionId);
   if (!entry) return null;
   entry.lastAccess = Date.now();
-  return entry.messages;
+  return entry;
 }
 
 // ---------------------------------------------------------------------------
@@ -95,7 +112,8 @@ export interface AgentState {
   appendDelta: (delta: string) => void;
   addToolCall: (toolCall: ToolCallEntry) => void;
   updateToolCall: (id: string, update: Partial<ToolCallEntry>) => void;
-  clearStreaming: () => void;
+  clearStreaming: (force?: boolean) => void;
+  syncFromServer: (sessionId: string) => Promise<void>;
   setSSEStatus: (status: "disconnected" | "connected" | "reconnecting") => void;
   setSSERetryAttempt: (attempt: number) => void;
   setPendingRunId: (runId: string) => void;
@@ -115,20 +133,29 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   pendingRunId: null as string | null,
 
   switchSession: (sessionId: string) => {
-    const cached = getCachedSession(sessionId);
-    // Cache current session before switching
-    const current = get();
-    if (current.sessionId && current.messages.length > 0) {
-      touchSession(current.sessionId, current.messages);
+    const state = get();
+
+    // Save current session state before switching
+    if (state.sessionId) {
+      cacheSession(
+        state.sessionId,
+        state.messages,
+        state.toolCalls,
+        state.streamingText,
+        state.pendingRunId,
+      );
     }
 
+    // Load target session
+    const cached = getCachedSession(sessionId);
     if (cached) {
       set({
         sessionId,
-        messages: cached,
-        streamingText: "",
-        toolCalls: [],
-        status: "idle",
+        messages: cached.messages,
+        toolCalls: cached.toolCalls,
+        streamingText: cached.streamingText,
+        pendingRunId: cached.pendingRunId,
+        status: cached.streamingText ? "streaming" : "idle",
         sessionLoading: false,
       });
     } else {
@@ -138,13 +165,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         streamingText: "",
         toolCalls: [],
         status: "idle",
+        pendingRunId: null,
         sessionLoading: true,
       });
     }
   },
 
   loadHistory: (sessionId: string, messages: AgentMessage[]) => {
-    touchSession(sessionId, messages);
+    cacheSession(sessionId, messages);
     set({
       messages,
       sessionId,
@@ -153,9 +181,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   addMessage: (message: AgentMessage) => {
-    const next = [...get().messages, message];
-    const sid = get().sessionId;
-    if (sid) touchSession(sid, next);
+    const state = get();
+    const next = [...state.messages, message];
+    if (state.sessionId) {
+      cacheSession(state.sessionId, next, state.toolCalls, state.streamingText, state.pendingRunId);
+    }
     set({ messages: next });
   },
 
@@ -178,20 +208,32 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     }));
   },
 
-  clearStreaming: () => {
+  /**
+   * Clear streaming state and create an assistant message.
+   *
+   * If `force` is false (default) and streamingText is empty but toolCalls
+   * exist, the tool calls are preserved as a tool-only assistant message.
+   * If `force` is true, all streaming state is discarded.
+   */
+  clearStreaming: (force = false) => {
     const state = get();
-    // Move streamed text into messages if non-empty
-    if (state.streamingText) {
+    const hasText = state.streamingText.length > 0;
+    const hasToolCalls = state.toolCalls.length > 0;
+
+    if (!force && (hasText || hasToolCalls)) {
+      // Create assistant message with whatever we have
       const assistantMsg: AgentMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: state.streamingText,
+        content: state.streamingText || (hasToolCalls ? "" : ""),
         timestamp: Date.now(),
-        toolCalls: state.toolCalls.length > 0 ? [...state.toolCalls] : undefined,
+        toolCalls: hasToolCalls ? [...state.toolCalls] : undefined,
         runId: state.pendingRunId ?? undefined,
       };
       const next = [...state.messages, assistantMsg];
-      if (state.sessionId) touchSession(state.sessionId, next);
+      if (state.sessionId) {
+        cacheSession(state.sessionId, next);
+      }
       set({
         messages: next,
         streamingText: "",
@@ -200,12 +242,54 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         pendingRunId: null,
       });
     } else {
+      if (state.sessionId) {
+        cacheSession(state.sessionId, state.messages);
+      }
       set({
         streamingText: "",
         toolCalls: [],
         status: "idle",
         pendingRunId: null,
       });
+    }
+  },
+
+  /**
+   * Sync messages from the server API.
+   * Called after a run completes to ensure the DB-persisted assistant
+   * message (which may not have been fully captured via SSE) is loaded.
+   */
+  syncFromServer: async (sessionId: string) => {
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/messages`);
+      if (!res.ok) return;
+      const msgs: Array<{
+        message_id: string;
+        role: string;
+        content: string;
+        created_at: string;
+        metadata?: Record<string, unknown> | null;
+      }> = await res.json();
+
+      const agentMessages: AgentMessage[] = msgs.map((m) => ({
+        id: m.message_id,
+        role: m.role as AgentMessage["role"],
+        content: m.content,
+        timestamp: new Date(m.created_at).getTime(),
+        runId: m.metadata?.runId as string | undefined,
+      }));
+
+      // Only update if this is still the current session
+      const current = get();
+      if (current.sessionId !== sessionId) return;
+
+      cacheSession(sessionId, agentMessages);
+      set({
+        messages: agentMessages,
+        sessionLoading: false,
+      });
+    } catch {
+      // silently ignore
     }
   },
 

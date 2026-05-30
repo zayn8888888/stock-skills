@@ -54,6 +54,7 @@ export default function Home() {
     sessionId,
     status,
     streamingText,
+    toolCalls,
     sessionLoading,
     switchSession,
     loadHistory,
@@ -66,6 +67,7 @@ export default function Home() {
     setSSERetryAttempt,
     setPendingRunId,
     fetchRunArtifacts,
+    syncFromServer,
   } = useAgentStore();
 
   const { connect, disconnect, onStatusChange } = useSSE();
@@ -141,10 +143,18 @@ export default function Home() {
             if (parsed.status === "success" && parsed.runId) {
               fetchRunArtifacts(parsed.runId);
             }
-            // Move streamed text into messages and reset
+            // Clear streaming state (creates assistant message from streamed text)
             clearStreaming();
             setRequestPending(false);
             window.dispatchEvent(new Event("stock-skills:sessions-updated"));
+            // After a brief delay, sync from server to ensure we have the
+            // DB-persisted assistant message (covers SSE event loss)
+            const currentSessionId = sessionId;
+            if (currentSessionId) {
+              setTimeout(() => {
+                syncFromServer(currentSessionId);
+              }, 500);
+            }
           }
         } catch {
           clearStreaming();
@@ -178,7 +188,7 @@ export default function Home() {
     return () => {
       disconnect();
     };
-  }, [sessionId, connect, disconnect, appendDelta, addToolCall, updateToolCall, addMessage, clearStreaming, setPendingRunId, fetchRunArtifacts, labels.errorPrefix, setRequestPending]);
+  }, [sessionId, connect, disconnect, appendDelta, addToolCall, updateToolCall, addMessage, clearStreaming, setPendingRunId, fetchRunArtifacts, labels.errorPrefix, setRequestPending, syncFromServer]);
 
   // Sync SSE status to store
   useEffect(() => {
@@ -194,6 +204,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!sessionId) return;
+    // Skip fetch if messages were already loaded from cache
+    if (!sessionLoading) return;
 
     fetch(`/api/sessions/${sessionId}/messages`)
       .then((r) => (r.ok ? r.json() : []))
@@ -214,7 +226,7 @@ export default function Home() {
         loadHistory(sessionId, agentMessages);
       })
       .catch(() => {});
-  }, [sessionId, loadHistory]);
+  }, [sessionId, sessionLoading, loadHistory]);
 
   // ---------------------------------------------------------------------------
   // Auto-scroll on new messages
@@ -224,7 +236,7 @@ export default function Home() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, streamingText]);
+  }, [messages, streamingText, toolCalls]);
 
   // ---------------------------------------------------------------------------
   // Send message
@@ -286,7 +298,7 @@ export default function Home() {
     });
 
     // Clear any previous streaming state and mark as pending
-    clearStreaming();
+    clearStreaming(true);
     setRequestPending(true);
 
     // Send to API
@@ -323,8 +335,9 @@ export default function Home() {
         method: "POST",
       }).catch(() => {});
     }
-    clearStreaming();
-  }, [clearStreaming, sessionId]);
+    clearStreaming(true); // force-clear, don't create partial message
+    setRequestPending(false);
+  }, [clearStreaming, sessionId, setRequestPending]);
 
   const handlePromptClick = useCallback(
     (query: string) => {
@@ -345,7 +358,7 @@ export default function Home() {
   // Render
   // ---------------------------------------------------------------------------
 
-  const hasMessages = messages.length > 0 || !!streamingText;
+  const hasMessages = messages.length > 0 || !!streamingText || toolCalls.length > 0;
   const isStreaming = status === "streaming";
 
   return (
@@ -385,7 +398,7 @@ export default function Home() {
           </div>
         ) : hasMessages ? (
           <div className="px-6 py-4 max-w-3xl mx-auto">
-            <Timeline messages={messages} streamingText={streamingText} />
+            <Timeline messages={messages} streamingText={streamingText} pendingToolCalls={toolCalls} />
           </div>
         ) : (
           <WelcomeScreen onPromptClick={handlePromptClick} />
