@@ -20,6 +20,21 @@ Read references/calculation-methods.md   # DCF/PE/PEG 完整计算步骤、公�
 Read references/china-adr-pitfalls.md    # 中概股 ADR 专项陷阱（PDD/BABA/BIDU 等）
 ```
 
+## Step 0.5：公司类型前置判断（在拉财务数据之前完成）
+
+根据 `get_stock_info` 返回的 `sector` 字段 + 财务特征，按以下优先级顺序匹配（前面匹配即停），决定后续估值模板：
+
+| 条件 | 判定类型 | 估值模板 |
+|------|---------|---------|
+| sector 含 `Financial` / `Banks` / `Insurance` / `Brokerage` | **金融股** | P/B + ROE 剩余收益模型，DCF 权重 = 0，PEG 不适用 |
+| sector 含 `Energy` / `Materials` / `Steel` / `Shipping` / `Chemicals`，**且** 近 3 年毛利率波动 > 15pp（从财务数据验证） | **周期股** | mid-cycle EPS × 5 年正常化 PE + EV/EBITDA，DCF 权重 = 0 |
+| TTM EPS < 0（亏损） | **亏损成长股** | reverse DCF（算市值隐含的未来增速是否合理）+ P/S / EV/Revenue，正向 DCF 跳过 |
+| 以上均不符合 | **正常盈利公司** | 现有默认权重：DCF 40% / P/E 35% / PEG 25% |
+
+**模糊区处理**：sector 落在 Technology / Semiconductor 等交叉领域时，先看 EPS 是否为正，再看毛利率波动；最终由 LLM 根据商业模式特征判断——但须在报告中说明判断依据（如"NVDA 毛利率稳定 >70%、无明显周期性，判定为正常盈利公司而非周期股"）。
+
+> 输出格式：在 Step 3 开头标注 `📋 公司类型：XXX 股 → 使用 XXX 模板`；金融股/周期股/亏损成长股需加 `⚠️` 警示。
+
 ## Step 1：并行拉取数据
 
 #### 1a. 富途行情（当前价格 + PE）
@@ -67,6 +82,14 @@ JSON 字段提取要点：
 **数据质量规则**：EPS 为负 → P/E 和 PEG 不适用，标注跳过；FCF 波动 > 30% → 取 3 年均值；缺失数据明确标注替代假设。
 
 ## Step 3：三种方法计算
+
+> **前置：PE 历史分位结构变化检测**（仅正常盈利公司执行；金融/周期/亏损成长股已换模板，跳过）
+>
+> 从财务数据取近 3 年毛利率序列（或最新年 vs 3 年前对比）：
+> - 若变化 **≤ 10pp**：历史 PE 分位正常使用
+> - 若变化 **> 10pp**：输出 `⚠️ 商业模式结构变化（毛利率 3 年变化 Xpp），历史 PE 分位可能失效。本次 PE 历史分位权重降为 50%，行业相对 PE 权重升至 50%。`
+>
+> 典型案例：苹果 2015→2019 服务收入占比从 8% 升至 18%，PE 中枢从 12x 永久升至 25x，历史分位法持续"高估"提示但从未回归。
 
 完整计算步骤、公式、敏感性分析见 [references/calculation-methods.md](references/calculation-methods.md)。
 

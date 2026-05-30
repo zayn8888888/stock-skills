@@ -77,9 +77,21 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 
 进入阶段 0 之前**必须用 `AskUserQuestion` 工具**做一次启动确认，避免出现"默认启用了 Buffett 但没调 stock-fundamentals 还硬给信号"这类偷懒。
 
+#### 步骤 0：持有期 / 投资视角确认（**新增前置问题，步骤 1 之前**）
+
+用 `AskUserQuestion` 先问一个问题：**「您的投资视角是？」**
+
+| 选项 | 含义 | 对后续流程的影响 |
+|------|------|----------------|
+| **短线 / 事件驱动（≤ 8 周）** | 财报 / 政策 / 技术催化驱动 | 大师推荐表**排除 Buffett / Munger**（持仓期不匹配）；止损距离收紧至 ATR×1.5 以内；fundamentals 权重降低 |
+| **中线（2-6 个月）** | 趋势 + 基本面共振 | 现有逻辑不变（默认） |
+| **长线（1 年+）** | 价值回归 / 护城河复利 | stock-fundamentals **强制必调**；止损允许宽至 ATR×3；Buffett / Munger 优先推荐 |
+
+> 用户未回答时默认「中线」，但必须在共享报告头部标注「默认中线视角」。
+
 #### 步骤 1：基于标的特征**动态推荐**大师组合
 
-不要无脑套用"Buffett + Lynch + Druckenmiller"默认套餐。先看 stock-analyzer 已有的快速指标，按下表挑：
+不要无脑套用"Buffett + Lynch + Druckenmiller"默认套餐。先看 stock-analyzer 已有的快速指标，**并结合步骤 0 的持有期**，按下表挑：
 
 | 标的特征 | 推荐大师组合 | 不推荐 |
 |---------|-----------|-------|
@@ -244,6 +256,8 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 - [ ] 如果是续接复用，`data_source` 字段是否标了"reused from"？
 - [ ] `data_gaps` 是否列出了所有缺失维度？（不允许藏起来）
 - [ ] 若启用大师团，是否核对了每个大师的"条件性必须 skill"是否真有数据传入其 prompt？（数据传入失败时该大师必须改为"跳过"，不允许含糊给 neutral）
+- [ ] **stock-analyzer 内部子 skill 是否全部已调用？** 检查：`futu-technical-anomaly`（维度 2）/ `futu-capital-anomaly`（维度 4）/ `futu-stock-digest`（维度 7b）/ `futu-news-search`（维度 7c）— 若 `data_gaps` 里出现"子 skill 未逐个触发"字样，立即停下回到 stock-analyzer 对应维度补调，不允许带着 data_gaps 继续辩论
+- [ ] `news_report` 字段是否包含来自 `futu-stock-digest` 的方向判断（bullish/bearish/neutral），而非仅 Tavily 搜索结果？
 
 **任何一条没做到，停下来补齐，禁止进入阶段 1**。
 
@@ -259,6 +273,7 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
 | "stock-fundamentals/stock-valuation 未独立 Skill 触发" | **立即** Skill() 调用补齐，不是写在 caveat 里就算了 |
 | "已有公开 consensus / Tavily 搜索结果可以替代" | 跳过该大师，不允许代理 |
 | "数据采集时间紧 / token 预算" | 用户选了 A 全调 = 已接受成本，agent 无权代为缩减 |
+| "futu-stock-digest / futu-news-search / futu-capital-anomaly / futu-technical-anomaly：stock-analyzer 子 skill 未逐个触发" | 立即停下，对 stock-analyzer 补调缺失的子 skill（`Skill()` 调用），不允许把"未触发"写进 `data_gaps` 继续辩论 |
 
 **触发条件**：
 - agent 在阶段 0 任何输出里包含"降级"、"有限版"、"代理"、"省略"、"足够直接进入"等词 → 停下，回看阶段 0a 清单，补调遗漏 skill
@@ -288,7 +303,9 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
 #### 调用约束
 
 - **每个大师 agent 用 ai-hedge-fund 风格 4 段式 prompt**（角色定位 + Checklist + Signal Rules + Confidence Scale 0-100）
-- 输出统一信号 schema：`{signal: bullish/bearish/neutral, confidence: 0-100, reasoning}`
+- 输出统一信号 schema：`{signal: bullish/bearish/neutral, confidence: 0-100, reasoning, time_horizon: "<具体期限>"}`
+  - `time_horizon` 示例：Druckenmiller → `"3-6 周趋势"`；Buffett → `"3 年价值回归"`；Lynch → `"6-18 个月成长"`
+  - **此字段必填**，不允许留空或填"不确定"
 - 推荐启用数量：**1-4 个**（>4 个噪音过大）
 - 用户没指定时默认套餐：**Buffett + Lynch + Druckenmiller**（价值 / 成长 / 宏观三视角）
 
@@ -298,6 +315,7 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
   - Bull 必须点名响应 ≥ 2 个 bullish 信号 + 反驳 ≥ 1 个 bearish 信号
   - Bear 同理镜像
 - 信号一致性指标：若 N 个大师中 bullish:bearish ≥ 4:2，**Research Manager** 阶段在 rationale 里注明"大师团一致性高"作为加权因子
+- **时间视角冲突处理**：若各大师 `time_horizon` 不同（如 Druckenmiller "3 周"vs Buffett "3 年"），PM 汇总时**禁止直接平均**，必须在 `investment_thesis` 里显式说明「本次决策以 X 视角为主，Y 视角信号作参考，原因：...」
 - **大师信号不直接参与阶段 6 PM 最终决策**（决策权归 PM）
 
 ### 阶段 2：Bull / Bear 多轮辩论（researchers）
@@ -339,11 +357,44 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
   "reasoning": "<2-4 句，锚定分析师报告 + research plan>",
   "entry_price": <float, 报价币种>,
   "stop_loss": <float>,
-  "position_sizing": "<例：5% of portfolio>"
+  "position_sizing": "<数字% of portfolio，必须附计算过程，见下方公式>",
+  "fundamental_exit_triggers": [
+    "<基本面止损条件 1，例：核心业务毛利率连续 2 季下滑 >3pp>",
+    "<基本面止损条件 2，例：FCF/净利润 < 0.6 连续 2 季>",
+    "<基本面止损条件 3，例：CEO/CFO 非计划离职>"
+  ]
 }
 ```
 
+**`position_sizing` 必须附两步计算过程**（不允许只写一个百分比数字）：
+
+```
+步骤 1 — 绝对上限（drawdown 约束）：
+  max_position = 组合目标最大回撤容忍度 / 止损距离百分比
+  默认组合最大回撤 = 15%（用户未指定时）
+  止损距离 = |entry_price - stop_loss| / entry_price
+  示例：15% / 8% = 1.875% → 取整为 2%
+
+步骤 2 — 波动率调整（多标的组合时适用）：
+  ATR_pct = 近 14 日 ATR / 现价（已有 K 线可计算）
+  adjusted = base_weight × (1 / ATR_pct) / avg(1 / ATR_pct of all positions)
+  高波动股自动降权，低波动股自动升权
+
+最终仓位 = min(步骤 1 上限, 步骤 2 调整值)
+单标的场景：直接用步骤 1 结果，不做步骤 2
+```
+
 末尾必须有 `FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**` 一行（与 TradingAgents 兼容）。
+
+**评级-行动偏离强制说明（新增）**：
+
+当 Trader action 与 RM recommendation 方向不一致时（如 RM Underweight 但 Trader 仍提议 Buy），**不强制重跑，但 reasoning 字段必须显式回答以下三问**：
+
+1. **为什么偏离评级**：具体的短期催化是什么？与评级所指的中长期判断是否时间维度不同？
+2. **如果评级方向正确，止损能否保护**：若中长期偏空的判断实现（如财报miss、业绩继续下滑），止损是否能在跳空情况下仍然有效？
+3. **赔率是否合理**：用具体数字说明——最大收益 vs 最大亏损的比例。
+
+> 背景：Underweight 是相对判断（持仓低于基准），不等于"绝对不能买"。投行内部"Underweight + 近期超配特定催化"是常见操作。但偏离评级买入必须有明确逻辑，不能用"仓位小"一句话带过。PDD 案例的问题是第2问没有回答（止损无法防财报跳空），而不是偏离评级本身错了。
 
 ### 阶段 5：Risk 三方辩论（risk_mgmt debators）
 
@@ -360,6 +411,29 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
 - 平衡两极，指出双方论据中数据支撑薄弱的地方
 
 **轮次终止条件**：`count >= 3 × risk_rounds`
+
+#### 财报二元事件硬规则（新增）
+
+当 `events_report` 中存在**距今 ≤ 5 个交易日**的财报事件时，Risk 阶段强制触发以下流程：
+
+**Conservative Analyst 必须完成 IV-implied 止损有效性验证**：
+
+```
+IV-implied 预期波动幅度 = 现价 × ATM IV × √(最近到期日天数 / 365)
+（数据来源：derivatives_report 中的 ATM IV；若无期权数据，改用近 30 日历史波动率 HV 替代，并标注"使用 HV 近似"）
+
+对比 Trader 的 stop_loss 距离：
+  stop_loss 距离 = |entry_price - stop_loss| / entry_price
+
+若 IV-implied 幅度 > stop_loss 距离：
+  → 必须输出：
+    "⚠️ 止损可能失效：市场定价的预期波动（IV-implied = X%）超过止损保护距离（Y%）。
+     财报跳空可能直接越过止损，建议：(1) 财报前不入场，或 (2) 改用最大亏损有限的期权多头代替股票多头。"
+```
+
+**Aggressive 必须正面回应**：不能仅凭估值低或大单信号驳斥，必须给出**为何期权 IV 高估了下行风险**的具体数据（如"近4季度财报后实际波动均小于 IV-implied"）。
+
+> 用 IV 而非"预估 EPS miss 幅度"的原因：期权市场已经对财报不确定性定价，IV-implied move 是可计算的真实数据。要求 Conservative 预测"EPS 差 X% 时跌 Y%"会导致 LLM 幻觉。PDD 案例：IV 60%，7天到期，IV-implied = $93.60 × 60% × √(7/365) ≈ $7.75，而 stop_loss 距离仅 $3.10（3.3%）—— 如果当时跑这个计算，Conservative 会发现止损根本不够用。
 
 #### 链上 funding 拥挤度硬规则（**新增 — 美股 / 美元资产必读**）
 
@@ -404,6 +478,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 3. **在 `investment_thesis` 显式写一行**：`拥挤降档：funding APR 24h avg = X%（> 100% 红线），Aggressive 未给出量化反驳，依据 Conservative 论点 Y，评级 Buy→Overweight，仓位 N%→N/2%`
 
 仅当 Aggressive 提供**数据驱动的反驳**（不是定性"未必拥挤"）时，PM 才可豁免降档，但仍需在 `investment_thesis` 里写"funding 红线达成但已豁免，依据 Aggressive 反驳：<具体数据>"。
+
 
 ### 阶段 7：复盘锚点（可选但推荐）
 
@@ -527,6 +602,9 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 - ❌ Bull/Bear 各说各话不互相反驳（违反"对话式辩论"原则）
 - ❌ Risk 只跑 1 个角色（必须三方都到场）
+- ❌ **RM Underweight/Sell + Trader Buy 但 reasoning 未回答三问**（偏离评级买入必须显式说明催化、止损有效性、赔率，否则是无根据的反向押注）
+- ❌ **财报在 5 日内但 Risk 未建模严重 miss 情景**（Conservative 必须给出跳空风险评估）
+- ❌ **财报在 5 日内但 Conservative 未完成 IV-implied 止损有效性验证**（期权卖方参考见 stock-analyzer 维度 8）
 - ❌ 跳过 Trader proposal 直接到 PM 决策
 - ❌ Trader 不给具体止损价，只写"破位止损"
 - ❌ PM 评级写"看个人风险偏好"——必须从 5 档中选一档
