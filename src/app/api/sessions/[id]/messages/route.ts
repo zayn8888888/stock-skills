@@ -10,7 +10,7 @@ import { createTools, createToolExecutor } from "@/lib/agent/tools";
 import { AgentLoop } from "@/lib/agent/loop";
 import { registerLoop, unregisterLoop } from "@/lib/agent/loop-registry";
 import { taskRunner } from "@/lib/agent/task-runner";
-import { getLLMClient, getModelName } from "@/lib/agent/llm-provider";
+import { getLLMClient, getModelName, isApiKeyConfigured } from "@/lib/agent/llm-provider";
 import { eventBus } from "@/lib/runtime/event-bus";
 import { registry as adapterRegistry } from "@/lib/adapters/registry";
 import { initAdapters } from "@/lib/adapters/init";
@@ -108,6 +108,29 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
 
     // ── Wire AgentLoop via TaskRunner ──────────────────────────────
     const agentName = body.context.skill_name ?? "stock-analyzer";
+
+    // Graceful fallback when API key is not configured
+    if (!isApiKeyConfigured()) {
+      const now2 = new Date().toISOString();
+      await db.insert(messages).values({
+        id: genId(),
+        sessionId,
+        role: "system",
+        content: "⚠️ ANTHROPIC_API_KEY is not configured. The agent cannot run without a valid API key. Please set the ANTHROPIC_API_KEY environment variable.",
+        createdAt: now2,
+        metadata: JSON.stringify({ runId: linkedRunId, error: true }),
+      });
+      await db
+        .update(runs)
+        .set({ status: "failed", finishedAt: now2, resultSummary: "API key not configured" })
+        .where(eq(runs.id, linkedRunId!));
+      eventBus.emit(sessionId, "run.updated", {
+        runId: linkedRunId,
+        status: "failed",
+        message: "API key not configured",
+      });
+    } else {
+
     const agent = loadAgent(agentName);
     const goalId: string | undefined = undefined; // will be resolved from active goal if present
     const ticker = body.context.ticker;
@@ -257,6 +280,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
       .catch(() => {
         // swallow — errors are already handled inside the task
       });
+    } // end isApiKeyConfigured else
   } else {
     // Still update session updated_at for the new message
     await db

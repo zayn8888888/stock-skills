@@ -16,3 +16,9 @@ export function getLLMClient(): Anthropic {
 export function getModelName(): string {
   return getConfig().llmModel;
 }
+
+/** Check if the Anthropic API key is configured. */
+export function isApiKeyConfigured(): boolean {
+  const key = getConfig().anthropicApiKey;
+  return key.length > 0;
+}
