@@ -85,6 +85,7 @@ export const runs = sqliteTable("runs", {
   durationMs: integer("duration_ms"),
   resultSummary: text("result_summary"),
   createdAt: text("created_at").notNull(),
+  metadata: text("metadata"), // JSON string for workflow_type, ticker, market, intent, etc.
 });
 
 // ──────────────────────────── artifacts ──────────────────────────

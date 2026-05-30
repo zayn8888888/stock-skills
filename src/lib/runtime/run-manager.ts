@@ -35,6 +35,7 @@ export function createRun(db: DB, data: CreateRunData): typeof schema.runs.$infe
     durationMs: null,
     resultSummary: null,
     createdAt: now,
+    metadata: null,
   };
 
   db.insert(schema.runs).values(run).run();
