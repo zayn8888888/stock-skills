@@ -11,14 +11,13 @@ description: 加密市场热点赛道扫描 + 候选筛选器。基于 CoinGecko
 
 ```bash
 BASE="https://api.coingecko.com/api/v3"
-CG_KEY="${COINGECKO_DEMO_KEY:-}"  # 从 ~/.zshenv 读取
 
 # ⚠️ DNS 绕过（部分网络环境本地 DNS 会将 api.coingecko.com 解析到错误 IP）
 # 用 Google DNS 获取真实 IP，固定写入每条 curl 命令
 # 真实 IP：104.20.41.132（或 172.66.172.219）
 # 每条 curl 加：--resolve "api.coingecko.com:443:104.20.41.132"
 
-# 有 Demo key：每条 curl 加 -H "x-cg-demo-api-key: $CG_KEY"（100次/分）
+# 有 Demo key：每条 curl 加 -H "x-cg-demo-api-key: $COINGECKO_DEMO_KEY"（100次/分）
 # 无 key：省略 header，降级到公共端点（~3次/分，需在请求间加间隔）
 ```
 
@@ -119,7 +118,7 @@ curl "$BASE/coins/markets?vs_currency=usd&category={CATEGORY_ID}&order=volume_de
 
 Hyperliquid 查询（有 perps 镜像的币）：
 ```bash
-~/.claude/skills/hyperliquid-perps/scripts/lookup.sh <TICKER> --json 2>/dev/null
+"${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh" <TICKER> --json 2>/dev/null
 ```
 
 ## 阶段 3：跨市场背离信号

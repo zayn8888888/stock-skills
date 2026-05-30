@@ -45,7 +45,7 @@ categories[]
 
 ## Hyperliquid 链上数据
 
-脚本：`~/.claude/skills/hyperliquid-perps/scripts/lookup.sh <TICKER> --json`
+脚本：`"${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh" <TICKER> --json`
 
 **关键字段：**
 ```
