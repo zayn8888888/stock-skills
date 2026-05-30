@@ -1,0 +1,13 @@
+{
+  "title": "Reviews",
+  "due": "Due",
+  "upcoming": "Upcoming",
+  "reviewed": "Reviewed",
+  "decisionDetail": "Decision Detail",
+  "lessonEditor": {
+    "label": "Lesson",
+    "placeholder": "Record a lesson learned from this decision...",
+    "save": "Save Lesson"
+  },
+  "noDecisions": "No decisions to review."
+}

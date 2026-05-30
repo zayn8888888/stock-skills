@@ -1,0 +1,9 @@
+{
+  "title": "Run Detail",
+  "duration": "Duration",
+  "skill": "Skill",
+  "ticker": "Ticker",
+  "noReport": "No report or result data available for this run.",
+  "viewReport": "View Report",
+  "viewJson": "View JSON"
+}

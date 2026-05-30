@@ -1,0 +1,7 @@
+{
+  "title": "Data Sources",
+  "healthStatus": "Health Status",
+  "lastChecked": "Last Checked",
+  "enabled": "Enabled",
+  "noSources": "No data sources configured."
+}

@@ -1,0 +1,9 @@
+{
+  "title": "运行详情",
+  "duration": "耗时",
+  "skill": "技能",
+  "ticker": "标的",
+  "noReport": "本次运行没有可用的报告或结果数据。",
+  "viewReport": "查看报告",
+  "viewJson": "查看 JSON"
+}

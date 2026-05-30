@@ -1,0 +1,11 @@
+{
+  "title": "Research Desk",
+  "composer": {
+    "placeholder": "Ask a research question...",
+    "submit": "Submit"
+  },
+  "welcome": {
+    "title": "Welcome to Research Desk",
+    "subtitle": "Start a research session by asking a question about a stock or market."
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "app": {
+    "title": "Stock Skills - Research Desk",
+    "description": "Stock research and analysis platform"
+  },
+  "nav": {
+    "research": "Research Desk",
+    "sources": "Data Sources",
+    "reviews": "Reviews",
+    "sessions": "Sessions",
+    "overview": "Overview"
+  },
+  "button": {
+    "analyze": "Analyze",
+    "debate": "Debate",
+    "review": "Review",
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "back": "Back",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "status": {
+    "running": "Running",
+    "success": "Success",
+    "failed": "Failed",
+    "pending": "Pending",
+    "cancelled": "Cancelled",
+    "active": "Active",
+    "inactive": "Inactive",
+    "unknown": "Unknown"
+  },
+  "tabs": {
+    "report": "Report",
+    "data": "Data",
+    "logs": "Logs",
+    "context": "Context",
+    "runs": "Runs",
+    "decisions": "Decisions",
+    "lessons": "Lessons",
+    "observations": "Observations",
+    "due": "Due",
+    "upcoming": "Upcoming",
+    "reviewed": "Reviewed"
+  },
+  "table": {
+    "noData": "No data",
+    "rowsTotal": "{{count}} row(s) total",
+    "pageInfo": "Page {{current}} of {{total}}"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "unexpected": "An unexpected error occurred.",
+    "notFound": "Not found"
+  },
+  "common": {
+    "language": "Language",
+    "theme": "Toggle theme",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "enabled": "Enabled",
+    "never": "Never"
+  }
+}

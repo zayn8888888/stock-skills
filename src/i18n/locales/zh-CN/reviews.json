@@ -1,0 +1,13 @@
+{
+  "title": "复盘",
+  "due": "待复盘",
+  "upcoming": "即将到期",
+  "reviewed": "已复盘",
+  "decisionDetail": "决策详情",
+  "lessonEditor": {
+    "label": "经验教训",
+    "placeholder": "记录从本次决策中学到的经验...",
+    "save": "保存教训"
+  },
+  "noDecisions": "暂无待复盘的决策。"
+}

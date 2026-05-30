@@ -1,0 +1,11 @@
+{
+  "title": "研究工作台",
+  "composer": {
+    "placeholder": "输入研究问题...",
+    "submit": "提交"
+  },
+  "welcome": {
+    "title": "欢迎使用研究工作台",
+    "subtitle": "通过提出关于股票或市场的问题来开始研究会话。"
+  }
+}
