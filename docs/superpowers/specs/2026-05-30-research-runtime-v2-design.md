@@ -57,6 +57,7 @@ v1 spec（同文件名，Python FastAPI 版）定义了数据模型和 API 契�
 | Toast | sonner | latest | shadcn 内置 |
 | 代码高亮 | react-syntax-highlighter | — | Run Detail |
 | 图表 | Lightweight Charts (TradingView) | latest | 股票 K 线；Vibe-Trading 用 ECharts，但 Lightweight Charts 更适合金融时序 |
+| i18n | react-i18next + i18next | latest | 成熟、TypeScript 友好、支持 ICU plural/interpolation、lazy load namespaces |
 
 ### 工具链
 
@@ -70,15 +71,34 @@ v1 spec（同文件名，Python FastAPI 版）定义了数据模型和 API 契�
 
 ### 设计系统
 
-基于 UI/UX Pro Max 分析 + spec 要求，采用浅色专业金融风格：
+基于 UI/UX Pro Max 分析 + spec 要求，支持 Light / Dark 双主题，默认浅色。使用 shadcn/ui 的 CSS variable token 系统，一套 semantic token 名映射到两组色值。
 
-**色彩**（spec 原文）：
-- 背景：true white 或 very light neutral（`#FFFFFF` / `#F8FAFC`）
-- 文字：charcoal（`#1E293B` / `#334155`）
-- 主色（ready/succeeded/primary action）：teal（`#0D9488` / `#14B8A6`）
-- 警告（due/degraded/warning）：amber（`#F59E0B` / `#D97706`）
-- 失败（failed/negative）：red（`#DC2626` / `#EF4444`）
-- 次要/信息：blue（`#2563EB` / `#3B82F6`）
+**Light theme 色彩**：
+- 背景：`hsl(0 0% 100%)` / `hsl(210 40% 98%)`
+- 前景/文字：`hsl(222 47% 11%)` / `hsl(217 33% 17%)`
+- 主色（ready/succeeded/primary action）：teal `hsl(173 80% 36%)` / `hsl(174 66% 45%)`
+- 警告（due/degraded/warning）：amber `hsl(38 92% 50%)` / `hsl(43 96% 56%)`
+- 失败（failed/negative）：red `hsl(0 84% 60%)` / `hsl(0 74% 42%)`
+- 次要/信息：blue `hsl(217 91% 60%)` / `hsl(221 83% 53%)`
+- Card：`hsl(0 0% 100%)`
+- Border：`hsl(214 32% 91%)`
+- Muted：`hsl(210 40% 96%)`
+
+**Dark theme 色彩**：
+- 背景：`hsl(222 47% 7%)` （deep navy-charcoal，接近 OLED 纯黑但保留层次）
+- 前景/文字：`hsl(210 40% 98%)`
+- 主色：teal `hsl(174 66% 45%)`（暗色下提亮 1 级保证对比度 ≥ 4.5:1）
+- 警告：amber `hsl(43 96% 56%)`
+- 失败：red `hsl(0 74% 55%)`（暗色下提亮避免 WCAG 失败）
+- Card：`hsl(222 47% 11%)`
+- Border：`hsl(217 33% 20%)`
+- Muted：`hsl(223 47% 15%)`
+
+**Dark mode 切换**：
+- 使用 `class` strategy（`dark:` variant），参考 Vibe-Trading 的 `useDarkMode` hook
+- 偏好存 `localStorage("theme")`，首次访问读 `prefers-color-scheme`
+- shadcn/ui 组件天然支持，只需维护两组 CSS variable
+- 图表组件（Lightweight Charts）需要独立主题配置切换
 
 **间距**：
 - Radius：6-8px
@@ -97,6 +117,42 @@ v1 spec（同文件名，Python FastAPI 版）定义了数据模型和 API 契�
 - table-first，避免嵌套卡片
 - 不使用 hero、装饰 orb、紫蓝渐变、beige/cream 主色
 - 数据密度优先（12-col grid, 8px gap, 12px padding）
+
+### 国际化（i18n）
+
+使用 `react-i18next` + `i18next`，支持中英双语。
+
+**V1 语言**：`zh-CN`（默认）、`en-US`。
+
+**Namespace 策略**：按页面/功能域拆分，lazy load 非当前页面的翻译包。
+
+```text
+web/src/i18n/
+  index.ts              # i18next init + language detector
+  locales/
+    zh-CN/
+      common.json       # 公共：按钮、状态词、错误信息
+      research.json     # Research Desk：composer、timeline、context chips
+      dashboard.json    # Dashboard
+      ticker.json       # Ticker Page
+      run.json          # Run Detail
+      sources.json      # Data Sources
+      reviews.json      # Review Queue
+    en-US/
+      (同结构)
+```
+
+**语言切换**：
+- UI 右上角或设置页提供语言切换器
+- 偏好存 `localStorage("lng")`，默认 `zh-CN`
+- Server API 不返回本地化文本（分析报告本身就是多语言混合）
+- 仅 UI chrome（按钮、标签、状态、导航）做 i18n
+
+**原则**：
+- 不翻译用户生成内容（messages、reports、observations）
+- 不翻译技术字段名（run_id、artifact_type、status 枚举值）
+- 翻译范围限于 UI chrome：nav labels、button text、status badges、form labels、error messages、empty states、toast messages
+- 日期/数字格式跟随语言 locale（`zh-CN` 用 `YYYY-MM-DD`，`en-US` 用 `MM/DD/YYYY`）
 
 ## 目录结构
 
@@ -201,13 +257,27 @@ stock-skills/
 
       hooks/
         useSSE.ts                 # SSE hook (reconnect, dedup, heartbeat)
-        useDarkMode.ts            # (V2 placeholder)
+        useTheme.ts               # dark mode toggle + prefers-color-scheme
 
       stores/
         agent.ts                  # Zustand: messages, session, streaming
 
       types/
         index.ts                  # frontend types
+
+      i18n/
+        index.ts                  # i18next init + language detector
+        locales/
+          zh-CN/
+            common.json
+            research.json
+            dashboard.json
+            ticker.json
+            run.json
+            sources.json
+            reviews.json
+          en-US/
+            (同结构)
 
       pages/
         ResearchDesk.tsx          # 主页：timeline + composer + context chips
@@ -719,7 +789,7 @@ Server 保持 session-scoped replay buffer（500 events），30 秒 heartbeat。
 ### Research Desk（主页面）
 
 布局：
-- 左侧 App Shell：nav + Sessions list，可 collapse（240px → 48px）
+- 左侧 App Shell：nav + Sessions list + dark mode toggle + 语言切换，可 collapse（240px → 48px）
 - 中央 Timeline：user message、assistant answer、thinking/tool progress、run card、artifact card、source warning、goal event 混排
 - 底部 Composer：多行 textarea + Enter 发送 + Shift+Enter 换行 + Stop
 - Composer `+` menu：Upload、New Research Goal、Analyze、Debate、Review、Agent Workflow
@@ -904,7 +974,9 @@ Trust panel：
 
 ### Phase 4: Web UI
 
-- [ ] App Shell（sidebar + nav + sessions list + connection banner）
+- [ ] App Shell（sidebar + nav + sessions list + connection banner + dark mode toggle + 语言切换）
+- [ ] i18n 初始化（react-i18next + zh-CN/en-US common namespace）
+- [ ] CSS variable 双主题（light + dark，class strategy）
 - [ ] Research Desk（timeline + composer + context chips + + menu）
 - [ ] SSE hook（reconnect + dedup + heartbeat + 90s timeout）
 - [ ] Agent store（Zustand: messages, session, streaming, toolCalls）
@@ -915,6 +987,7 @@ Trust panel：
 - [ ] Ticker Page（context + observations + decisions + lessons）
 - [ ] Data Sources（health table + toggles）
 - [ ] Review Queue（due decisions + lesson editor）
+- [ ] i18n namespace 补全（research/dashboard/ticker/run/sources/reviews）
 
 ### Phase 5: Skill integration
 
@@ -943,3 +1016,6 @@ Trust panel：
 11. Run Detail 能展示 Report / Result JSON / Sources / Logs，并展示 trust panel + artifact checksum。
 12. 安全测试覆盖缺 token、错误 Origin、path traversal、超大 artifact、非法 artifact type。
 13. `/analysis/`、`.venv/`、`web/node_modules/`、`web/dist/` 已加入 `.gitignore`。
+14. Light/Dark 主题可通过 sidebar toggle 切换，偏好持久化到 localStorage，首次访问读 `prefers-color-scheme`。
+15. 中英文可通过 sidebar 语言切换器切换，所有 UI chrome 文本（nav、button、status、form label、error、empty state、toast）均走 i18n。
+16. Dark 主题下所有文字对比度 ≥ 4.5:1（WCAG AA），teal/amber/red 在暗色下均有调亮处理。
