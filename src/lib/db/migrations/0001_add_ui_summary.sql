@@ -1,0 +1,1 @@
+ALTER TABLE `research_goals` ADD `ui_summary` text;

@@ -35,6 +35,7 @@ export const researchGoals = sqliteTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     completedAt: text("completed_at"),
+    uiSummary: text("ui_summary"),
   },
   (t) => [
     // Composite index for fast lookups; the actual partial UNIQUE index

@@ -16,7 +16,7 @@ interface AddEvidenceData {
   confidence?: number;
 }
 
-interface GoalSnapshot {
+export interface GoalSnapshot {
   goal: typeof schema.researchGoals.$inferSelect;
   criteria: (typeof schema.goalCriteria.$inferSelect)[];
   evidence: (typeof schema.goalEvidence.$inferSelect)[];
@@ -49,6 +49,7 @@ export function createGoal(db: DB, sessionId: string, data: CreateGoalData): typ
     createdAt: now,
     updatedAt: now,
     completedAt: null,
+    uiSummary: null,
   };
 
   db.insert(schema.researchGoals).values(goal).run();
