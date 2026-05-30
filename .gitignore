@@ -33,6 +33,10 @@ out/
 # Node
 node_modules/
 
+# Database
+data/*.db
+data/*.db-journal
+
 # Analysis runtime data (not committed)
 /analysis/
 
