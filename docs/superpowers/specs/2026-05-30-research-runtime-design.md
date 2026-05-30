@@ -78,9 +78,11 @@ Data source adapters + existing scripts
 Server 负责：
 
 - 创建和管理 run。
+- 创建和管理 research session、message history、research goal、goal evidence。
 - 调用数据源 adapters 或现有脚本。
-- 写入 raw artifacts、normalized observations、reports、decisions、lessons。
+- 写入 raw artifacts、normalized observations、reports、decisions、lessons、goal evidence。
 - 提供 ticker context、source health、review due queue。
+- 通过 SSE 推送工具进度、run 状态、artifact 可用性、goal evidence 和错误。
 
 Skills 负责：
 
@@ -90,15 +92,38 @@ Skills 负责：
 
 Web UI 负责：
 
-- 启动分析和复盘。
+- 启动分析、持续研究和复盘。
+- 维护 Research Desk：左侧 session/history，中央 timeline，底部 composer。
 - 查看 run、ticker context、source health、artifacts。
+- 管理 active context chips：ticker、goal、上传文件、workflow、agent handoff。
 - 编辑 lesson、标记 decision reviewed。
 
 Agent 负责：
 
 - 对 agent_workflow 执行推理。
-- 使用 server API 读取 context。
-- 通过 server API 写回 report、result JSON、sources JSON、decision 和 lesson。
+- 使用 server API 读取 session、goal、ticker context 和 run context。
+- 通过 server API 写回 report、result JSON、sources JSON、decision、lesson 和 goal evidence。
+- 不直接写 SQLite；所有状态变更必须走 API。
+
+### Vibe-Trading interaction reference
+
+`~/Code/Vibe-Trading` 的 `/agent` 交互是本设计的主要参考，但不照搬业务能力。
+
+本项目要借鉴的交互模式：
+
+- Collapsible app shell：左侧有 navigation、sessions、recent runs，支持 session rename/delete。
+- Research Desk first：第一屏优先是可继续工作的研究会话，而不是静态 dashboard。
+- Timeline rendering：用户消息、agent 答案、tool timeline、run complete card、source warning、artifact card 混排在同一条时间线。
+- Compact context chips：composer 上方显示 active ticker、research goal、attachment、workflow、agent owner。
+- Composer `+` menu：把 upload、research goal、agent workflow、debate workflow 收进一个菜单。
+- Tool progress heartbeat：长任务必须有阶段、进度、耗时、ETA 或 heartbeat，不让 UI 看起来卡死。
+- Run card / trust panel：Run Detail 必须显示 artifact checksum、source warnings、reproducibility 和数据源 provenance。
+
+本项目不借鉴的部分：
+
+- 不做实盘 mandate、broker runner、kill switch。
+- 不做交易策略 marketplace 或 alpha zoo 作为 V1 范围。
+- 不把所有研究动作都变成聊天；Data Sources、Review Queue、Run Detail 仍是结构化页面。
 
 ## 目录结构
 
@@ -156,6 +181,8 @@ SQLite 做索引、状态和可检索字段。完整大文本和原始数据留�
 
 ```text
 id
+session_id
+goal_id
 skill_name
 ticker
 market
@@ -170,6 +197,8 @@ started_at
 finished_at
 error_message
 ```
+
+`session_id` 可为空，表示从 API/CLI 直接发起的离散 run。Web 发起的 run 必须绑定 session。`goal_id` 可为空，表示不属于长期 research goal。
 
 `workflow_type`：
 
@@ -210,6 +239,178 @@ cancelled
 ```
 
 `runs` 不保存固定 artifact path 列。所有 artifacts 由 `artifacts` 表管理，避免 API 支持多 artifact 但 DB 只能放固定几列。
+
+### sessions
+
+```text
+id
+title
+status
+active_goal_id
+last_run_id
+created_at
+updated_at
+archived_at
+metadata_json
+```
+
+`sessions` 是 Web Research Desk 的主召回单位。一个 session 可以包含多轮 messages、多次 runs、一个当前 active goal 和历史 goal。
+
+`status`：
+
+```text
+active
+running
+waiting_for_agent
+failed
+archived
+```
+
+### messages
+
+```text
+id
+session_id
+role
+message_type
+content
+linked_run_id
+linked_artifact_id
+created_at
+metadata_json
+```
+
+`role`：
+
+```text
+user
+assistant
+system
+tool
+event
+```
+
+`message_type`：
+
+```text
+plain
+thinking
+tool_call
+tool_result
+run_card
+artifact_card
+source_warning
+goal_event
+error
+```
+
+Messages 是 UI timeline 的 durable history。大 artifacts 不塞进 message content；message 只保存摘要和 artifact/run 引用。
+
+### research_goals
+
+```text
+id
+session_id
+status
+objective
+ui_summary
+risk_tier
+token_budget
+tokens_used
+turn_budget
+turns_used
+time_budget_seconds
+time_used_seconds
+created_at
+updated_at
+completed_at
+recap
+```
+
+V1 每个 session 同时最多一个 non-terminal goal。创建新 goal 时，server 必须把旧 active goal 标记为 `superseded`，避免 agent 往过期 goal 写 evidence。
+
+`status`：
+
+```text
+active
+paused
+waiting_user
+needs_refresh
+insufficient_evidence
+blocked
+budget_limited
+complete
+cancelled
+superseded
+```
+
+### goal_criteria
+
+```text
+id
+goal_id
+session_id
+text
+required
+status
+freshness_requirement
+protocol_step
+created_at
+updated_at
+```
+
+`status`：
+
+```text
+pending
+covered
+waived
+failed
+```
+
+### goal_evidence
+
+```text
+id
+goal_id
+session_id
+criterion_id
+run_id
+observation_id
+artifact_id
+source_name
+source_type
+source_uri
+text
+symbol_universe_json
+benchmark_json
+timeframe
+method
+artifact_path
+artifact_hash
+data_as_of
+freshness_status
+verification_status
+confidence
+caveat
+created_at
+```
+
+Goal evidence 是“为什么这个长期研究目标可以继续/完成”的 ledger。Agent 在完成工具支持的研究步骤后必须写 evidence，并尽量关联 `criterion_id`、`run_id`、`observation_id` 或 `artifact_id`。
+
+### session_events
+
+```text
+id
+session_id
+event_type
+severity
+message
+payload_json
+created_at
+```
+
+用于 SSE replay、Research Desk connection recovery 和跨页面同步。`session_events` 记录 session 级事件，`run_events` 记录 run 级事件；二者都必须是追加式日志。
 
 ### artifacts
 
@@ -683,6 +884,107 @@ Artifact submission alone does not change terminal state. It may be accepted whi
 
 ## API 设计
 
+### Sessions and messages
+
+```text
+POST   /api/sessions
+GET    /api/sessions
+GET    /api/sessions/{session_id}
+PATCH  /api/sessions/{session_id}
+DELETE /api/sessions/{session_id}
+POST   /api/sessions/{session_id}/messages
+GET    /api/sessions/{session_id}/messages
+POST   /api/sessions/{session_id}/cancel
+```
+
+创建 session 示例：
+
+```json
+{
+  "title": "NVDA post-earnings research"
+}
+```
+
+发送 message 示例：
+
+```json
+{
+  "content": "Analyze NVDA after earnings, focus on data center margin and China risk.",
+  "context": {
+    "ticker": "NVDA",
+    "workflow_type": "agent_workflow",
+    "skill_name": "stock-analyzer"
+  }
+}
+```
+
+Server 必须把用户 message 先写入 `messages`，再创建 run 或 agent handoff。若下游失败，timeline 仍能显示用户请求和失败事件。
+
+### Research goals
+
+```text
+POST  /api/sessions/{session_id}/goal
+GET   /api/sessions/{session_id}/goal
+PATCH /api/sessions/{session_id}/goal
+POST  /api/sessions/{session_id}/goal/evidence
+PATCH /api/sessions/{session_id}/goal/status
+```
+
+创建 goal 示例：
+
+```json
+{
+  "objective": "Decide whether NVDA remains overweight for the next quarter.",
+  "criteria": [
+    "Collect fresh price and benchmark evidence",
+    "Review earnings and margin drivers",
+    "Compare thesis risks against current valuation",
+    "Produce a decision and review date"
+  ],
+  "risk_tier": "market_specific_short_term",
+  "turn_budget": 6
+}
+```
+
+`GET /goal` 返回 `goal + criteria + recent evidence + evidence_count`，用于 composer 上方的 Goal chip 和 agent context。所有 mutation 请求必须带 `expected_goal_id`，防止 stale agent 写入被新 goal 覆盖。
+
+### Session event stream
+
+```text
+GET /api/sessions/{session_id}/events
+```
+
+SSE event types：
+
+```text
+message.created
+text_delta
+thinking_done
+tool_call
+tool_result
+run.created
+run.updated
+artifact.created
+source.warning
+goal.created
+goal.evidence
+goal.updated
+agent.claimed
+agent.released
+heartbeat
+done
+error
+```
+
+SSE requirements:
+
+- Every event has stable `id`, `event`, `data`, and `created_at`.
+- Browser clients may pass `Last-Event-ID` as header or query parameter.
+- Server keeps an in-memory replay buffer for active sessions and persists important events to `session_events`.
+- Completed history is loaded from `messages`, `runs`, `artifacts`, and `session_events`; SSE replay is only for active recovery.
+- A heartbeat is emitted at least every 30 seconds while a client is connected.
+- Reconnected clients must dedupe by event id.
+
 ### Health and sources
 
 ```text
@@ -709,6 +1011,8 @@ POST /api/runs/{run_id}/cancel
 ```json
 {
   "skill_name": "stock-analyzer",
+  "session_id": "sess_abc123",
+  "goal_id": "goal_def456",
   "ticker": "NVDA",
   "market": "US",
   "intent": "full_analysis",
@@ -735,6 +1039,8 @@ POST /api/runs/{run_id}/cancel
 
 For `data_workflow`, `required_submitted_artifacts` is empty because server generates all artifacts. For `agent_workflow`, `required_submitted_artifacts` is `["report", "result", "sources"]`; for decision agent workflows it also includes `decision`.
 
+When a run belongs to a session, `POST /api/runs` must append a `run_card` or `run.created` timeline item so Web can show the in-progress work immediately.
+
 ### Ticker context
 
 ```text
@@ -752,6 +1058,7 @@ GET /api/tickers/{ticker}/lessons
 POST /api/runs/{run_id}/artifacts
 GET  /api/runs/{run_id}/artifacts
 GET  /api/runs/{run_id}/report
+POST /api/uploads
 ```
 
 Artifact submit payload supports metadata plus either inline text/JSON for small artifacts or multipart upload for larger files:
@@ -767,6 +1074,8 @@ Artifact submit payload supports metadata plus either inline text/JSON for small
 ```
 
 Server validates artifact type, schema version, path boundaries, request size, checksum, and required artifact completeness before moving a run to terminal state.
+
+Uploads are separate from run artifacts. Upload response returns a safe handle under analysis root; later messages or runs may reference that handle. Executable files, archives, path traversal, and oversized files are rejected.
 
 ### Reviews and lessons
 
@@ -792,37 +1101,96 @@ POST  /api/lessons
 - table-first，避免嵌套卡片。
 - 不使用 hero、装饰 orb、紫蓝渐变、beige/cream 主色。
 
-页面：
+Information architecture:
 
-1. Dashboard
+1. Research Desk
+   - 作为 Web 第一屏。
+   - 左侧 app shell：nav、Sessions、Recent Runs，可 collapse。
+   - Session list 支持 create、rename、archive/delete，active session 高亮。
+   - 中央 timeline：user message、assistant answer、thinking timeline、tool progress、run card、artifact card、source warning、goal event。
+   - 底部 composer：多行输入、Enter 发送、Shift+Enter 换行、Stop 当前 run。
+   - Composer `+` menu：Upload document/data、New Research Goal、Analyze、Debate、Review、Agent Workflow。
+   - Composer 上方 context chips：active ticker、goal progress、attachment、selected workflow、current owner。
+   - 空 session 显示示例 prompt grid，但不做营销 hero。
+   - Streaming 状态必须展示 heartbeat/tool progress；90 秒无事件时提示 timeout 并允许重试。
+
+2. Dashboard
    - 最近 runs。
    - Running/Failed/Due Reviews/Source Health 汇总。
    - Due Reviews 和 Source Health 右栏。
    - Run throughput 和 recent lessons。
 
-2. Ticker Page
+3. Ticker Page
    - ticker header。
    - Analyze / Debate / Review 动作。
    - Context/Runs/Decisions/Lessons/Observations tabs。
    - latest successful runs、recent observations、open decision、source freshness、rating history。
 
-3. Run Detail
+4. Run Detail
    - report/result JSON/sources/logs tabs。
    - artifact list。
    - source provenance。
    - errors/warnings。
+   - trust panel：schema version、generated_at、data_sources、warnings、artifact checksums、reproducibility。
+   - 从 timeline 的 run card 点击进入。
 
-4. Data Sources
+5. Data Sources
    - source health table。
    - enabled toggles。
    - selected source detail。
    - source catalog 和 recent checks。
 
-5. Review Queue
+6. Review Queue
    - due/upcoming/reviewed filters。
    - decision table。
    - selected decision detail。
    - current price, benchmark comparison, alpha, lesson editor。
+
+### Research Desk timeline contract
+
+Timeline rows derive from `messages`, `run_events`, `session_events`, and `artifacts`:
+
+```text
+user message -> persisted message
+assistant answer -> persisted message
+thinking/tool_call/tool_result -> compact expandable timeline row
+run created/updated -> run card
+artifact created -> artifact card
+source.warning -> warning row
+goal.created/evidence/updated -> goal event row and Goal chip refresh
+```
+
+The UI should not parse final Markdown to discover runs or artifacts. Server must send structured timeline events and persist durable references.
+
+Run card minimum fields:
+
+```text
+run_id
+status
+skill_name
+ticker
+market
+started_at
+finished_at
+summary
+metrics_json
+artifact_refs[]
+source_warning_count
+```
+
+Tool progress payload:
+
+```text
+tool
+status
+stage
+message
+current
+total
+elapsed_s
+run_id
+source_name
+```
 
 Concept assets:
 
@@ -969,11 +1337,15 @@ tests/fixtures/polymarket_markets.json
 
 ### Runtime and artifact tests
 
+- 创建 session，写 messages，更新 session title/status。
+- 创建 research goal、criteria、goal evidence，并验证 stale `expected_goal_id` 会 409。
 - 创建 fake run。
 - SQLite 写入 run。
+- run 可绑定 session/goal。
 - 写 `report.md/result.json/sources.json/input.json/logs.ndjson`。
 - 验证 `input.json` 和 `logs.ndjson` 由 server 生成，agent workflow 只需提交 `report/result/sources/decision`。
 - observations 入库。
+- session_events 和 run_events 都是 append-only。
 - 状态从 queued -> running -> succeeded_with_warnings。
 - agent workflow 状态从 waiting_for_agent -> running -> waiting_for_artifacts -> succeeded。
 - failed run 保存 error_message 和 source error。
@@ -983,6 +1355,13 @@ tests/fixtures/polymarket_markets.json
 使用 FastAPI test client 验证：
 
 ```text
+POST /api/sessions
+POST /api/sessions/{id}/messages
+GET /api/sessions/{id}/messages
+POST /api/sessions/{id}/goal
+POST /api/sessions/{id}/goal/evidence
+PATCH /api/sessions/{id}/goal/status
+GET /api/sessions/{id}/events
 POST /api/runs
 GET /api/runs/{id}
 GET /api/tickers/NVDA/context
@@ -993,11 +1372,17 @@ POST /api/lessons
 
 重点验证 response schema，而不是只看 HTTP 200。
 
+SSE API tests must verify event id, heartbeat, Last-Event-ID replay for active sessions, and dedupe-safe event shape.
+
 ### Web UI tests
 
+- Research Desk 渲染 session list、timeline、composer、context chips。
+- Research Desk 能创建 session、发送 message、显示 streaming/tool progress、stop 当前 run。
+- Goal chip 能展开 criteria/evidence，并能 continue/edit/cancel goal。
+- `+` menu 能选择 upload、research goal、agent workflow、debate workflow。
 - Dashboard 渲染 recent runs / due reviews / source health。
 - Ticker Page 渲染 context / observations / decisions / lessons。
-- Run Detail 切换 Report / Result JSON / Sources / Logs。
+- Run Detail 切换 Report / Result JSON / Sources / Logs，并展示 trust panel / artifact checksum。
 - Review Queue 选择 decision，编辑 lesson，保存。
 - Data Sources 切换 filters，显示 degraded reason。
 - 桌面和移动宽度不能溢出，按钮和表格文字不能重叠。
@@ -1027,6 +1412,9 @@ scripts/check_sources.py
 - V1 将 `trading-debate` 视为 `agent_workflow`，不实现 in-process debate worker。
 - Markdown fallback 在 V1 只保存，不弱解析为 decisions 或 observations。
 - Web V1 面向 desktop/tablet；窄屏必须不溢出，但不要求专门移动端工作流。
+- Web V1 的默认入口是 Research Desk；Dashboard 是第二入口，不作为空白启动页。
+- V1 必须实现 sessions/messages/goals 的最小闭环，避免 Web 只是 run list 包皮。
+- V1 必须实现 session SSE；没有 SSE 的版本不能称为交互式研究台。
 - V1 使用 `result.json` 表示结构化结果，使用 `sources/*.raw.json` 表示原始数据源响应。
 - V1 必须在 Phase 0 把 `/analysis/` 加入 `.gitignore`，避免运行数据被提交。
 
@@ -1046,8 +1434,9 @@ scripts/check_sources.py
 - Artifact writer。
 - Observation schema。
 - SourceError schema。
+- Session/message/goal/evidence schema。
 - analysis root 配置。
-- `artifacts` 和 `run_events` 表。
+- `artifacts`、`run_events` 和 `session_events` 表。
 - Local session token、Origin/CSRF 检查、artifact path boundary check。
 
 ### Phase 2: Adapters
@@ -1064,12 +1453,16 @@ scripts/check_sources.py
 - ticker context API。
 - source health API。
 - reviews/lessons API。
+- sessions/messages/goals API。
+- session SSE event stream。
 - agent_workflow handoff API 和 terminal-state validation。
 
 ### Phase 4: Web UI
 
 - React + Vite app。
 - App shell。
+- Research Desk。
+- SSE client with reconnect/dedupe/heartbeat handling。
 - Dashboard。
 - Ticker Page。
 - Run Detail。
@@ -1091,9 +1484,14 @@ scripts/check_sources.py
 ## 验收标准
 
 - 能启动本地 server。
+- 能创建 session、发送 message、刷新后仍能看到 session timeline。
+- 能创建 research goal、追加 evidence、展示 criteria/evidence progress。
 - 能创建 run，并写 SQLite 与 artifacts。
+- Web 发起的 run 能绑定 session/goal。
 - 能从至少一个 live 或 fixture source 生成 Observation。
 - 能通过 API 查询 ticker context。
+- Research Desk 能展示 session list、timeline、context chips、tool progress 和 run card。
+- SSE 能推送 run/tool/goal/artifact 事件；断线重连能通过 Last-Event-ID 恢复 active session。
 - Web Dashboard 能展示 runs、source health、due reviews。
 - Ticker Page 能展示 context、observations、open decisions、lessons、source freshness，并能触发 Analyze/Debate/Review 动作。
 - Run Detail 能展示 Markdown report 和 sources provenance。
