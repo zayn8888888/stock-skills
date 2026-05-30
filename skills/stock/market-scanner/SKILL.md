@@ -5,61 +5,6 @@ description: 市场热点板块扫描 + 产业链外推器。A股用东方财富
 
 # 市场热点扫描
 
-## Data Tools（可用工具清单）
-
-以下 capability tools 替代原来的 Python 脚本调用。所有工具自动处理连接，无需手动配置 OpenD 或安装依赖。
-
-### 个股行情与深度
-
-| 工具 | 用途 | 参数 |
-|------|------|------|
-| `get_quote_snapshot` | 实时行情快照（价格/涨幅/成交额/市值/PE/PB 等） | `{ ticker, market }` |
-| `get_quote_kline` | 历史 K 线（日/周/月） | `{ ticker, market, params: { num: 30 } }` — num 控制返回条数 |
-| `get_quote_depth` | 订单簿深度（买五卖五） | `{ ticker, market }` |
-| `get_capital_flow` | 历史资金流（最近 36 天） | `{ ticker, market }` — 美股蓝筹频繁返回 0，见 fallback 规则 |
-| `get_valuation_detail` | 估值详情（PE/PB 分位等） | `{ ticker, market }` |
-| `get_financial_statements` | 财务报表 | `{ ticker, market, params: { num: 8 } }` — num 控制返回期数 |
-| `get_shareholders_overview` | 股东概览 | `{ ticker, market }` |
-| `get_corporate_dividends` | 分红派息记录 | `{ ticker, market }` |
-| `get_company_info` | 基本信息（含 pe / 52 周高低 / 换手率） | `{ ticker, market }` — PE 首选此接口 |
-
-### 板块与板块成分股
-
-| 工具 | 用途 | 参数 |
-|------|------|------|
-| `get_plate_list` | 获取板块列表（INDUSTRY / CONCEPT） | `{ market, params: { plateSetType: "CONCEPT" } }` |
-| `get_plate_stocks` | 获取板块成分股 | `{ market, params: { plateCode: "HK.LIST1013" } }` |
-
-### 期权与盘口
-
-| 工具 | 用途 | 参数 |
-|------|------|------|
-| `get_options_chain` | 期权链 | `{ ticker, market }` |
-
-### 参数格式说明
-
-- **ticker**: 纯股票代码，如 `"NVDA"`, `"00700"`, `"600519"`
-- **market**: 市场标识，如 `"US"`, `"HK"`, `"SH"`, `"SZ"`
-- **params**: 可选的额外参数对象
-
-不再使用 `"US.NVDA"` 格式——ticker 和 market 是独立参数。
-
-### Proto 字段对照表（替代原 Futu SDK 字段名）
-
-| 原 Futu SDK 字段 | Proto 字段 | 含义 |
-|-----------------|-----------|------|
-| `last_price` | `curPrice` | 最新价 |
-| `open_price` | `openPrice` | 开盘价 |
-| `high_price` | `highPrice` | 最高价 |
-| `low_price` | `lowPrice` | 最低价 |
-| `prev_close_price` | `lastClosePrice` | 昨收价 |
-| `change_rate` | `changeRate` | 涨跌幅 |
-| `turnover_rate` | `turnoverRate` | 换手率 |
-| `total_market_val` | `marketCap` | 总市值 |
-| `pe_ttm_ratio` | `pe` | 市盈率（TTM） |
-| `pb_ratio` | `pb` | 市净率 |
-| `update_time` | `updateTime` | 更新时间 |
-
 ## 核心原则
 
 1. **发现与验证双通道**：热点来源分两路——① 富途 capability tools（涨幅 / 资金）② Tavily 新闻/社交。**两路都要主动发现**，不能只让新闻做"已上榜板块的验证"，否则会漏掉还在媒体铺垫阶段的跨行业主题（AI 产业链 / HBM / 存储 / 核聚变等）

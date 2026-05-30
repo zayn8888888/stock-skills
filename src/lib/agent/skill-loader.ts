@@ -116,9 +116,36 @@ function parseScalar(value: string): unknown {
 // ──────────────────────── path helpers ───────────────────────────
 
 const AGENTS_ROOT = resolve(process.cwd(), "skills", "agents");
+const SKILLS_ROOT = resolve(process.cwd(), "skills");
 
 function agentDir(name: string): string {
   return resolve(AGENTS_ROOT, name);
+}
+
+// ── Load referenced skill prompts ───────────────────────────────
+
+/**
+ * Load all SKILL.md files referenced by the agent's `skills` array.
+ * Each skill path is relative to the project root (e.g. "skills/stock/stock-analyzer").
+ * Returns the concatenated content.
+ */
+function loadSkillPrompts(skillPaths: string[]): string {
+  const parts: string[] = [];
+  for (const skillPath of skillPaths) {
+    const skillDir = resolve(process.cwd(), skillPath);
+    const skillFile = resolve(skillDir, "SKILL.md");
+    if (existsSync(skillFile)) {
+      parts.push(readFileSync(skillFile, "utf-8"));
+    }
+    // Also load reference files
+    const refsDir = resolve(skillDir, "references");
+    if (existsSync(refsDir)) {
+      for (const ref of readdirSync(refsDir).filter((f) => f.endsWith(".md"))) {
+        parts.push(readFileSync(resolve(refsDir, ref), "utf-8"));
+      }
+    }
+  }
+  return parts.join("\n\n---\n\n");
 }
 
 // ──────────────────────── cache ──────────────────────────────────
@@ -166,15 +193,21 @@ export function loadAgent(name: string): LoadedAgent {
   const contract = JSON.parse(readFileSync(contractPath, "utf-8")) as Record<string, unknown>;
 
   // ── assemble ──
+  const skills = (config.skills as string[]) ?? [];
+  const skillPrompts = loadSkillPrompts(skills);
+  const fullPrompt = skillPrompts
+    ? `${prompt}\n\n---\n\n# Referenced Skill Knowledge\n\n${skillPrompts}`
+    : prompt;
+
   const agent: LoadedAgent = {
     name: (config.name as string) ?? name,
     displayName: (config.display_name as string) ?? name,
     workflowType: (config.workflow_type as string) ?? "unknown",
-    skills: (config.skills as string[]) ?? [],
+    skills,
     requiredArtifacts: (config.required_artifacts as string[]) ?? [],
     optionalArtifacts: (config.optional_artifacts as string[]) ?? [],
     dataSources: (config.data_sources as string[]) ?? [],
-    prompt,
+    prompt: fullPrompt,
     contract,
   };
 

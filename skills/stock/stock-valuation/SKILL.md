@@ -9,43 +9,6 @@ description: 股票定量估值计算器。接受股票名称或代码，用三�
 
 把估值"黑盒"变成"玻璃盒"——每一个数字从哪里来、为什么这么算、假设是否合理，全部透明呈现。
 
-## 数据工具
-
-所有行情与财务数据通过以下 capability 工具获取（工具自动处理连接与鉴权，无需手动配置 OpenD）：
-
-| 工具 | 用途 | 参数 | 示例 |
-|------|------|------|------|
-| `get_quote_snapshot` | 实时行情快照（价格、PE、市值等） | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
-| `get_quote_kline` | K 线数据 | `{ ticker, market, params: { num } }` | `{ ticker: "00700", market: "HK", params: { num: 30 } }` |
-| `get_capital_flow` | 资金流向 | `{ ticker, market }` | `{ ticker: "600519", market: "SH" }` |
-| `get_valuation_detail` | 估值详情（PE 百分位、前瞻 PE 等） | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
-| `get_financial_statements` | 财务报表（EPS、净利润等） | `{ ticker, market, params: { num } }` | `{ ticker: "BABA", market: "US", params: { num: 8 } }` |
-| `get_shareholders_overview` | 股东概况 | `{ ticker, market }` | `{ ticker: "PDD", market: "US" }` |
-| `get_corporate_dividends` | 分红派息记录 | `{ ticker, market }` | `{ ticker: "00700", market: "HK" }` |
-| `get_options_chain` | 期权链 | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
-| `get_plate_list` | 板块列表 | `{ market, params: { plateSetType } }` | `{ market: "HK", params: { plateSetType: 1 } }` |
-| `get_plate_stocks` | 板块成分股 | `{ market, params: { plateCode } }` | `{ market: "SH", params: { plateCode: "BK0001" } }` |
-| `get_quote_depth` | 盘口深度 | `{ ticker, market }` | `{ ticker: "00700", market: "HK" }` |
-| `get_company_info` | 公司基本信息（行业、sector 等） | `{ ticker, market }` | `{ ticker: "AAPL", market: "US" }` |
-
-**市场代码**：`US` = 美股，`HK` = 港股，`SH` = 沪市，`SZ` = 深市
-
-**行情字段对照**（proto 字段名）：
-
-| 含义 | proto 字段名 |
-|------|-------------|
-| 最新价 | `curPrice` |
-| 开盘价 | `openPrice` |
-| 最高价 | `highPrice` |
-| 最低价 | `lowPrice` |
-| 昨收价 | `lastClosePrice` |
-| 涨跌幅 | `changeRate` |
-| 换手率 | `turnoverRate` |
-| 总市值 | `marketCap` |
-| 市盈率(TTM) | `pe` |
-| 市净率 | `pb` |
-| 更新时间 | `updateTime` |
-
 ## 参数说明
 
 用户输入的股票代码需要拆分为 `ticker` 和 `market` 两个参数：

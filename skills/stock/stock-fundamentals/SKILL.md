@@ -18,29 +18,6 @@ description: 自下而上基本面研究助手。对单只股票进行商业模�
 Read references/four-steps.md  # 四步分析框架完整细节（指标定义、判断标准、会计陷阱）
 ```
 
-## 数据工具
-
-所有行情与财务数据通过以下 capability tools 获取。调用时使用 `ticker` + `market` 分离参数（如 `ticker: "NVDA", market: "US"`）。
-
-| 工具 | 用途 | 必需参数 | 可选参数 |
-|------|------|---------|---------|
-| `get_quote_snapshot` | 实时行情快照（最新价、涨跌幅、成交量等） | `ticker`, `market` | — |
-| `get_company_info` | 公司基本信息（名称、行业、简介等） | `ticker`, `market` | — |
-| `get_financial_statements` | 财务三大表（利润表、资产负债表、现金流量表） | `ticker`, `market` | `params.num`（期数，默认 8） |
-| `get_valuation_detail` | 估值分位数（历史百分位、前瞻 PE） | `ticker`, `market` | — |
-| `get_shareholders_overview` | 股东持股概览（仅港美股） | `ticker`, `market` | — |
-| `get_corporate_dividends` | 分红历史 | `ticker`, `market` | — |
-| `get_quote_kline` | K 线数据 | `ticker`, `market` | `params.num`（根数）、`params.ktype`（周期） |
-| `get_capital_flow` | 资金流向 | `ticker`, `market` | — |
-| `get_quote_depth` | 盘口深度 / 订单簿 | `ticker`, `market` | — |
-| `get_options_chain` | 期权链 | `ticker`, `market` | — |
-| `get_plate_list` | 板块列表 | `market` | `params.plateSetType` |
-| `get_plate_stocks` | 板块成分股 | `market` | `params.plateCode` |
-
-**参数说明**：
-- `ticker`：股票代码，不含市场前缀。美股如 `"NVDA"`，港股如 `"00700"`，A 股如 `"600519"` 或 `"000001"`
-- `market`：市场标识，`"US"` / `"HK"` / `"SH"` / `"SZ"`
-
 ## 数据获取流程
 
 ### Step 0：识别 ticker 与 market
@@ -118,24 +95,6 @@ JSON 字段提取要点：
 | 盈利预警 / 上调 | Step 4 估值（更新正常化 FCF） |
 
 > `futu-stock-digest` 为可选增强 skill。若不可用，使用 Tavily MCP 搜索近 7 天新闻作为替代。
-
-## 字段名对照
-
-行情快照返回的 proto 字段名：
-
-| 用途 | proto 字段名 |
-|------|-------------|
-| 最新价 | `curPrice` |
-| 开盘价 | `openPrice` |
-| 最高价 | `highPrice` |
-| 最低价 | `lowPrice` |
-| 昨收价 | `lastClosePrice` |
-| 涨跌幅 | `changeRate` |
-| 换手率 | `turnoverRate` |
-| 总市值 | `marketCap` |
-| 市盈率 (TTM) | `pe` |
-| 市净率 | `pb` |
-| 更新时间 | `updateTime` |
 
 ## 四步分析框架
 

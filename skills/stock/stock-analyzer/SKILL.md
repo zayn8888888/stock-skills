@@ -13,30 +13,6 @@ description: 个股多维分析助手。基于内置数据源能力（实时行�
 4. **不出买卖指令**：只提供分析框架和数据，最终决策权交给用户
 5. **标注数据时效**：行情数据标清时点，新闻/公告标清日期
 
-## 数据工具一览
-
-所有数据通过内置工具获取，无需调用外部脚本。
-
-| 工具 | 用途 | 关键参数 |
-|------|------|---------|
-| `get_quote_snapshot` | 实时报价（价格/成交量/PE/PB/市值） | `ticker`, `market` |
-| `get_quote_kline` | 实时K线 | `ticker`, `market`, `params.num` |
-| `get_quote_history_kline` | 历史K线（按日期范围） | `ticker`, `market`, `params.beginTime/endTime` |
-| `get_quote_depth` | 盘口深度 | `ticker`, `market`, `params.levels` |
-| `get_technical_indicators` | 技术指标（SMA/RSI/MACD/BOLL） | `ticker`, `market` |
-| `get_capital_flow` | 资金流向 | `ticker`, `market`, `params.periodType` |
-| `get_capital_distribution` | 资金分布 | `ticker`, `market` |
-| `get_company_info` | 公司信息 + 估值（pe/pb/marketCap/EPS/股息率） | `ticker`, `market` |
-| `get_valuation_detail` | 估值详情（PE趋势/百分位） | `ticker`, `market` |
-| `get_financial_statements` | 财务报表 | `ticker`, `market`, `params.num` |
-| `get_shareholders_overview` | 股东结构 | `ticker`, `market` |
-| `get_corporate_dividends` | 股息信息 | `ticker`, `market` |
-| `get_options_chain` | 期权链 | `ticker`, `market` |
-| `get_plate_list` | 板块列表 | `market`, `params.plateSetType` |
-| `get_plate_stocks` | 板块成分股 | `market`, `params.plateCode` |
-| `get_news_search` | 新闻搜索 | `ticker`, `params.maxResults` |
-| `get_sentiment_feed` | 市场情绪 | `ticker` |
-
 ## 执行契约
 
 **硬约束，不满足不出报告**：
