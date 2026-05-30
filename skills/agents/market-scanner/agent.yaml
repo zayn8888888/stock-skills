@@ -1,0 +1,20 @@
+name: market-scanner
+display_name: "市场热点扫描"
+workflow_type: data_workflow
+skills:
+  - skills/stock/market-scanner
+  - skills/core/event-calendar
+  - skills/core/hyperliquid-perps
+  - skills/futu/futuapi
+required_artifacts:
+  - report.md
+  - result.json
+  - sources.json
+optional_artifacts:
+  - sector-kline.json
+data_sources:
+  - eastmoney-api
+  - futu-opend
+  - tavily
+  - hyperliquid
+  - event-calendar

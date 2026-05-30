@@ -1,0 +1,24 @@
+name: stock-analyzer
+display_name: "个股多维分析"
+workflow_type: data_workflow
+skills:
+  - skills/stock/stock-analyzer
+  - skills/futu/futu-technical-anomaly
+  - skills/futu/futu-capital-anomaly
+  - skills/futu/futu-news-search
+  - skills/futu/futu-comment-sentiment
+  - skills/futu/futu-stock-digest
+  - skills/futu/futu-derivatives-anomaly
+  - skills/core/hyperliquid-perps
+  - skills/core/event-calendar
+required_artifacts:
+  - report.md
+  - result.json
+  - sources.json
+optional_artifacts:
+  - kline-data.json
+data_sources:
+  - futu-opend
+  - tavily
+  - hyperliquid
+  - event-calendar

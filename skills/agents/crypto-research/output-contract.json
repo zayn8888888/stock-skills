@@ -1,0 +1,262 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CryptoResearchResult",
+  "description": "加密资产研究 result.json 输出契约",
+  "type": "object",
+  "required": [
+    "mode",
+    "research_timestamp",
+    "data_completeness",
+    "sources"
+  ],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["scan", "analyze", "scan_and_analyze"],
+      "description": "执行模式"
+    },
+    "research_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "global_market": {
+      "type": "object",
+      "description": "宏观锚定数据",
+      "properties": {
+        "btc_dominance_pct": { "type": "number" },
+        "total_market_cap_usd": { "type": "number" },
+        "btc_trend_30d": { "type": "string" },
+        "alt_season_signal": { "type": "string", "enum": ["btc_dominant", "transitioning", "alt_season"] },
+        "macro_events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "event": { "type": "string" },
+              "date": { "type": "string" },
+              "impact": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "sector_scan": {
+      "type": "object",
+      "description": "扫描模式输出（crypto-scanner）",
+      "properties": {
+        "top_sectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "category_id": { "type": "string" },
+              "name": { "type": "string" },
+              "market_cap_change_24h_pct": { "type": "number" },
+              "signal_intersection": {
+                "type": "object",
+                "properties": {
+                  "price_signal": { "type": "boolean" },
+                  "trending_signal": { "type": "boolean" },
+                  "news_signal": { "type": "boolean" },
+                  "hit_count": { "type": "integer" }
+                }
+              },
+              "source_credibility": { "type": "string", "enum": ["tier1", "tier2", "tier3", "warning"] }
+            }
+          }
+        },
+        "cross_market_divergence": {
+          "type": "object",
+          "properties": {
+            "pattern": { "type": "string" },
+            "implication": { "type": "string" }
+          }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "description": "候选币种清单",
+      "items": {
+        "type": "object",
+        "properties": {
+          "coingecko_id": { "type": "string" },
+          "symbol": { "type": "string" },
+          "name": { "type": "string" },
+          "from_sector": { "type": "string" },
+          "market_cap_usd": { "type": "number" },
+          "volume_24h_usd": { "type": "number" },
+          "total_score": { "type": "number" },
+          "score_breakdown": {
+            "type": "object",
+            "properties": {
+              "momentum_7d": { "type": "integer" },
+              "volume_anomaly": { "type": "integer" },
+              "crowding": { "type": "integer" },
+              "sector_relative": { "type": "integer" },
+              "trending_bonus": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "description": "分析模式输出（crypto-analyzer）",
+      "properties": {
+        "coingecko_id": { "type": "string" },
+        "symbol": { "type": "string" },
+        "name": { "type": "string" },
+        "dimensions": {
+          "type": "object",
+          "properties": {
+            "quote": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+                "current_price_usd": { "type": "number" },
+                "market_cap_usd": { "type": "number" },
+                "fdv_usd": { "type": "number" },
+                "volume_24h_usd": { "type": "number" },
+                "ath_usd": { "type": "number" },
+                "ath_distance_pct": { "type": "number" },
+                "change_24h_pct": { "type": "number" },
+                "change_7d_pct": { "type": "number" },
+                "change_30d_pct": { "type": "number" },
+                "market_cap_rank": { "type": "integer" },
+                "circulating_supply": { "type": "number" },
+                "total_supply": { "type": "number" }
+              }
+            },
+            "technical": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+                "rsi_14": { "type": "number" },
+                "ma_7d": { "type": "number" },
+                "ma_30d": { "type": "number" },
+                "cross_signal": { "type": "string", "enum": ["golden", "death"] },
+                "support_7d": { "type": "number" },
+                "resistance_7d": { "type": "number" },
+                "trend_90d": { "type": "string", "enum": ["uptrend", "downtrend", "range"] }
+              }
+            },
+            "onchain": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok", "error", "skipped", "not_available"] },
+                "hyperliquid_available": { "type": "boolean" },
+                "funding_apr_now": { "type": ["number", "null"] },
+                "open_interest_usd": { "type": ["number", "null"] },
+                "premium_vs_spot_pct": { "type": ["number", "null"] },
+                "volume_24h_usd": { "type": ["number", "null"] },
+                "crowding_level": { "type": "string", "enum": ["neutral", "warm", "hot", "extreme"] }
+              }
+            },
+            "narrative": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+                "categories": { "type": "array", "items": { "type": "string" } },
+                "narrative_strength": { "type": "string", "enum": ["emerging", "mature", "declining"] },
+                "sector_position": { "type": "string", "enum": ["leader", "follower", "differentiated"] }
+              }
+            },
+            "peers": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+                "category_id": { "type": "string" },
+                "rank_in_category": { "type": "integer" },
+                "excess_return_7d_pp": { "type": "number" },
+                "excess_return_30d_pp": { "type": "number" },
+                "peer_list": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "symbol": { "type": "string" },
+                      "name": { "type": "string" },
+                      "market_cap_rank": { "type": "integer" },
+                      "change_7d_pct": { "type": "number" },
+                      "change_30d_pct": { "type": "number" }
+                    }
+                  }
+                }
+              }
+            },
+            "news": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+                "overall_sentiment": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+                "key_events": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": { "type": "string" },
+                      "date": { "type": "string" },
+                      "source": { "type": "string" },
+                      "url": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            },
+            "calendar": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+                "macro_events": { "type": "array", "items": { "type": "object" } },
+                "token_events": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "event": { "type": "string" },
+                      "date": { "type": "string" },
+                      "type": { "type": "string" },
+                      "source": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "verdict": {
+          "type": "object",
+          "properties": {
+            "bulls": { "type": "array", "items": { "type": "string" } },
+            "bears": { "type": "array", "items": { "type": "string" } },
+            "risks": { "type": "array", "items": { "type": "string" } },
+            "key_signals": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "data_completeness": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["ok", "partial", "error", "skipped", "not_available"]
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

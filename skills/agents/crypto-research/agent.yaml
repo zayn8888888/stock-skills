@@ -1,0 +1,19 @@
+name: crypto-research
+display_name: "加密资产研究"
+workflow_type: data_workflow
+skills:
+  - skills/crypto/crypto-analyzer
+  - skills/crypto/crypto-scanner
+  - skills/core/event-calendar
+  - skills/core/hyperliquid-perps
+required_artifacts:
+  - report.md
+  - result.json
+  - sources.json
+optional_artifacts:
+  - sector-scan.json
+data_sources:
+  - coingecko
+  - hyperliquid
+  - tavily
+  - event-calendar

@@ -1,0 +1,22 @@
+name: portfolio-review
+display_name: "组合回顾分析"
+workflow_type: agent_workflow
+skills:
+  - skills/core/trading-debate
+  - skills/stock/stock-analyzer
+  - skills/stock/stock-fundamentals
+  - skills/stock/stock-valuation
+  - skills/core/event-calendar
+  - skills/core/hyperliquid-perps
+  - skills/futu/futuapi
+optional_artifacts:
+  - decision.json
+required_artifacts:
+  - report.md
+  - result.json
+  - sources.json
+data_sources:
+  - futu-opend
+  - tavily
+  - hyperliquid
+  - event-calendar

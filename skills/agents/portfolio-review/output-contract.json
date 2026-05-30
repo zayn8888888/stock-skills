@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PortfolioReviewResult",
+  "description": "组合回顾分析 result.json 输出契约",
+  "type": "object",
+  "required": [
+    "review_timestamp",
+    "candidates",
+    "single_ticker_decisions",
+    "correlation_matrix",
+    "portfolio_actions",
+    "portfolio_metrics",
+    "review_anchors",
+    "sources"
+  ],
+  "properties": {
+    "review_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "current_portfolio": {
+      "type": "object",
+      "description": "用户当前持仓",
+      "properties": {
+        "positions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ticker": { "type": "string" },
+              "name": { "type": "string" },
+              "position_pct": { "type": "number" },
+              "market": { "type": "string" }
+            }
+          }
+        },
+        "cash_pct": { "type": "number" }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "description": "候选标的列表",
+      "items": {
+        "type": "string"
+      }
+    },
+    "single_ticker_decisions": {
+      "type": "array",
+      "description": "阶段 P1 各标的独立七阶段结果",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ticker": { "type": "string" },
+          "data_timestamp": { "type": "string" },
+          "pm_rating": { "type": "string", "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"] },
+          "pm_summary": { "type": "string" },
+          "pm_investment_thesis": { "type": "string" },
+          "pm_price_target": { "type": ["number", "null"] },
+          "trader_entry_price": { "type": "number" },
+          "trader_stop_loss": { "type": "number" },
+          "trader_position_pct": { "type": "number" },
+          "master_signals": {
+            "type": "object",
+            "properties": {
+              "bullish": { "type": "integer" },
+              "bearish": { "type": "integer" },
+              "neutral": { "type": "integer" },
+              "skipped": { "type": "integer" }
+            }
+          },
+          "stages_completed": { "type": "array", "items": { "type": "string" } },
+          "status": { "type": "string", "enum": ["completed", "partial", "failed"] },
+          "error": { "type": "string" }
+        }
+      }
+    },
+    "correlation_matrix": {
+      "type": "object",
+      "description": "阶段 P2 相关性矩阵（60 日）",
+      "properties": {
+        "data_days": { "type": "integer" },
+        "tickers": { "type": "array", "items": { "type": "string" } },
+        "matrix": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "number" }
+          }
+        },
+        "high_correlation_pairs": {
+          "type": "array",
+          "description": "相关性 > 0.7 的标的对",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ticker_a": { "type": "string" },
+              "ticker_b": { "type": "string" },
+              "correlation": { "type": "number" },
+              "action_taken": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "portfolio_actions": {
+      "type": "array",
+      "description": "阶段 P3 组合层 PM 输出",
+      "items": {
+        "type": "object",
+        "required": ["ticker", "action", "reasoning"],
+        "properties": {
+          "ticker": { "type": "string" },
+          "action": { "type": "string", "enum": ["buy", "trim", "hold", "sell", "new_position"] },
+          "from_position_pct": { "type": "number" },
+          "to_position_pct": { "type": "number" },
+          "reasoning": { "type": "string" }
+        }
+      }
+    },
+    "portfolio_metrics": {
+      "type": "object",
+      "description": "组合层关键指标",
+      "properties": {
+        "total_turnover_pct": { "type": "number", "description": "总换手率" },
+        "post_trade_cash_pct": { "type": "number" },
+        "max_single_position_pct": { "type": "number" },
+        "max_sector_pct": { "type": "number" },
+        "sector_concentration": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "sector": { "type": "string" },
+              "total_pct": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    "rationale": {
+      "type": "string",
+      "description": "组合层逻辑总结"
+    },
+    "risk_warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "review_anchors": {
+      "type": "array",
+      "description": "阶段 P4 组合层复盘锚点",
+      "items": {
+        "type": "object",
+        "properties": {
+          "metric": { "type": "string" },
+          "threshold": { "type": "string" },
+          "verify_by_date": { "type": "string", "format": "date" },
+          "trigger_if_breached": { "type": "string" }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

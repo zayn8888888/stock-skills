@@ -1,0 +1,176 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MarketScannerResult",
+  "description": "市场热点扫描 result.json 输出契约",
+  "type": "object",
+  "required": [
+    "scan_timestamp",
+    "market_state",
+    "sectors",
+    "candidates",
+    "data_completeness",
+    "sources"
+  ],
+  "properties": {
+    "scan_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "扫描执行时点"
+    },
+    "market_state": {
+      "type": "object",
+      "description": "各市场大盘状态门控结果",
+      "properties": {
+        "CN": { "type": "string", "enum": ["uptrend", "consolidation", "downtrend"] },
+        "HK": { "type": "string", "enum": ["uptrend", "consolidation", "downtrend"] },
+        "US": { "type": "string", "enum": ["uptrend", "consolidation", "downtrend"] }
+      }
+    },
+    "early_stop": {
+      "type": "object",
+      "description": "早停判断结果",
+      "properties": {
+        "triggered": { "type": "boolean" },
+        "branch": { "type": "string", "enum": ["full", "single_sector", "stop_chase", "defense_pool"] },
+        "reason": { "type": "string" }
+      }
+    },
+    "topic_discovery": {
+      "type": "array",
+      "description": "L0 主题发现结果",
+      "items": {
+        "type": "object",
+        "properties": {
+          "topic": { "type": "string" },
+          "market": { "type": "string", "enum": ["CN", "HK", "US"] },
+          "source_credibility": { "type": "string", "enum": ["tier1", "tier2", "tier3", "warning"] },
+          "mapped_sectors": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "sectors": {
+      "type": "array",
+      "description": "通过多重信号交集的板块 Top 5",
+      "items": {
+        "type": "object",
+        "required": ["code", "name", "market", "signal_intersection", "rotation_nature"],
+        "properties": {
+          "code": { "type": "string" },
+          "name": { "type": "string" },
+          "market": { "type": "string", "enum": ["CN", "HK", "US"] },
+          "change_5d_pct": { "type": "number" },
+          "median_5d_pct": { "type": "number", "description": "成分股 5 日涨幅中位数" },
+          "divergence_pp": { "type": "number", "description": "指数 vs 中位数背离（pp）" },
+          "signal_intersection": {
+            "type": "object",
+            "properties": {
+              "price_signal": { "type": "boolean" },
+              "capital_signal": { "type": "boolean" },
+              "news_signal": { "type": "boolean" },
+              "hit_count": { "type": "integer" }
+            }
+          },
+          "rotation_nature": {
+            "type": "string",
+            "enum": ["sustained", "sub_rising", "sub_declining", "pulse", "fading"]
+          },
+          "heat_stage": {
+            "type": "string",
+            "enum": ["early", "developing", "overheated"]
+          },
+          "concentration_top1_pct": { "type": "number" },
+          "concentration_warning": { "type": "boolean" },
+          "quality_checks": {
+            "type": "object",
+            "properties": {
+              "persistence": { "type": "string" },
+              "breadth": { "type": "number" },
+              "catalyst_lookback": { "type": "string" },
+              "catalyst_forecast": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "candidates": {
+      "type": "array",
+      "description": "最终候选标的清单",
+      "items": {
+        "type": "object",
+        "required": ["ticker", "name", "market", "from_sector", "total_score"],
+        "properties": {
+          "ticker": { "type": "string" },
+          "name": { "type": "string" },
+          "market": { "type": "string" },
+          "from_sector": { "type": "string" },
+          "total_score": { "type": "number" },
+          "score_breakdown": {
+            "type": "object",
+            "properties": {
+              "momentum_7d": { "type": "integer" },
+              "volume_anomaly": { "type": "integer" },
+              "crowding": { "type": "integer" },
+              "sector_relative": { "type": "integer" },
+              "trending_bonus": { "type": "integer" },
+              "quality_penalty": { "type": "integer" }
+            }
+          }
+        }
+      }
+    },
+    "backup_pool": {
+      "type": "array",
+      "description": "单一信号板块候补池",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sector_name": { "type": "string" },
+          "signal": { "type": "string" },
+          "market": { "type": "string" }
+        }
+      }
+    },
+    "eliminated_sectors": {
+      "type": "array",
+      "description": "被前置门槛淘汰的板块",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sector_name": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "extrapolation": {
+      "type": "array",
+      "description": "L5 产业链外推",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "target_sector": { "type": "string" },
+          "target_tickers": { "type": "array", "items": { "type": "string" } },
+          "rebuttal": { "type": "string" },
+          "status": { "type": "string", "enum": ["already_moving", "starting", "not_yet", "weakening"] },
+          "is_inference": { "type": "boolean" }
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "本期扫描的局限"
+    },
+    "data_completeness": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["ok", "partial", "error", "skipped"]
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

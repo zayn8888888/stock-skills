@@ -1,0 +1,287 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StockAnalyzerResult",
+  "description": "个股多维分析 result.json 输出契约",
+  "type": "object",
+  "required": [
+    "ticker",
+    "company_name",
+    "analysis_mode",
+    "data_timestamp",
+    "dimensions",
+    "verdict",
+    "data_completeness",
+    "sources"
+  ],
+  "properties": {
+    "ticker": {
+      "type": "string",
+      "description": "富途格式代码，如 US.NVDA、HK.01810、SH.600519"
+    },
+    "company_name": {
+      "type": "string",
+      "description": "公司中英文名称"
+    },
+    "analysis_mode": {
+      "type": "string",
+      "enum": ["full", "decision_oriented", "single_point"],
+      "description": "分析路径：full=全景分析, decision_oriented=决策导向, single_point=单点深挖"
+    },
+    "data_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "数据拉取时点（ISO 8601）"
+    },
+    "market_state": {
+      "type": "string",
+      "enum": ["pre_market", "intraday", "post_market", "closed"],
+      "description": "盘前/盘中/盘后/休市"
+    },
+    "dimensions": {
+      "type": "object",
+      "required": ["quote", "technical", "valuation", "capital", "orderbook", "peers", "news", "options", "calendar"],
+      "properties": {
+        "quote": {
+          "type": "object",
+          "description": "维度 1：基础行情",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "current_price": { "type": "number" },
+            "open": { "type": "number" },
+            "high": { "type": "number" },
+            "low": { "type": "number" },
+            "prev_close": { "type": "number" },
+            "change_pct": { "type": "number" },
+            "volume": { "type": "number" },
+            "turnover": { "type": "number" },
+            "amplitude_pct": { "type": "number" },
+            "pre_market": {
+              "type": "object",
+              "properties": {
+                "price": { "type": "number" },
+                "change_pct": { "type": "number" }
+              }
+            },
+            "after_market": {
+              "type": "object",
+              "properties": {
+                "price": { "type": "number" },
+                "change_pct": { "type": "number" }
+              }
+            }
+          }
+        },
+        "technical": {
+          "type": "object",
+          "description": "维度 2：技术走势",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "high_30d": { "type": "number" },
+            "low_30d": { "type": "number" },
+            "relative_position": { "type": "string" },
+            "volume_price_signal": { "type": "string" },
+            "moving_avg_signal": { "type": "string" },
+            "anomaly_detected": { "type": "boolean" },
+            "anomaly_detail": { "type": "string" },
+            "relative_strength": {
+              "type": "object",
+              "properties": {
+                "vs_benchmark_5d": { "type": "number" },
+                "vs_sector_5d": { "type": "number" },
+                "alpha_5d": { "type": "number" },
+                "signal": { "type": "string", "enum": ["stock_driven", "beta_driven", "underperform"] }
+              }
+            },
+            "technical_signals": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "valuation": {
+          "type": "object",
+          "description": "维度 3：估值与基本面",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "pe_ttm": { "type": ["number", "null"] },
+            "pb": { "type": ["number", "null"] },
+            "dividend_yield_pct": { "type": ["number", "null"] },
+            "market_cap": { "type": "number" },
+            "free_float_cap": { "type": "number" },
+            "high_52w": { "type": "number" },
+            "low_52w": { "type": "number" },
+            "turnover_rate_pct": { "type": "number" },
+            "valuation_percentile": { "type": ["number", "null"], "description": "历史百分位 0-1" },
+            "forward_pe": { "type": ["number", "null"] },
+            "analyst_ratings": {
+              "type": "object",
+              "properties": {
+                "buy": { "type": "integer" },
+                "hold": { "type": "integer" },
+                "sell": { "type": "integer" },
+                "consensus_target": { "type": "number" }
+              }
+            }
+          }
+        },
+        "capital": {
+          "type": "object",
+          "description": "维度 4：资金流向",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "net_inflow_1d": { "type": "number" },
+            "net_inflow_5d": { "type": "number" },
+            "large_order_pct": { "type": "number" },
+            "hk_broker_anomaly": { "type": "string" },
+            "hk_short_selling": { "type": "string" },
+            "hyperliquid": {
+              "type": "object",
+              "description": "美股/美元资产链上 funding",
+              "properties": {
+                "available": { "type": "boolean" },
+                "funding_apr_now": { "type": "number" },
+                "funding_apr_24h_avg": { "type": "number" },
+                "open_interest_usd": { "type": "number" },
+                "crowding_level": { "type": "string", "enum": ["neutral", "warm", "hot", "extreme"] }
+              }
+            }
+          }
+        },
+        "orderbook": {
+          "type": "object",
+          "description": "维度 5：盘口与成交",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "bid_depth": { "type": "array", "items": { "type": "object" } },
+            "ask_depth": { "type": "array", "items": { "type": "object" } },
+            "buy_sell_ratio": { "type": "number" },
+            "large_order_concentration": { "type": "string" },
+            "liquidity_warning": { "type": "string" }
+          }
+        },
+        "peers": {
+          "type": "object",
+          "description": "维度 6：同行对比",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "sector": { "type": "string" },
+            "sector_plate_code": { "type": "string" },
+            "peer_comparison": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "ticker": { "type": "string" },
+                  "name": { "type": "string" },
+                  "pe_ttm": { "type": ["number", "null"] },
+                  "pb": { "type": ["number", "null"] },
+                  "dividend_yield_pct": { "type": ["number", "null"] },
+                  "change_pct_today": { "type": "number" }
+                }
+              }
+            }
+          }
+        },
+        "news": {
+          "type": "object",
+          "description": "维度 7：新闻与事件（回看）",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "ai_digest": {
+              "type": "object",
+              "properties": {
+                "direction": { "type": "string", "enum": ["bullish", "bearish", "neutral"] },
+                "summary": { "type": "string" }
+              }
+            },
+            "recent_news": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "date": { "type": "string" },
+                  "source": { "type": "string" },
+                  "url": { "type": "string" },
+                  "sentiment": { "type": "string", "enum": ["positive", "negative", "neutral"] }
+                }
+              }
+            },
+            "corporate_actions": {
+              "type": "object",
+              "properties": {
+                "dividends": { "type": "array", "items": { "type": "object" } },
+                "splits": { "type": "array", "items": { "type": "object" } },
+                "buybacks": { "type": "array", "items": { "type": "object" } }
+              }
+            },
+            "reverse_trace": { "type": "string", "description": "价格异动 >=5% 时的反向追溯结论" }
+          }
+        },
+        "options": {
+          "type": "object",
+          "description": "维度 8：期权链",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped", "not_applicable"] },
+            "skip_reason": { "type": "string" },
+            "put_call_ratio": { "type": "number" },
+            "max_pain": { "type": "number" },
+            "iv_skew": { "type": "string" },
+            "notable_strikes": { "type": "array", "items": { "type": "object" } },
+            "anomaly_signals": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "calendar": {
+          "type": "object",
+          "description": "维度 9：事件日历（前瞻）",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "date": { "type": "string" },
+                  "event": { "type": "string" },
+                  "type": { "type": "string" },
+                  "expected": { "type": "string" },
+                  "source": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "description": "综合研判",
+      "required": ["bulls", "bears", "risks", "key_signals"],
+      "properties": {
+        "bulls": { "type": "array", "items": { "type": "string" } },
+        "bears": { "type": "array", "items": { "type": "string" } },
+        "risks": { "type": "array", "items": { "type": "string" } },
+        "key_signals": { "type": "array", "items": { "type": "string" }, "description": "等待什么信号确认拐点" }
+      }
+    },
+    "data_completeness": {
+      "type": "object",
+      "description": "各维度数据完整性自检",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["ok", "partial", "error", "skipped", "not_applicable"]
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "所有数据来源列表"
+    }
+  }
+}

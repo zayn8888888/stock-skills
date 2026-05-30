@@ -1,0 +1,14 @@
+name: event-calendar
+display_name: "前瞻事件日历"
+workflow_type: data_workflow
+skills:
+  - skills/core/event-calendar
+required_artifacts:
+  - report.md
+  - result.json
+  - sources.json
+optional_artifacts: []
+data_sources:
+  - finnhub
+  - polymarket
+  - tavily

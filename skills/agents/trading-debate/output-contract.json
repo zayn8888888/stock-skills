@@ -1,0 +1,196 @@
+{
+  "$schema": "http://json-schema.org/draft-2020-12/schema#",
+  "title": "TradingDebateResult",
+  "description": "多Agent辩论决策 result.json 输出契约",
+  "type": "object",
+  "required": [
+    "ticker",
+    "data_timestamp",
+    "stages_completed",
+    "shared_report",
+    "debate",
+    "research_plan",
+    "trader_proposal",
+    "risk_debate",
+    "pm_decision",
+    "review_anchors",
+    "sources"
+  ],
+  "properties": {
+    "ticker": {
+      "type": "string",
+      "description": "富途格式代码"
+    },
+    "data_timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "investment_horizon": {
+      "type": "string",
+      "enum": ["short_term", "medium_term", "long_term"],
+      "description": "投资视角"
+    },
+    "stages_completed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["stage0_data", "stage1_masters", "stage2_debate", "stage3_rm", "stage4_trader", "stage5_risk", "stage6_pm", "stage7_review", "stage8_reflection", "p1_p4_portfolio"]
+      }
+    },
+    "required_skills_called": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "shared_report": {
+      "type": "object",
+      "description": "阶段 0 输出的共享数据报告",
+      "properties": {
+        "data_timestamp": { "type": "string" },
+        "data_source": { "type": "string" },
+        "market_report": { "type": "string" },
+        "fundamentals_report": { "type": "string" },
+        "capital_report": { "type": "string" },
+        "peers_report": { "type": "string" },
+        "news_report": { "type": "string" },
+        "derivatives_report": { "type": "string" },
+        "events_report": { "type": "string" },
+        "data_gaps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "master_signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "master_name": { "type": "string" },
+          "signal": { "type": "string", "enum": ["bullish", "bearish", "neutral", "skipped"] },
+          "confidence": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "reasoning": { "type": "string" },
+          "time_horizon": { "type": "string" },
+          "skip_reason": { "type": "string" }
+        }
+      }
+    },
+    "debate": {
+      "type": "object",
+      "description": "阶段 2 Bull/Bear 辩论",
+      "properties": {
+        "rounds_completed": { "type": "integer" },
+        "exchanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "round": { "type": "integer" },
+              "role": { "type": "string", "enum": ["bull", "bear"] },
+              "arguments": { "type": "array", "items": { "type": "string" } },
+              "rebuttals": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "research_plan": {
+      "type": "object",
+      "description": "阶段 3 Research Manager 输出",
+      "properties": {
+        "recommendation": { "type": "string", "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"] },
+        "rationale": { "type": "string" },
+        "strategic_actions": { "type": "string" }
+      }
+    },
+    "trader_proposal": {
+      "type": "object",
+      "description": "阶段 4 Trader 输出",
+      "properties": {
+        "action": { "type": "string", "enum": ["Buy", "Hold", "Sell"] },
+        "reasoning": { "type": "string" },
+        "entry_price": { "type": "number" },
+        "stop_loss": { "type": "number" },
+        "position_sizing": {
+          "type": "object",
+          "properties": {
+            "percentage": { "type": "number" },
+            "calculation": {
+              "type": "object",
+              "properties": {
+                "step1_max_position": { "type": "string" },
+                "step2_volatility_adjusted": { "type": "string" },
+                "final": { "type": "string" }
+              }
+            }
+          }
+        },
+        "fundamental_exit_triggers": { "type": "array", "items": { "type": "string" } },
+        "rating_action_deviation": { "type": "string" }
+      }
+    },
+    "risk_debate": {
+      "type": "object",
+      "description": "阶段 5 Risk 三方辩论",
+      "properties": {
+        "rounds_completed": { "type": "integer" },
+        "exchanges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "round": { "type": "integer" },
+              "role": { "type": "string", "enum": ["aggressive", "conservative", "neutral"] },
+              "arguments": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "earnings_event": {
+          "type": "object",
+          "properties": {
+            "within_5_days": { "type": "boolean" },
+            "iv_implied_move_pct": { "type": "number" },
+            "stop_loss_gap_adequate": { "type": "boolean" }
+          }
+        },
+        "crowding_assessment": {
+          "type": "object",
+          "properties": {
+            "funding_apr_24h_avg": { "type": "number" },
+            "level": { "type": "string", "enum": ["neutral", "warning", "red_line"] },
+            "aggressive_rebuttal": { "type": "string" }
+          }
+        }
+      }
+    },
+    "pm_decision": {
+      "type": "object",
+      "description": "阶段 6 Portfolio Manager 最终决策",
+      "required": ["rating", "executive_summary", "investment_thesis"],
+      "properties": {
+        "rating": { "type": "string", "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"] },
+        "executive_summary": { "type": "string" },
+        "investment_thesis": { "type": "string" },
+        "price_target": { "type": "number" },
+        "parameter_drift": { "type": "string" },
+        "crowding_downgrade": { "type": "string" }
+      }
+    },
+    "review_anchors": {
+      "type": "array",
+      "description": "阶段 7 复盘锚点",
+      "items": {
+        "type": "object",
+        "properties": {
+          "indicator": { "type": "string" },
+          "threshold": { "type": "string" },
+          "verify_by_date": { "type": "string", "format": "date" },
+          "linked_event": { "type": "string" }
+        }
+      }
+    },
+    "disclaimer": {
+      "type": "string"
+    },
+    "sources": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
