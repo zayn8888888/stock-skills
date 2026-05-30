@@ -8,7 +8,7 @@
  * column. This store follows that convention.
  */
 
-import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, type SQL } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { observations } from "@/lib/db/schema";
 import type { Observation } from "@/lib/adapters/base";
