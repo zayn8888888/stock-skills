@@ -1277,4 +1277,118 @@ Phase 6: 6.1
 
 **Critical path:** 0.1 → 0.3 → 0.5 → 1.1 → 1.3 → 3.1 → 3.3 → 4.1 → 4.3 → 4.4 → 4.5
 
-**Total:** 25 tasks, ~6-10 hours agentic execution.
+**Total:** 26 tasks, ~6-10 hours agentic execution.
+
+---
+
+## Adversarial Review Revisions (2026-05-30)
+
+Three parallel adversarial reviews (Technical Architect, Product Manager, UX Designer) identified issues. All revisions below are **mandatory** and override the original plan sections.
+
+### R1: TaskRunner — AgentLoop 生命周期管理 [架构师 P0]
+
+**问题：** AgentLoop 不能直接放在 Route Handler 中 fire-and-forget。Next.js 的请求生命周期不可靠。
+
+**修正：** 新增 `src/lib/agent/task-runner.ts`，在 Task 4.3 和 4.4 之间插入 **Task 4.3b: TaskRunner**:
+
+```typescript
+// src/lib/agent/task-runner.ts
+export class TaskRunner {
+  private tasks = new Map<string, AbortController>();
+  private maxConcurrent = 2;
+
+  enqueue(runId: string, fn: (signal: AbortSignal) => Promise<void>) {
+    if (this.tasks.size >= this.maxConcurrent) {
+      throw new Error("Max concurrent tasks reached");
+    }
+    const ac = new AbortController();
+    this.tasks.set(runId, ac);
+
+    // 10 minute timeout
+    const timeout = setTimeout(() => ac.abort(), 10 * 60 * 1000);
+
+    fn(ac.signal).finally(() => {
+      clearTimeout(timeout);
+      this.tasks.delete(runId);
+    });
+  }
+
+  cancel(runId: string): boolean {
+    const ac = this.tasks.get(runId);
+    if (ac) { ac.abort(); this.tasks.delete(runId); return true; }
+    return false;
+  }
+
+  isRunning(runId: string): boolean {
+    return this.tasks.has(runId);
+  }
+}
+
+export const taskRunner = new TaskRunner(); // singleton
+```
+
+**Task 4.5 Wire Agent** 改为：`POST /messages` → 保存 message → `taskRunner.enqueue()` → 立即返回 200。不 await AgentLoop。
+
+### R2: AgentLoop 必须使用流式 API [架构师 P1]
+
+**问题：** 原始代码用 `this.client.messages.create()`（非流式），前端无实时反馈。
+
+**修正：** Task 4.4 的 AgentLoop 代码改为 `this.client.messages.create({ stream: true })`（或 `.stream()` 方法），逐 token 推 `text_delta` SSE 事件。完整流式代码见 spec 的 Agent 执行架构章节。
+
+关键变更：
+- 非流式 `await this.client.messages.create(...)` → 流式 `this.client.messages.stream(...)`
+- `for await (const event of stream)` 处理 `content_block_delta` 事件
+- `AbortController` 支持取消（从 TaskRunner 传入 signal）
+
+### R3: SQLite busy_timeout [架构师 P2]
+
+**修正：** 在 `src/lib/db/index.ts` 的 `getDb()` 中添加：
+
+```typescript
+sqlite.pragma("busy_timeout = 5000"); // 5秒重试
+```
+
+### R4: SSE replay buffer 过滤 [架构师 P2]
+
+**修正：** `src/lib/runtime/event-bus.ts` 的 `emit()` 方法中，只有以下事件类型进入 replay buffer：
+- `run.created`, `run.updated`, `artifact.created`, `goal.created`, `goal.evidence`, `goal.updated`, `error`
+
+以下事件**不进 replay buffer**（实时流，断线即失）：
+- `text_delta`, `tool_call`, `tool_result`, `thinking_done`, `tool_progress`, `heartbeat`
+
+客户端重连时如果 replay buffer 为空或缺失，从 `GET /messages` + `GET /runs` 重建 timeline。
+
+### R5: 信息架构简化 [设计师]
+
+**修正：**
+- 砍掉 `/dashboard` 路由。Dashboard 组件（RunsTable, SourceHealthGrid, DueReviewsList）改用于 Research Desk sidebar 的 Overview 区。
+- Run Detail 从 6 tabs → 3 tabs：**Report**（Markdown + JSON toggle）| **Data**（sources + artifacts + trust summary bar）| **Logs**
+- Composer `+` menu 简化为 3 项：Upload / Attach context / Set goal
+- Workflow 选择改为 composer 下方按钮行：`[Analyze]` `[Debate]` `[Scan]` `[Review]`
+- Session list 用右键 context menu 替代 hover-reveal
+- Dark mode 默认 dark（金融终端惯例）
+- Timeline 引入 Turn 折叠：一轮对话打包为可折叠单元，默认展开最新 2 个
+
+### R6: Python 残留清理 [架构师 次要]
+
+**修正：** Phase 0 Task 0.1 中，skills 迁移后，删除以下 Python 文件：
+- `pyproject.toml`
+- `server/__init__.py`
+- `server/api/__init__.py`
+
+### R7: 代码修正 [架构师 次要]
+
+- `src/lib/utils.ts`：`import { tailwindMerge }` → `import { twMerge } from "tailwind-merge"`
+- DB init 加 `sqlite.pragma("busy_timeout = 5000")`
+
+### 执行顺序更新
+
+```
+Phase 0: 0.1 → 0.2 → 0.3 → 0.4 → 0.5
+Phase 1: [1.1, 1.2] → 1.3 → 1.4
+Phase 2: [2.1, 2.2] → 2.3
+Phase 3: [3.1, 3.2] → 3.3 → [3.4, 3.5]
+Phase 4: [4.1, 4.2] → 4.3 → 4.3b(TaskRunner) → 4.4 → 4.5 → 4.6
+Phase 5: 5.1 → [5.2, 5.3] → [5.4, 5.5] → 5.6
+Phase 6: 6.1
+```
