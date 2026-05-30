@@ -17,9 +17,9 @@
     "finnhub"
   ],
   "skills": [
-    "./core",
-    "./stock",
-    "./crypto",
-    "./futu"
+    "./skills/core",
+    "./skills/stock",
+    "./skills/crypto",
+    "./skills/futu"
   ]
 }
