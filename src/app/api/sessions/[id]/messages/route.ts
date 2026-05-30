@@ -13,7 +13,7 @@ import { taskRunner } from "@/lib/agent/task-runner";
 import { getLLMClient, getModelName } from "@/lib/agent/llm-provider";
 import { eventBus } from "@/lib/runtime/event-bus";
 import { registry as adapterRegistry } from "@/lib/adapters/registry";
-import * as writeArtifact from "@/lib/runtime/artifact-writer";
+import * as artifactWriter from "@/lib/runtime/artifact-writer";
 import * as goalManager from "@/lib/runtime/goal-manager";
 
 const genId = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 12);
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
 
     const toolDefs = createTools(
       adapterRegistry,
-      writeArtifact,
+      artifactWriter,
       goalManager,
       linkedRunId,
       sessionId,
@@ -123,7 +123,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
 
     const toolExecutor = createToolExecutor(
       adapterRegistry,
-      writeArtifact,
+      artifactWriter,
       goalManager,
       linkedRunId,
       sessionId,

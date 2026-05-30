@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import type { AdapterRegistry } from "@/lib/adapters/registry";
-import type { writeArtifact } from "@/lib/runtime/artifact-writer";
+import type * as artifactWriterModule from "@/lib/runtime/artifact-writer";
 import type * as goalManager from "@/lib/runtime/goal-manager";
 import type { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@/lib/db/schema";
@@ -118,7 +118,7 @@ function buildAdapterTool(
  */
 export function createTools(
   adapterRegistry: AdapterRegistry,
-  _artifactWriter: typeof writeArtifact,
+  _artifactWriter: typeof artifactWriterModule,
   _goalManager: typeof goalManager,
   _runId: string,
   _sessionId: string,
@@ -152,7 +152,7 @@ export interface ToolExecutorFn {
  */
 export function createToolExecutor(
   adapterRegistry: AdapterRegistry,
-  artifactWriter: typeof writeArtifact,
+  artifactWriter: typeof artifactWriterModule,
   goalManagerModule: typeof goalManager,
   runId: string,
   sessionId: string,
@@ -167,7 +167,7 @@ export function createToolExecutor(
         kind: string;
       };
 
-      const result = artifactWriter(runId, filename, content);
+      const result = artifactWriter.writeArtifact(runId, filename, content);
 
       // Persist artifact record in DB
       db.insert(schema.artifacts)

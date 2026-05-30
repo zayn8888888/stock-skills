@@ -36,6 +36,8 @@ node_modules/
 # Database
 data/*.db
 data/*.db-journal
+data/*.db-shm
+data/*.db-wal
 
 # Analysis runtime data (not committed)
 /analysis/
@@ -44,3 +46,4 @@ data/*.db-journal
 narrative_monnitor/
 test/
 .claude
+tsconfig.tsbuildinfo

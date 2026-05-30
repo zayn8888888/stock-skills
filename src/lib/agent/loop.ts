@@ -115,7 +115,7 @@ export class AgentLoop {
           const block = event.content_block;
 
           if (block.type === "text") {
-            currentTextBlock = { type: "text", text: "" };
+            currentTextBlock = { type: "text" as const, text: "", citations: [] };
           } else if (block.type === "tool_use") {
             currentToolBlock = {
               type: "tool_use",

@@ -1,47 +1,55 @@
-/**
- * Application configuration — singleton loaded once from environment variables.
- */
+import path from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 
-export interface LLMConfig {
-  apiKey: string;
-  model: string;
-  baseUrl: string;
-  temperature: number;
-  maxTokens: number;
-}
-
-export interface AppConfig {
-  /** Absolute path to the analysis output root (e.g. ./analysis) */
+export interface Config {
   analysisRoot: string;
-  /** Bearer token for API authentication */
-  token: string;
-  /** LLM provider configuration */
-  llm: LLMConfig;
-  /** SQLite database file path */
   dbPath: string;
+  token: string;
+  maxUploadBytes: number;
+  anthropicApiKey: string;
+  llmModel: string;
 }
 
-let _config: AppConfig | null = null;
+let _config: Config | null = null;
 
-export function getConfig(): AppConfig {
+export function getConfig(): Config {
   if (_config) return _config;
 
-  const analysisRoot = process.env.ANALYSIS_ROOT ?? "./analysis";
-  const token = process.env.ANA_TOKEN ?? "";
-  const dbPath = process.env.DB_PATH ?? "./data/stock.db";
+  const analysisRoot = process.env.STOCK_SKILLS_ANALYSIS_ROOT
+    ?? path.resolve(process.cwd(), "analysis");
+  const dbPath = path.resolve(analysisRoot, "stock_skills.sqlite");
+  const token = loadOrCreateToken(analysisRoot);
+
+  if (!existsSync(analysisRoot)) {
+    mkdirSync(analysisRoot, { recursive: true });
+  }
+  const artifactsDir = path.resolve(analysisRoot, "artifacts");
+  if (!existsSync(artifactsDir)) {
+    mkdirSync(artifactsDir, { recursive: true });
+  }
 
   _config = {
     analysisRoot,
-    token,
     dbPath,
-    llm: {
-      apiKey: process.env.LLM_API_KEY ?? "",
-      model: process.env.LLM_MODEL ?? "claude-sonnet-4-20250514",
-      baseUrl: process.env.LLM_BASE_URL ?? "https://api.anthropic.com",
-      temperature: Number.parseFloat(process.env.LLM_TEMPERATURE ?? "0.3"),
-      maxTokens: Number.parseInt(process.env.LLM_MAX_TOKENS ?? "4096", 10),
-    },
+    token,
+    maxUploadBytes: 50 * 1024 * 1024,
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+    llmModel: process.env.LLM_MODEL ?? "claude-sonnet-4-20250514",
   };
-
   return _config;
+}
+
+function loadOrCreateToken(analysisRoot: string): string {
+  const envToken = process.env.STOCK_SKILLS_TOKEN;
+  if (envToken) return envToken;
+
+  const tokenFile = path.resolve(analysisRoot, ".token");
+  if (existsSync(tokenFile)) {
+    return readFileSync(tokenFile, "utf-8").trim();
+  }
+
+  const token = randomBytes(32).toString("hex");
+  writeFileSync(tokenFile, token, "utf-8");
+  return token;
 }

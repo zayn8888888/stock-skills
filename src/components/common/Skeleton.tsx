@@ -3,9 +3,10 @@ import { cn } from "@/lib/utils";
 interface SkeletonProps {
   className?: string;
   variant?: "text" | "heading" | "card" | "avatar" | "table-row";
+  style?: React.CSSProperties;
 }
 
-export function Skeleton({ className, variant = "text" }: SkeletonProps) {
+export function Skeleton({ className, variant = "text", style }: SkeletonProps) {
   const variants: Record<string, string> = {
     text: "h-4 w-full rounded",
     heading: "h-7 w-1/3 rounded",
@@ -21,6 +22,7 @@ export function Skeleton({ className, variant = "text" }: SkeletonProps) {
         variants[variant],
         className
       )}
+      style={style}
     />
   );
 }
