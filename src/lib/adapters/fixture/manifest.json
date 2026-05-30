@@ -1,0 +1,16 @@
+{
+  "provider": {
+    "id": "prov_fixture",
+    "name": "测试数据 (Fixture)",
+    "adapterId": "fixture",
+    "connectionConfig": {}
+  },
+  "supports": ["quote.snapshot", "quote.kline", "quote.depth", "news.search", "technical.indicators"],
+  "routes": [
+    { "capabilitySlug": "quote.snapshot",      "markets": ["*"], "priority": 99 },
+    { "capabilitySlug": "quote.kline",         "markets": ["*"], "priority": 99 },
+    { "capabilitySlug": "quote.depth",         "markets": ["*"], "priority": 99 },
+    { "capabilitySlug": "news.search",         "markets": ["*"], "priority": 99 },
+    { "capabilitySlug": "technical.indicators", "markets": ["*"], "priority": 99 }
+  ]
+}

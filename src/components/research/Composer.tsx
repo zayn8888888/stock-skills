@@ -31,6 +31,7 @@ export interface ComposerProps {
   disabled?: boolean;
   context?: ComposerContext;
   onClearContext?: (key: keyof ComposerContext) => void;
+  size?: "default" | "lg";
   className?: string;
 }
 
@@ -89,6 +90,7 @@ export function Composer({
   disabled = false,
   context,
   onClearContext,
+  size = "default",
   className,
 }: ComposerProps) {
   const { language } = useLanguage();
@@ -171,8 +173,9 @@ export function Composer({
 
       {/* Input area */}
       <div className={cn(
-        "flex items-end gap-2 rounded-2xl border border-border/60 bg-card p-2",
-        "focus-within:border-primary/40 focus-within:shadow-sm focus-within:shadow-primary/5 transition-all duration-200"
+        "flex gap-2 rounded-2xl border border-border/60 bg-card p-2",
+        "focus-within:border-primary/40 focus-within:shadow-sm focus-within:shadow-primary/5 transition-all duration-200",
+        size === "lg" ? "items-start" : "items-end"
       )}>
         {/* + Menu */}
         <div className="relative" ref={plusMenuRef} onBlur={handlePlusBlur}>
@@ -217,11 +220,13 @@ export function Composer({
           onKeyDown={handleKeyDown}
           placeholder={labels.placeholder}
           disabled={disabled}
-          rows={1}
+          rows={size === "lg" ? 3 : 1}
           className={cn(
             "flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground",
             "outline-none border-none focus:ring-0",
-            "min-h-[32px] max-h-[200px] py-1"
+            size === "lg"
+              ? "min-h-[80px] max-h-[240px] py-2 placeholder:leading-relaxed"
+              : "min-h-[32px] max-h-[200px] py-1"
           )}
         />
 

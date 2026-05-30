@@ -5,6 +5,7 @@ import path from "node:path";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { getConfig } from "@/lib/config";
 import * as schema from "./schema";
+import { seed } from "@/lib/data-source/seed";
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
@@ -79,6 +80,10 @@ export function getDb(): ReturnType<typeof drizzle<typeof schema>> {
   applySqlMigrations(sqlite, migrationsFolder);
 
   _db = drizzle(sqlite, { schema });
+
+  // Seed data from JSON manifests (idempotent — DELETE + INSERT)
+  seed(_db);
+
   return _db;
 }
 

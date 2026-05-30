@@ -1,6 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { EventBus } from "@/lib/runtime/event-bus";
 import type { ToolExecutorFn } from "./tools";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import type * as schema from "@/lib/db/schema";
+import { runEvents } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { customAlphabet } from "nanoid";
+
+const genId = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 12);
 
 // ──────────────────── types ─────────────────────────────────────────
 
@@ -32,6 +39,7 @@ export class AgentLoop {
   private sessionId: string;
   private runId: string;
   private abortController: AbortController;
+  private db: BetterSQLite3Database<typeof schema>;
 
   constructor(
     client: Anthropic,
@@ -42,6 +50,7 @@ export class AgentLoop {
     eventBus: EventBus,
     sessionId: string,
     runId: string,
+    db: BetterSQLite3Database<typeof schema>,
     externalAbortController?: AbortController,
   ) {
     this.client = client;
@@ -52,6 +61,7 @@ export class AgentLoop {
     this.eventBus = eventBus;
     this.sessionId = sessionId;
     this.runId = runId;
+    this.db = db;
     this.abortController = externalAbortController ?? new AbortController();
   }
 
@@ -181,6 +191,23 @@ export class AgentLoop {
         const toolResults: Anthropic.ToolResultBlockParam[] = [];
 
         for (const toolBlock of toolUseBlocks) {
+          // Insert running event
+          const eventId = genId();
+          const callTimestamp = new Date().toISOString();
+
+          await this.db.insert(runEvents).values({
+            id: eventId,
+            runId: this.runId,
+            timestamp: callTimestamp,
+            eventType: "tool_use",
+            data: JSON.stringify({
+              status: "running",
+              toolName: toolBlock.name,
+              toolId: toolBlock.id,
+              input: toolBlock.input,
+            }),
+          });
+
           this.eventBus.emit(this.sessionId, "tool_call", {
             runId: this.runId,
             toolName: toolBlock.name,
@@ -188,16 +215,20 @@ export class AgentLoop {
             input: toolBlock.input,
           });
 
+          // Execute
           let resultText: string;
+          let status: "completed" | "error";
           try {
             resultText = await this.toolExecutor(
               toolBlock.name,
               toolBlock.input as Record<string, unknown>,
             );
+            status = "completed";
           } catch (err) {
             resultText = JSON.stringify({
               error: err instanceof Error ? err.message : String(err),
             });
+            status = "error";
           }
 
           toolResults.push({
@@ -205,6 +236,20 @@ export class AgentLoop {
             tool_use_id: toolBlock.id,
             content: resultText,
           });
+
+          // Update event with result
+          await this.db
+            .update(runEvents)
+            .set({
+              data: JSON.stringify({
+                status,
+                toolName: toolBlock.name,
+                toolId: toolBlock.id,
+                input: toolBlock.input,
+                result: resultText,
+              }),
+            })
+            .where(eq(runEvents.id, eventId));
 
           this.eventBus.emit(this.sessionId, "tool_result", {
             runId: this.runId,

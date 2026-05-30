@@ -12,8 +12,7 @@ import { registerLoop, unregisterLoop } from "@/lib/agent/loop-registry";
 import { taskRunner } from "@/lib/agent/task-runner";
 import { getLLMClient, getModelName, isApiKeyConfigured } from "@/lib/agent/llm-provider";
 import { eventBus } from "@/lib/runtime/event-bus";
-import { registry as adapterRegistry } from "@/lib/adapters/registry";
-import { initAdapters } from "@/lib/adapters/init";
+import { getRouter } from "@/lib/adapters/init";
 import * as artifactWriter from "@/lib/runtime/artifact-writer";
 import * as goalManager from "@/lib/runtime/goal-manager";
 
@@ -35,8 +34,8 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   const authErr = validateAuth(req);
   if (authErr) return authErr;
 
-  // Ensure adapters are registered
-  initAdapters();
+  // Ensure adapters and router are initialized
+  const router = getRouter();
 
   const { id: sessionId } = await ctx.params;
   const body: MessageBody = await req.json();
@@ -140,7 +139,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     const client = getLLMClient();
 
     const toolDefs = createTools(
-      adapterRegistry,
+      router,
       artifactWriter,
       goalManager,
       linkedRunId,
@@ -149,7 +148,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     );
 
     const toolExecutor = createToolExecutor(
-      adapterRegistry,
+      router,
       artifactWriter,
       goalManager,
       linkedRunId,
@@ -179,6 +178,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
           eventBus,
           sessionId,
           linkedRunId!,
+          db,
         );
 
         registerLoop(linkedRunId!, loop);

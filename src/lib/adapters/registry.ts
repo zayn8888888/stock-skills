@@ -35,6 +35,11 @@ export class AdapterRegistry {
     const checks = this.list().map((adapter) => adapter.healthCheck());
     return Promise.all(checks);
   }
+
+  /** Expose the internal Map for SourceRouter. */
+  getMap(): Map<string, DataSourceAdapter> {
+    return this.adapters;
+  }
 }
 
 /** Singleton registry instance for the application. */

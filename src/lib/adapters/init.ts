@@ -1,20 +1,24 @@
 /**
- * Adapter initialization — registers all available data source adapters
- * with the global registry.
+ * Adapter + Router initialization.
  *
- * Call this once at application startup (e.g., from a Next.js middleware
- * or the first API route that uses adapters).
+ * Registers all available data source adapters with the global registry
+ * and creates the SourceRouter singleton backed by the DB route table.
  */
 
 import { registry } from "./registry";
 import { FixtureAdapter } from "./fixture";
 import { FutuAdapter } from "./futu";
+import { FutuNewsAdapter } from "./futu-news";
+import { EastMoneyAdapter } from "./eastmoney";
+import { SourceRouter } from "@/lib/data-source/router";
+import { getDb } from "@/lib/db";
 
-let initialized = false;
+let adaptersInitialized = false;
+let router: SourceRouter | null = null;
 
 export function initAdapters(): void {
-  if (initialized) return;
-  initialized = true;
+  if (adaptersInitialized) return;
+  adaptersInitialized = true;
 
   // Fixture adapter (always available for testing)
   registry.register(new FixtureAdapter());
@@ -26,4 +30,30 @@ export function initAdapters(): void {
     // Non-fatal: Futu OpenD may not be running
     console.warn("[adapters] Futu OpenD not available");
   }
+
+  // Futu news/sentiment (public HTTP API, always available)
+  registry.register(new FutuNewsAdapter());
+
+  // East Money (A-share board scanning, public HTTP API, always available)
+  registry.register(new EastMoneyAdapter());
 }
+
+/**
+ * Get the SourceRouter singleton. Initializes adapters on first call.
+ * The router reads the route table from the DB and caches it in memory.
+ */
+export function getRouter(): SourceRouter {
+  if (!router) {
+    initAdapters();
+    const db = getDb();
+    router = new SourceRouter(db, registry.getMap());
+  }
+  return router;
+}
+
+/** Force-reload the router's route cache (call after admin CRUD). */
+export function reloadRouter(): void {
+  if (router) router.reload();
+}
+
+export { registry };

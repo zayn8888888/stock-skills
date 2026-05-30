@@ -137,9 +137,28 @@
   }
 }
 
-/* ── Markdown Prose Overrides (Vibe Trading style) ──────────────── */
+/* ── Markdown Prose Overrides ─────────────────────────────────────── */
 
 .prose {
+  --tw-prose-body: hsl(222 20% 25%);
+  --tw-prose-headings: hsl(222 47% 11%);
+  --tw-prose-lead: hsl(215 16% 47%);
+  --tw-prose-links: hsl(173 80% 36%);
+  --tw-prose-bold: hsl(222 47% 11%);
+  --tw-prose-counters: hsl(215 16% 47%);
+  --tw-prose-bullets: hsl(173 80% 36%);
+  --tw-prose-hr: hsl(214 32% 91%);
+  --tw-prose-quotes: hsl(222 47% 11%);
+  --tw-prose-quote-borders: hsl(173 80% 36%);
+  --tw-prose-captions: hsl(215 16% 47%);
+  --tw-prose-code: hsl(173 80% 36%);
+  --tw-prose-pre-code: hsl(215 16% 47%);
+  --tw-prose-pre-bg: hsl(210 40% 96%);
+  --tw-prose-th-borders: hsl(214 32% 91%);
+  --tw-prose-td-borders: hsl(214 32% 91%);
+}
+
+.dark .prose {
   --tw-prose-body: hsl(210 20% 80%);
   --tw-prose-headings: hsl(210 40% 96%);
   --tw-prose-lead: hsl(210 20% 75%);
@@ -158,21 +177,22 @@
   --tw-prose-td-borders: hsl(230 15% 17%);
 }
 
-.dark .prose {
-  --tw-prose-invert-body: hsl(210 20% 80%);
-  --tw-prose-invert-headings: hsl(210 40% 96%);
-  --tw-prose-invert-links: hsl(190 90% 50%);
-  --tw-prose-invert-bold: hsl(210 40% 96%);
-  --tw-prose-invert-code: hsl(190 80% 70%);
-  --tw-prose-invert-pre-code: hsl(210 30% 85%);
-  --tw-prose-invert-pre-bg: hsl(230 30% 8%);
-  --tw-prose-invert-quotes: hsl(210 30% 85%);
-  --tw-prose-invert-quote-borders: hsl(190 90% 50%);
-  --tw-prose-invert-th-borders: hsl(230 20% 20%);
-  --tw-prose-invert-td-borders: hsl(230 15% 17%);
+/* ── Syntax highlighting for code blocks ────────────────────────── */
+
+pre code.hljs {
+  background: transparent;
 }
 
-/* ── Syntax highlighting for code blocks ────────────────────────── */
+.hljs-keyword { color: hsl(270 60% 45%); }
+.hljs-string { color: hsl(152 55% 35%); }
+.hljs-number { color: hsl(30 70% 45%); }
+.hljs-comment { color: hsl(215 16% 47%); font-style: italic; }
+.hljs-function { color: hsl(190 70% 40%); }
+.hljs-title { color: hsl(190 70% 40%); }
+.hljs-params { color: hsl(215 20% 35%); }
+.hljs-built_in { color: hsl(40 70% 40%); }
+.hljs-attr { color: hsl(30 70% 45%); }
+.hljs-literal { color: hsl(30 70% 45%); }
 
 .dark pre code.hljs {
   background: transparent;
@@ -228,4 +248,21 @@
 
 .dark .glow-primary {
   box-shadow: 0 0 20px hsl(190 90% 50% / 0.15), 0 0 40px hsl(190 90% 50% / 0.05);
+}
+
+/* ── Composer slide-up animation (welcome → chat transition) ──── */
+
+@keyframes composer-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-composer-slide-up {
+  animation: composer-slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }

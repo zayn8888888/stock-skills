@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
-import type { AdapterRegistry } from "@/lib/adapters/registry";
+import type { SourceRouter } from "@/lib/data-source/router";
 import type * as artifactWriterModule from "@/lib/runtime/artifact-writer";
 import type * as goalManager from "@/lib/runtime/goal-manager";
 import type { drizzle } from "drizzle-orm/better-sqlite3";
@@ -65,45 +65,58 @@ const updateGoalEvidenceTool: Anthropic.Tool = {
   },
 };
 
-// ──────────────────── adapter tool builder ──────────────────────────
+// ──────────────────── capability tool builder ─────────────────────
 
 /**
- * Build an Anthropic tool definition from an adapter capability string.
+ * Build an Anthropic tool definition from a capability record.
  *
- * Convention: tool name is `{adapterName}_{capability_dots_to_underscores}`.
- * For example, adapter "yfinance" with capability "quote.snapshot"
- * becomes tool name "yfinance_quote_snapshot".
+ * Convention: tool name is `get_{capability_slug_dots_to_underscores}`.
+ * For example, capability "quote.snapshot" becomes "get_quote_snapshot".
  */
-function buildAdapterTool(
-  adapterName: string,
-  capability: string,
+function buildCapabilityTool(
+  cap: { slug: string; displayName: string; description: string | null; paramsSchema: string | null; responseSchema: string | null },
 ): Anthropic.Tool {
-  const toolName = `${adapterName}_${capability.replace(/\./g, "_")}`;
+  const toolName = `get_${cap.slug.replace(/\./g, "_")}`;
 
+  // Build description: name + description + response schema summary
+  let desc = `${cap.displayName}${cap.description ? `: ${cap.description}` : ""}`;
+  if (cap.responseSchema) {
+    try {
+      const schema = JSON.parse(cap.responseSchema) as { properties?: Record<string, { type: string; description?: string }> };
+      if (schema.properties) {
+        const fields = Object.entries(schema.properties)
+          .map(([name, prop]) => `${name}(${prop.type})${prop.description ? `: ${prop.description}` : ""}`)
+          .join("; ");
+        desc += `\n返回字段: ${fields}`;
+      }
+    } catch { /* ignore parse errors */ }
+  }
+
+  // Build input schema from paramsSchema or use default
+  let inputSchema: Anthropic.Tool["input_schema"];
+  if (cap.paramsSchema) {
+    try {
+      const parsed = JSON.parse(cap.paramsSchema);
+      inputSchema = { type: "object" as const, ...parsed };
+    } catch {
+      inputSchema = buildDefaultInputSchema();
+    }
+  } else {
+    inputSchema = buildDefaultInputSchema();
+  }
+
+  return { name: toolName, description: desc, input_schema: inputSchema };
+}
+
+function buildDefaultInputSchema(): Anthropic.Tool["input_schema"] {
   return {
-    name: toolName,
-    description:
-      `Fetch ${capability} data from ${adapterName}. ` +
-      `Operation: ${capability}`,
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        ticker: {
-          type: "string",
-          description: "Ticker symbol (e.g. 'NVDA', 'AAPL')",
-        },
-        market: {
-          type: "string",
-          description: "Market identifier (e.g. 'NASDAQ', 'SSE')",
-        },
-        params: {
-          type: "object",
-          description: "Additional operation-specific parameters",
-          additionalProperties: true,
-        },
-      },
-      required: [],
+    type: "object" as const,
+    properties: {
+      ticker: { type: "string", description: "Ticker symbol (e.g. 'NVDA', '00700', 'BTC')" },
+      market: { type: "string", description: "Market identifier (e.g. 'HK', 'US', 'CN', 'CRYPTO')" },
+      params: { type: "object", description: "Additional operation-specific parameters", additionalProperties: true },
     },
+    required: [],
   };
 }
 
@@ -113,11 +126,11 @@ function buildAdapterTool(
  * Create the full list of Anthropic tool definitions for an agent run.
  *
  * Includes:
- * - One tool per adapter capability (data fetching)
+ * - One tool per registered capability (data fetching via router)
  * - System tools: write_artifact, update_goal_evidence
  */
 export function createTools(
-  adapterRegistry: AdapterRegistry,
+  router: SourceRouter,
   _artifactWriter: typeof artifactWriterModule,
   _goalManager: typeof goalManager,
   _runId: string,
@@ -126,11 +139,10 @@ export function createTools(
 ): Anthropic.Tool[] {
   const tools: Anthropic.Tool[] = [];
 
-  // Adapter tools
-  for (const adapter of adapterRegistry.list()) {
-    for (const capability of adapter.capabilities()) {
-      tools.push(buildAdapterTool(adapter.name, capability));
-    }
+  // Capability-based tools (from DB via router)
+  const capabilities = router.getCapabilities();
+  for (const cap of capabilities) {
+    tools.push(buildCapabilityTool(cap));
   }
 
   // System tools
@@ -148,10 +160,10 @@ export interface ToolExecutorFn {
 
 /**
  * Create a tool executor function that dispatches tool calls to the
- * appropriate handler (adapter, artifact writer, or goal manager).
+ * appropriate handler (router for data tools, artifact writer, or goal manager).
  */
 export function createToolExecutor(
-  adapterRegistry: AdapterRegistry,
+  router: SourceRouter,
   artifactWriter: typeof artifactWriterModule,
   goalManagerModule: typeof goalManager,
   runId: string,
@@ -169,7 +181,6 @@ export function createToolExecutor(
 
       const result = artifactWriter.writeArtifact(runId, filename, content);
 
-      // Persist artifact record in DB
       db.insert(schema.artifacts)
         .values({
           id: nanoid(),
@@ -200,7 +211,6 @@ export function createToolExecutor(
         confidence?: number;
       };
 
-      // Find the goal that owns this criterion
       const [criterion] = db
         .select({ goalId: schema.goalCriteria.goalId })
         .from(schema.goalCriteria)
@@ -222,41 +232,36 @@ export function createToolExecutor(
       return JSON.stringify({ success: true, evidenceId: result.id });
     }
 
-    // ── Adapter tools: {adapterName}_{capability} ──
-    const adapters = adapterRegistry.list();
-    for (const adapter of adapters) {
-      for (const capability of adapter.capabilities()) {
-        const expectedName = `${adapter.name}_${capability.replace(/\./g, "_")}`;
-        if (toolName !== expectedName) continue;
+    // ── Data tools: get_{capability} ──
+    if (toolName.startsWith("get_")) {
+      const capability = toolName.slice(4).replace(/_/g, ".");
+      const { ticker, market, params } = input as {
+        ticker?: string;
+        market?: string;
+        params?: Record<string, unknown>;
+      };
 
-        const { ticker, market, params } = input as {
-          ticker?: string;
-          market?: string;
-          params?: Record<string, unknown>;
-        };
+      const { raw, adapter } = await router.execute({
+        operation: capability,
+        ticker,
+        market,
+        params,
+      });
 
-        const raw = await adapter.fetch({
-          operation: capability,
-          ticker,
-          market,
-          params,
-        });
+      const observations = adapter.normalize(raw, {
+        operation: capability,
+        ticker,
+        market,
+        params,
+      });
 
-        const observations = adapter.normalize(raw, {
-          operation: capability,
-          ticker,
-          market,
-          params,
-        });
-
-        return JSON.stringify({
-          source: raw.source,
-          operation: raw.operation,
-          latency_ms: raw.latency_ms,
-          observations,
-          data: raw.data,
-        });
-      }
+      return JSON.stringify({
+        source: raw.source,
+        operation: raw.operation,
+        latency_ms: raw.latency_ms,
+        observations,
+        data: raw.data,
+      });
     }
 
     return JSON.stringify({ error: `Unknown tool: ${toolName}` });

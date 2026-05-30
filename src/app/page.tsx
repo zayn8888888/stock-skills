@@ -207,23 +207,27 @@ export default function Home() {
     // Skip fetch if messages were already loaded from cache
     if (!sessionLoading) return;
 
-    fetch(`/api/sessions/${sessionId}/messages`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((msgs) => {
+    Promise.all([
+      fetch(`/api/sessions/${sessionId}/messages`).then((r) => (r.ok ? r.json() : [])),
+      fetch(`/api/sessions/${sessionId}/tool-events`).then((r) => (r.ok ? r.json() : {})),
+    ])
+      .then(([msgs, toolCallsByRun]) => {
         const agentMessages: AgentMessage[] = msgs.map(
           (m: {
             message_id: string;
             role: string;
             content: string;
             created_at: string;
+            metadata?: { runId?: string } | null;
           }) => ({
             id: m.message_id,
             role: m.role as AgentMessage["role"],
             content: m.content,
             timestamp: new Date(m.created_at).getTime(),
+            runId: m.metadata?.runId,
           })
         );
-        loadHistory(sessionId, agentMessages);
+        loadHistory(sessionId, agentMessages, toolCallsByRun);
       })
       .catch(() => {});
   }, [sessionId, sessionLoading, loadHistory]);
@@ -397,25 +401,35 @@ export default function Home() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : hasMessages ? (
-          <div className="px-6 py-4 max-w-3xl mx-auto">
+          <div className="px-8 py-4 max-w-5xl mx-auto">
             <Timeline messages={messages} streamingText={streamingText} pendingToolCalls={toolCalls} />
           </div>
         ) : (
-          <WelcomeScreen onPromptClick={handlePromptClick} />
+          <WelcomeScreen
+            onPromptClick={handlePromptClick}
+            onSend={handleSend}
+            onStop={handleStop}
+            streaming={isStreaming}
+            disabled={requestPending && !isStreaming}
+            context={composerContext}
+            onClearContext={handleClearContext}
+          />
         )}
       </div>
 
-      {/* Composer - always visible */}
-      <div className="border-t border-border px-6 py-3 shrink-0 max-w-3xl mx-auto w-full">
-        <Composer
-          onSend={handleSend}
-          onStop={handleStop}
-          streaming={isStreaming}
-          disabled={requestPending && !isStreaming}
-          context={composerContext}
-          onClearContext={handleClearContext}
-        />
-      </div>
+      {/* Composer — only visible once conversation has started */}
+      {hasMessages && (
+        <div className="border-t border-border px-8 py-3 shrink-0 max-w-5xl mx-auto w-full animate-composer-slide-up">
+          <Composer
+            onSend={handleSend}
+            onStop={handleStop}
+            streaming={isStreaming}
+            disabled={requestPending && !isStreaming}
+            context={composerContext}
+            onClearContext={handleClearContext}
+          />
+        </div>
+      )}
     </div>
   );
 }

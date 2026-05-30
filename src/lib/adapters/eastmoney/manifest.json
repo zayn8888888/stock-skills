@@ -1,0 +1,14 @@
+{
+  "provider": {
+    "id": "prov_eastmoney",
+    "name": "东方财富",
+    "adapterId": "eastmoney",
+    "connectionConfig": { "nodes": ["push2delay.eastmoney.com", "push2.eastmoney.com"] }
+  },
+  "supports": ["market.cn_boards", "market.cn_board_stocks", "market.cn_board_kline"],
+  "routes": [
+    { "capabilitySlug": "market.cn_boards",       "markets": ["CN"], "priority": 1 },
+    { "capabilitySlug": "market.cn_board_stocks",  "markets": ["CN"], "priority": 1 },
+    { "capabilitySlug": "market.cn_board_kline",   "markets": ["CN"], "priority": 1 }
+  ]
+}

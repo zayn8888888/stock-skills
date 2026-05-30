@@ -162,14 +162,50 @@ export const lessons = sqliteTable("lessons", {
   createdAt: text("created_at").notNull(),
 });
 
-// ──────────────────────────── data_sources ───────────────────────
-export const dataSources = sqliteTable("data_sources", {
+// ──────────────────────────── data_providers ──────────────────────
+export const dataProviders = sqliteTable("data_providers", {
   id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  type: text("type").notNull(), // api | file | database | scraper
-  connectionInfo: text("connection_info"), // JSON string
-  lastSyncAt: text("last_sync_at"),
-  status: text("status").notNull().default("unknown"), // active | inactive | error | unknown
+  name: text("name").notNull().unique(),
+  adapterId: text("adapter_id").notNull(), // maps to DataSourceAdapter.name
+  enabled: integer("enabled").notNull().default(1), // 0 | 1
+  connectionConfig: text("connection_config"), // JSON: { host, port, apiKey, ... }
+  status: text("status").notNull().default("unknown"), // healthy | degraded | down | unknown
+  lastCheckAt: text("last_check_at"),
+  lastError: text("last_error"),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
+
+// ──────────────────────────── data_capabilities ──────────────────
+export const dataCapabilities = sqliteTable("data_capabilities", {
+  id: text("id").primaryKey(),
+  slug: text("slug").notNull().unique(), // "quote.snapshot", "news.search"
+  category: text("category").notNull(), // quote | kline | depth | news | sentiment | capital
+  displayName: text("display_name").notNull(),
+  description: text("description"),
+  paramsSchema: text("params_schema"), // JSON Schema: input parameters
+  responseSchema: text("response_schema"), // JSON Schema: response fields + types + descriptions
+  createdAt: text("created_at").notNull(),
+});
+
+// ──────────────────────────── data_source_routes ─────────────────
+export const dataSourceRoutes = sqliteTable(
+  "data_source_routes",
+  {
+    id: text("id").primaryKey(),
+    providerId: text("provider_id")
+      .notNull()
+      .references(() => dataProviders.id),
+    capabilityId: text("capability_id")
+      .notNull()
+      .references(() => dataCapabilities.id),
+    markets: text("markets").notNull().default('["*"]'), // JSON: ["HK","US"] or ["*"]
+    priority: integer("priority").notNull().default(1), // lower = higher priority
+    enabled: integer("enabled").notNull().default(1),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("idx_route_provider_cap").on(t.providerId, t.capabilityId),
+  ],
+);

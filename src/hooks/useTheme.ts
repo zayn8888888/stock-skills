@@ -7,10 +7,10 @@ type Theme = "light" | "dark";
 const STORAGE_KEY = "theme";
 
 function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === "light" || stored === "dark") return stored;
-  return "dark";
+  return "light";
 }
 
 function applyTheme(theme: Theme) {
@@ -23,12 +23,23 @@ function applyTheme(theme: Theme) {
 }
 
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  // Always start with "light" to match the server-rendered <html> (no dark class),
+  // then sync from localStorage after hydration to avoid SSR mismatch.
+  const [theme, setTheme] = useState<Theme>("light");
+  const [hydrated, setHydrated] = useState(false);
+
+  // Sync from localStorage on first client render
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === "dark") setTheme(stored);
+    setHydrated(true);
+  }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     applyTheme(theme);
     localStorage.setItem(STORAGE_KEY, theme);
-  }, [theme]);
+  }, [theme, hydrated]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));

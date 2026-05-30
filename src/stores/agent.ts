@@ -107,7 +107,7 @@ export interface AgentState {
 
   // Actions
   switchSession: (sessionId: string) => void;
-  loadHistory: (sessionId: string, messages: AgentMessage[]) => void;
+  loadHistory: (sessionId: string, messages: AgentMessage[], toolCallsByRun?: Record<string, ToolCallEntry[]>) => void;
   addMessage: (message: AgentMessage) => void;
   appendDelta: (delta: string) => void;
   addToolCall: (toolCall: ToolCallEntry) => void;
@@ -171,10 +171,20 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     }
   },
 
-  loadHistory: (sessionId: string, messages: AgentMessage[]) => {
-    cacheSession(sessionId, messages);
+  loadHistory: (sessionId: string, messages: AgentMessage[], toolCallsByRun?: Record<string, ToolCallEntry[]>) => {
+    // Attach historical tool calls to assistant messages by runId
+    let merged = messages;
+    if (toolCallsByRun) {
+      merged = messages.map((msg) => {
+        if (msg.role === "assistant" && msg.runId && toolCallsByRun[msg.runId]?.length) {
+          return { ...msg, toolCalls: toolCallsByRun[msg.runId] };
+        }
+        return msg;
+      });
+    }
+    cacheSession(sessionId, merged);
     set({
-      messages,
+      messages: merged,
       sessionId,
       sessionLoading: false,
     });

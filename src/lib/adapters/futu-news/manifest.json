@@ -1,0 +1,13 @@
+{
+  "provider": {
+    "id": "prov_futu_news",
+    "name": "Futu 新闻/情绪",
+    "adapterId": "futu-news",
+    "connectionConfig": { "baseUrl": "https://ai-news-search.futunn.com" }
+  },
+  "supports": ["news.search", "sentiment.feed"],
+  "routes": [
+    { "capabilitySlug": "news.search",    "markets": ["*"], "priority": 1 },
+    { "capabilitySlug": "sentiment.feed", "markets": ["*"], "priority": 1 }
+  ]
+}

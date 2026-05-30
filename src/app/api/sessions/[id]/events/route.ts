@@ -13,6 +13,11 @@ export async function GET(
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
+      // Confirm connection immediately so the client isn't left waiting
+      controller.enqueue(
+        encoder.encode("event: connected\ndata: {}\n\n")
+      );
+
       // Subscribe to events
       const unsubscribe = eventBus.subscribe(sessionId, (event) => {
         controller.enqueue(encoder.encode(eventBus.toSSE(event)));

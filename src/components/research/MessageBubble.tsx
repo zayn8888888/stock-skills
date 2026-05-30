@@ -118,6 +118,14 @@ const markdownComponents: Components = {
       {children}
     </thead>
   ),
+  tr: ({ children, ...props }) => (
+    <tr
+      className="last:[&_td]:border-b-0"
+      {...props}
+    >
+      {children}
+    </tr>
+  ),
   th: ({ children, ...props }) => (
     <th
       className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b border-border"
@@ -128,7 +136,7 @@ const markdownComponents: Components = {
   ),
   td: ({ children, ...props }) => (
     <td
-      className="px-3 py-2 text-sm border-b border-border/50 last:border-b-0"
+      className="px-3 py-2 text-sm border-b border-border/50"
       {...props}
     >
       {children}
@@ -145,7 +153,7 @@ const markdownComponents: Components = {
       <div className="relative group my-3 rounded-lg border border-border overflow-hidden">
         <CopyButton text={codeText} />
         <pre
-          className="bg-[hsl(230,30%,8%)] p-4 overflow-x-auto text-sm leading-relaxed"
+          className="bg-muted p-4 overflow-x-auto text-sm leading-relaxed"
           {...props}
         >
           {children}
