@@ -10,28 +10,31 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string", "description": "股票代码，如 NVDA、00700、AAPL" },
-          "market": { "type": "string", "description": "市场标识: HK(港股) US(美股) CN(沪深) CRYPTO" }
+          "market": {
+            "type": "string",
+            "description": "市场标识: HK(港股) US(美股) CN(沪深) CRYPTO"
+          }
         },
         "required": ["ticker"]
       },
       "responseSchema": {
         "type": "object",
         "properties": {
-          "name":          { "type": "string",  "description": "股票名称" },
-          "curPrice":      { "type": "number",  "description": "当前价格（最新成交价）" },
-          "highPrice":     { "type": "number",  "description": "今日最高价" },
-          "lowPrice":      { "type": "number",  "description": "今日最低价" },
-          "openPrice":     { "type": "number",  "description": "今日开盘价" },
-          "lastClosePrice":{ "type": "number",  "description": "昨收价" },
-          "volume":        { "type": "number",  "description": "成交量（股）" },
-          "turnover":      { "type": "number",  "description": "成交额" },
-          "turnoverRate":  { "type": "number",  "description": "换手率 (%)" },
-          "amplitude":     { "type": "number",  "description": "振幅 (%)" },
-          "pe":            { "type": "number",  "description": "市盈率 (TTM)" },
-          "pb":            { "type": "number",  "description": "市净率" },
-          "marketCap":     { "type": "number",  "description": "总市值" },
-          "updateTime":    { "type": "string",  "description": "数据更新时间" },
-          "isSuspended":   { "type": "boolean", "description": "是否停牌" }
+          "name": { "type": "string", "description": "股票名称" },
+          "curPrice": { "type": "number", "description": "当前价格（最新成交价）" },
+          "highPrice": { "type": "number", "description": "今日最高价" },
+          "lowPrice": { "type": "number", "description": "今日最低价" },
+          "openPrice": { "type": "number", "description": "今日开盘价" },
+          "lastClosePrice": { "type": "number", "description": "昨收价" },
+          "volume": { "type": "number", "description": "成交量（股）" },
+          "turnover": { "type": "number", "description": "成交额" },
+          "turnoverRate": { "type": "number", "description": "换手率 (%)" },
+          "amplitude": { "type": "number", "description": "振幅 (%)" },
+          "pe": { "type": "number", "description": "市盈率 (TTM)" },
+          "pb": { "type": "number", "description": "市净率" },
+          "marketCap": { "type": "number", "description": "总市值" },
+          "updateTime": { "type": "string", "description": "数据更新时间" },
+          "isSuspended": { "type": "boolean", "description": "是否停牌" }
         },
         "required": ["curPrice"]
       }
@@ -50,8 +53,11 @@
           "params": {
             "type": "object",
             "properties": {
-              "num":    { "type": "number", "description": "返回K线根数，默认30" },
-              "klType": { "type": "number", "description": "K线类型: 1=1分 2=日 3=周 4=月 5=年 6=5分" }
+              "num": { "type": "number", "description": "返回K线根数，默认30" },
+              "klType": {
+                "type": "number",
+                "description": "K线类型: 1=1分 2=日 3=周 4=月 5=年 6=5分"
+              }
             }
           }
         },
@@ -67,13 +73,13 @@
             "items": {
               "type": "object",
               "properties": {
-                "time":       { "type": "string", "description": "时间" },
-                "openPrice":  { "type": "number", "description": "开盘价" },
-                "highPrice":  { "type": "number", "description": "最高价" },
-                "lowPrice":   { "type": "number", "description": "最低价" },
+                "time": { "type": "string", "description": "时间" },
+                "openPrice": { "type": "number", "description": "开盘价" },
+                "highPrice": { "type": "number", "description": "最高价" },
+                "lowPrice": { "type": "number", "description": "最低价" },
                 "closePrice": { "type": "number", "description": "收盘价" },
-                "volume":     { "type": "number", "description": "成交量" },
-                "turnover":   { "type": "number", "description": "成交额" },
+                "volume": { "type": "number", "description": "成交量" },
+                "turnover": { "type": "number", "description": "成交额" },
                 "changeRate": { "type": "number", "description": "涨跌幅 (%)" }
               }
             }
@@ -92,7 +98,10 @@
         "properties": {
           "ticker": { "type": "string", "description": "股票代码" },
           "market": { "type": "string" },
-          "params": { "type": "object", "properties": { "levels": { "type": "number", "description": "盘口档数，默认10" } } }
+          "params": {
+            "type": "object",
+            "properties": { "levels": { "type": "number", "description": "盘口档数，默认10" } }
+          }
         },
         "required": ["ticker"]
       },
@@ -100,8 +109,30 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string" },
-          "asks": { "type": "array", "description": "卖盘（价格从低到高）", "items": { "type": "object", "properties": { "price": { "type": "number" }, "volume": { "type": "number" }, "numOrders": { "type": "number" } } } },
-          "bids": { "type": "array", "description": "买盘（价格从高到低）", "items": { "type": "object", "properties": { "price": { "type": "number" }, "volume": { "type": "number" }, "numOrders": { "type": "number" } } } }
+          "asks": {
+            "type": "array",
+            "description": "卖盘（价格从低到高）",
+            "items": {
+              "type": "object",
+              "properties": {
+                "price": { "type": "number" },
+                "volume": { "type": "number" },
+                "numOrders": { "type": "number" }
+              }
+            }
+          },
+          "bids": {
+            "type": "array",
+            "description": "买盘（价格从高到低）",
+            "items": {
+              "type": "object",
+              "properties": {
+                "price": { "type": "number" },
+                "volume": { "type": "number" },
+                "numOrders": { "type": "number" }
+              }
+            }
+          }
         }
       }
     },
@@ -119,26 +150,39 @@
           "params": {
             "type": "object",
             "properties": {
-              "klType":    { "type": "number", "description": "K线类型: 1=1分 2=日 3=周 4=月 5=年 6=5分" },
+              "klType": {
+                "type": "number",
+                "description": "K线类型: 1=1分 2=日 3=周 4=月 5=年 6=5分"
+              },
               "beginTime": { "type": "string", "description": "开始时间，格式 yyyy-MM-dd" },
-              "endTime":   { "type": "string", "description": "结束时间，格式 yyyy-MM-dd" },
-              "maxCount":  { "type": "number", "description": "最大返回数量，默认1000" }
-            }
+              "endTime": { "type": "string", "description": "结束时间，格式 yyyy-MM-dd" },
+              "maxCount": { "type": "number", "description": "最大返回数量，默认1000" }
+            },
+            "required": ["beginTime", "endTime"]
           }
         },
-        "required": ["ticker", "params.beginTime", "params.endTime"]
+        "required": ["ticker"]
       },
       "responseSchema": {
         "type": "object",
         "properties": {
           "ticker": { "type": "string" },
-          "bars": { "type": "array", "items": { "type": "object", "properties": {
-            "time": { "type": "string" },
-            "openPrice": { "type": "number" }, "highPrice": { "type": "number" },
-            "lowPrice": { "type": "number" }, "closePrice": { "type": "number" },
-            "volume": { "type": "number" }, "turnover": { "type": "number" },
-            "changeRate": { "type": "number", "description": "涨跌幅 (%)" }
-          }}}
+          "bars": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": { "type": "string" },
+                "openPrice": { "type": "number" },
+                "highPrice": { "type": "number" },
+                "lowPrice": { "type": "number" },
+                "closePrice": { "type": "number" },
+                "volume": { "type": "number" },
+                "turnover": { "type": "number" },
+                "changeRate": { "type": "number", "description": "涨跌幅 (%)" }
+              }
+            }
+          }
         }
       }
     },
@@ -153,7 +197,12 @@
         "properties": {
           "ticker": { "type": "string", "description": "股票代码" },
           "market": { "type": "string" },
-          "params": { "type": "object", "properties": { "periodType": { "type": "number", "description": "周期: 1=日内 2=日 3=周 4=月" } } }
+          "params": {
+            "type": "object",
+            "properties": {
+              "periodType": { "type": "number", "description": "周期: 1=日内 2=日 3=周 4=月" }
+            }
+          }
         },
         "required": ["ticker"]
       },
@@ -161,15 +210,21 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string" },
-          "flowItemList": { "type": "array", "items": { "type": "object", "properties": {
-            "time":        { "type": "string", "description": "时间" },
-            "inFlow":      { "type": "number", "description": "总净流入" },
-            "mainInFlow":  { "type": "number", "description": "主力净流入" },
-            "superInFlow": { "type": "number", "description": "超大单净流入" },
-            "bigInFlow":   { "type": "number", "description": "大单净流入" },
-            "midInFlow":   { "type": "number", "description": "中单净流入" },
-            "smlInFlow":   { "type": "number", "description": "小单净流入" }
-          }}}
+          "flowItemList": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": { "type": "string", "description": "时间" },
+                "inFlow": { "type": "number", "description": "总净流入" },
+                "mainInFlow": { "type": "number", "description": "主力净流入" },
+                "superInFlow": { "type": "number", "description": "超大单净流入" },
+                "bigInFlow": { "type": "number", "description": "大单净流入" },
+                "midInFlow": { "type": "number", "description": "中单净流入" },
+                "smlInFlow": { "type": "number", "description": "小单净流入" }
+              }
+            }
+          }
         }
       }
     },
@@ -190,16 +245,16 @@
       "responseSchema": {
         "type": "object",
         "properties": {
-          "ticker":          { "type": "string" },
-          "capitalInSuper":  { "type": "number", "description": "超大单流入" },
+          "ticker": { "type": "string" },
+          "capitalInSuper": { "type": "number", "description": "超大单流入" },
           "capitalOutSuper": { "type": "number", "description": "超大单流出" },
-          "capitalInBig":    { "type": "number", "description": "大单流入" },
-          "capitalOutBig":   { "type": "number", "description": "大单流出" },
-          "capitalInMid":    { "type": "number", "description": "中单流入" },
-          "capitalOutMid":   { "type": "number", "description": "中单流出" },
-          "capitalInSmall":  { "type": "number", "description": "小单流入" },
+          "capitalInBig": { "type": "number", "description": "大单流入" },
+          "capitalOutBig": { "type": "number", "description": "大单流出" },
+          "capitalInMid": { "type": "number", "description": "中单流入" },
+          "capitalOutMid": { "type": "number", "description": "中单流出" },
+          "capitalInSmall": { "type": "number", "description": "小单流入" },
           "capitalOutSmall": { "type": "number", "description": "小单流出" },
-          "updateTime":      { "type": "string" }
+          "updateTime": { "type": "string" }
         }
       }
     },
@@ -213,24 +268,33 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string", "description": "股票代码/关键词" },
-          "params": { "type": "object", "properties": {
-            "query":      { "type": "string", "description": "搜索关键词" },
-            "maxResults": { "type": "number", "description": "最大返回条数，默认10" },
-            "newsType":   { "type": "number", "description": "类型: 1=新闻 2=公告 3=研报" },
-            "lang":       { "type": "string", "description": "语言: zh/en" }
-          }}
+          "params": {
+            "type": "object",
+            "properties": {
+              "query": { "type": "string", "description": "搜索关键词" },
+              "maxResults": { "type": "number", "description": "最大返回条数，默认10" },
+              "newsType": { "type": "number", "description": "类型: 1=新闻 2=公告 3=研报" },
+              "lang": { "type": "string", "description": "语言: zh/en" }
+            }
+          }
         }
       },
       "responseSchema": {
         "type": "object",
         "properties": {
-          "articles": { "type": "array", "items": { "type": "object", "properties": {
-            "title":       { "type": "string", "description": "标题" },
-            "url":         { "type": "string", "description": "链接" },
-            "source":      { "type": "string", "description": "来源" },
-            "publishedAt": { "type": "string", "description": "发布时间" },
-            "snippet":     { "type": "string", "description": "摘要" }
-          }}}
+          "articles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string", "description": "标题" },
+                "url": { "type": "string", "description": "链接" },
+                "source": { "type": "string", "description": "来源" },
+                "publishedAt": { "type": "string", "description": "发布时间" },
+                "snippet": { "type": "string", "description": "摘要" }
+              }
+            }
+          }
         }
       }
     },
@@ -244,7 +308,10 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string", "description": "股票代码" },
-          "params": { "type": "object", "properties": { "maxResults": { "type": "number", "description": "最大返回条数" } } }
+          "params": {
+            "type": "object",
+            "properties": { "maxResults": { "type": "number", "description": "最大返回条数" } }
+          }
         },
         "required": ["ticker"]
       },
@@ -266,10 +333,17 @@
         "properties": {
           "ticker": { "type": "string", "description": "股票代码" },
           "market": { "type": "string" },
-          "params": { "type": "object", "properties": {
-            "period":     { "type": "number", "description": "计算周期，默认20" },
-            "indicators": { "type": "array", "items": { "type": "string" }, "description": "指定指标: SMA, RSI, MACD, BOLL" }
-          }}
+          "params": {
+            "type": "object",
+            "properties": {
+              "period": { "type": "number", "description": "计算周期，默认20" },
+              "indicators": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "指定指标: SMA, RSI, MACD, BOLL"
+              }
+            }
+          }
         },
         "required": ["ticker"]
       },
@@ -277,12 +351,39 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string" },
-          "indicators": { "type": "object", "properties": {
-            "sma":  { "type": "object", "description": "简单移动平均线", "properties": { "value": { "type": "number" }, "period": { "type": "number" } } },
-            "rsi":  { "type": "object", "description": "相对强弱指标 (0-100)", "properties": { "value": { "type": "number" }, "period": { "type": "number" } } },
-            "macd": { "type": "object", "description": "MACD", "properties": { "macd": { "type": "number" }, "signal": { "type": "number" }, "histogram": { "type": "number" } } },
-            "boll": { "type": "object", "description": "布林带", "properties": { "upper": { "type": "number" }, "middle": { "type": "number" }, "lower": { "type": "number" } } }
-          }}
+          "indicators": {
+            "type": "object",
+            "properties": {
+              "sma": {
+                "type": "object",
+                "description": "简单移动平均线",
+                "properties": { "value": { "type": "number" }, "period": { "type": "number" } }
+              },
+              "rsi": {
+                "type": "object",
+                "description": "相对强弱指标 (0-100)",
+                "properties": { "value": { "type": "number" }, "period": { "type": "number" } }
+              },
+              "macd": {
+                "type": "object",
+                "description": "MACD",
+                "properties": {
+                  "macd": { "type": "number" },
+                  "signal": { "type": "number" },
+                  "histogram": { "type": "number" }
+                }
+              },
+              "boll": {
+                "type": "object",
+                "description": "布林带",
+                "properties": {
+                  "upper": { "type": "number" },
+                  "middle": { "type": "number" },
+                  "lower": { "type": "number" }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -306,14 +407,18 @@
           "ticker": { "type": "string" },
           "staticInfo": { "type": "object", "description": "静态信息（上市日期、每手股数等）" },
           "snapshot": { "type": "object", "description": "行情快照" },
-          "valuation": { "type": "object", "description": "估值数据", "properties": {
-            "pe": { "type": "number", "description": "市盈率" },
-            "pb": { "type": "number", "description": "市净率" },
-            "marketCap": { "type": "number", "description": "总市值" },
-            "earningsPerShare": { "type": "number", "description": "每股收益" },
-            "totalShares": { "type": "number", "description": "总股本" },
-            "outstandingShares": { "type": "number", "description": "流通股本" }
-          }}
+          "valuation": {
+            "type": "object",
+            "description": "估值数据",
+            "properties": {
+              "pe": { "type": "number", "description": "市盈率" },
+              "pb": { "type": "number", "description": "市净率" },
+              "marketCap": { "type": "number", "description": "总市值" },
+              "earningsPerShare": { "type": "number", "description": "每股收益" },
+              "totalShares": { "type": "number", "description": "总股本" },
+              "outstandingShares": { "type": "number", "description": "流通股本" }
+            }
+          }
         }
       }
     },
@@ -328,11 +433,14 @@
         "properties": {
           "ticker": { "type": "string", "description": "股票代码" },
           "market": { "type": "string" },
-          "params": { "type": "object", "properties": {
-            "statementType": { "type": "number", "description": "1=年报 2=季报" },
-            "financialType": { "type": "number", "description": "1=报告期 2=报告期(调整后)" },
-            "num": { "type": "number", "description": "返回期数，默认8" }
-          }}
+          "params": {
+            "type": "object",
+            "properties": {
+              "statementType": { "type": "number", "description": "1=年报 2=季报" },
+              "financialType": { "type": "number", "description": "1=报告期 2=报告期(调整后)" },
+              "num": { "type": "number", "description": "返回期数，默认8" }
+            }
+          }
         },
         "required": ["ticker"]
       },
@@ -340,7 +448,11 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string" },
-          "reportList": { "type": "array", "description": "财务报告列表", "items": { "type": "object" } },
+          "reportList": {
+            "type": "array",
+            "description": "财务报告列表",
+            "items": { "type": "object" }
+          },
           "structureList": { "type": "array", "description": "字段结构定义" }
         }
       }
@@ -356,9 +468,12 @@
         "properties": {
           "ticker": { "type": "string", "description": "股票代码" },
           "market": { "type": "string" },
-          "params": { "type": "object", "properties": {
-            "valuationType": { "type": "number", "description": "1=PE_TTM 2=PB 3=PS" }
-          }}
+          "params": {
+            "type": "object",
+            "properties": {
+              "valuationType": { "type": "number", "description": "1=PE_TTM 2=PB 3=PS" }
+            }
+          }
         },
         "required": ["ticker"]
       },
@@ -417,10 +532,17 @@
         "type": "object",
         "properties": {
           "ticker": { "type": "string" },
-          "dividendList": { "type": "array", "description": "分红记录列表", "items": { "type": "object", "properties": {
-            "time": { "type": "string", "description": "除权日" },
-            "dividend": { "type": "number", "description": "每股派息" }
-          }}}
+          "dividendList": {
+            "type": "array",
+            "description": "分红记录列表",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": { "type": "string", "description": "除权日" },
+                "dividend": { "type": "number", "description": "每股派息" }
+              }
+            }
+          }
         }
       }
     },
@@ -435,9 +557,12 @@
         "properties": {
           "ticker": { "type": "string", "description": "标的股票代码" },
           "market": { "type": "string" },
-          "params": { "type": "object", "properties": {
-            "type": { "type": "number", "description": "1=全部 2=看涨 3=看跌" }
-          }}
+          "params": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "number", "description": "1=全部 2=看涨 3=看跌" }
+            }
+          }
         },
         "required": ["ticker"]
       },
@@ -459,19 +584,32 @@
         "type": "object",
         "properties": {
           "market": { "type": "string", "description": "市场标识" },
-          "params": { "type": "object", "properties": {
-            "plateSetType": { "type": "number", "description": "1=全部 2=行业 3=地域 4=概念 5=交易所" }
-          }}
+          "params": {
+            "type": "object",
+            "properties": {
+              "plateSetType": {
+                "type": "number",
+                "description": "1=全部 2=行业 3=地域 4=概念 5=交易所"
+              }
+            }
+          }
         }
       },
       "responseSchema": {
         "type": "object",
         "properties": {
           "market": { "type": "number" },
-          "plates": { "type": "array", "description": "板块列表", "items": { "type": "object", "properties": {
-            "code": { "type": "string", "description": "板块代码" },
-            "name": { "type": "string", "description": "板块名称" }
-          }}}
+          "plates": {
+            "type": "array",
+            "description": "板块列表",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string", "description": "板块代码" },
+                "name": { "type": "string", "description": "板块名称" }
+              }
+            }
+          }
         }
       }
     },
@@ -485,20 +623,30 @@
         "type": "object",
         "properties": {
           "market": { "type": "string" },
-          "params": { "type": "object", "properties": {
-            "plateCode": { "type": "string", "description": "板块代码" }
-          }}
-        },
-        "required": ["params.plateCode"]
+          "params": {
+            "type": "object",
+            "properties": {
+              "plateCode": { "type": "string", "description": "板块代码" }
+            },
+            "required": ["plateCode"]
+          }
+        }
       },
       "responseSchema": {
         "type": "object",
         "properties": {
           "plateCode": { "type": "string" },
-          "stocks": { "type": "array", "description": "成分股列表", "items": { "type": "object", "properties": {
-            "code": { "type": "string" },
-            "name": { "type": "string" }
-          }}}
+          "stocks": {
+            "type": "array",
+            "description": "成分股列表",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string" },
+                "name": { "type": "string" }
+              }
+            }
+          }
         }
       }
     },
@@ -511,22 +659,34 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "params": { "type": "object", "properties": {
-            "pages": { "type": "number", "description": "拉取页数，默认5（每页100个板块）" }
-          }}
+          "params": {
+            "type": "object",
+            "properties": {
+              "pages": { "type": "number", "description": "拉取页数，默认5（每页100个板块）" }
+            }
+          }
         }
       },
       "responseSchema": {
         "type": "object",
         "properties": {
           "total": { "type": "number", "description": "板块总数" },
-          "boards": { "type": "array", "items": { "type": "object", "properties": {
-            "code":         { "type": "string",  "description": "BK 板块代码，如 BK1101" },
-            "name":         { "type": "string",  "description": "板块名称" },
-            "changeRate":   { "type": "number",  "description": "今日涨幅 (%)" },
-            "changeRate5d": { "type": "number",  "description": "5日涨幅 (%)" },
-            "isNoise":      { "type": "boolean", "description": "是否为噪音板块（统计/资金类虚拟板块）" }
-          }}}
+          "boards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string", "description": "BK 板块代码，如 BK1101" },
+                "name": { "type": "string", "description": "板块名称" },
+                "changeRate": { "type": "number", "description": "今日涨幅 (%)" },
+                "changeRate5d": { "type": "number", "description": "5日涨幅 (%)" },
+                "isNoise": {
+                  "type": "boolean",
+                  "description": "是否为噪音板块（统计/资金类虚拟板块）"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -539,28 +699,37 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "params": { "type": "object", "properties": {
-            "boardCode": { "type": "string", "description": "BK 板块代码，如 BK1101" },
-            "limit":     { "type": "number", "description": "最大返回数量，默认50" }
-          }},
-          "required": ["params.boardCode"]
+          "params": {
+            "type": "object",
+            "properties": {
+              "boardCode": { "type": "string", "description": "BK 板块代码，如 BK1101" },
+              "limit": { "type": "number", "description": "最大返回数量，默认50" }
+            },
+            "required": ["boardCode"]
+          }
         }
       },
       "responseSchema": {
         "type": "object",
         "properties": {
           "boardCode": { "type": "string" },
-          "total":     { "type": "number" },
-          "stocks":    { "type": "array", "items": { "type": "object", "properties": {
-            "code":         { "type": "string",  "description": "股票代码（6位数字）" },
-            "market":       { "type": "string",  "description": "SH 或 SZ" },
-            "futuCode":     { "type": "string",  "description": "富途格式代码，如 SH.600519" },
-            "name":         { "type": "string",  "description": "股票名称" },
-            "changeRate":   { "type": "number",  "description": "今日涨幅 (%)" },
-            "changeRate5d": { "type": "number",  "description": "5日涨幅 (%)" },
-            "turnover":     { "type": "number",  "description": "成交额（元）" },
-            "mainFlow":     { "type": "number",  "description": "今日主力净流入（元）" }
-          }}}
+          "total": { "type": "number" },
+          "stocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string", "description": "股票代码（6位数字）" },
+                "market": { "type": "string", "description": "SH 或 SZ" },
+                "futuCode": { "type": "string", "description": "富途格式代码，如 SH.600519" },
+                "name": { "type": "string", "description": "股票名称" },
+                "changeRate": { "type": "number", "description": "今日涨幅 (%)" },
+                "changeRate5d": { "type": "number", "description": "5日涨幅 (%)" },
+                "turnover": { "type": "number", "description": "成交额（元）" },
+                "mainFlow": { "type": "number", "description": "今日主力净流入（元）" }
+              }
+            }
+          }
         }
       }
     },
@@ -573,28 +742,37 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "params": { "type": "object", "properties": {
-            "boardCode": { "type": "string", "description": "BK 板块代码" },
-            "weeks":     { "type": "number", "description": "拉取周数，默认4" }
-          }},
-          "required": ["params.boardCode"]
+          "params": {
+            "type": "object",
+            "properties": {
+              "boardCode": { "type": "string", "description": "BK 板块代码" },
+              "weeks": { "type": "number", "description": "拉取周数，默认4" }
+            },
+            "required": ["boardCode"]
+          }
         }
       },
       "responseSchema": {
         "type": "object",
         "properties": {
           "boardCode": { "type": "string" },
-          "klines":    { "type": "array", "items": { "type": "object", "properties": {
-            "time":       { "type": "string", "description": "日期" },
-            "open":       { "type": "number" },
-            "close":      { "type": "number" },
-            "high":       { "type": "number" },
-            "low":        { "type": "number" },
-            "volume":     { "type": "number" },
-            "turnover":   { "type": "number" },
-            "amplitude":  { "type": "number" },
-            "changeRate": { "type": "number", "description": "涨跌幅 (%)" }
-          }}}
+          "klines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "time": { "type": "string", "description": "日期" },
+                "open": { "type": "number" },
+                "close": { "type": "number" },
+                "high": { "type": "number" },
+                "low": { "type": "number" },
+                "volume": { "type": "number" },
+                "turnover": { "type": "number" },
+                "amplitude": { "type": "number" },
+                "changeRate": { "type": "number", "description": "涨跌幅 (%)" }
+              }
+            }
+          }
         }
       }
     }

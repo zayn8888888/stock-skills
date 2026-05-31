@@ -116,7 +116,7 @@ function parseScalar(value: string): unknown {
 // ──────────────────────── path helpers ───────────────────────────
 
 const AGENTS_ROOT = resolve(process.cwd(), "skills", "agents");
-const SKILLS_ROOT = resolve(process.cwd(), "skills");
+const _SKILLS_ROOT = resolve(process.cwd(), "skills");
 
 function agentDir(name: string): string {
   return resolve(AGENTS_ROOT, name);

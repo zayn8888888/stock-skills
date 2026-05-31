@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { sessions, runs } from "@/lib/db/schema";
-import { validateAuth } from "@/lib/auth/middleware";
-import { eq, and } from "drizzle-orm";
 import { taskRunner } from "@/lib/agent/task-runner";
+import { validateAuth } from "@/lib/auth/middleware";
+import { getDb } from "@/lib/db";
+import { runs, sessions } from "@/lib/db/schema";
 import { eventBus } from "@/lib/runtime/event-bus";
+import { and, eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -17,11 +17,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   const db = getDb();
 
   // Verify session exists
-  const [session] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
+  const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
 
   if (!session) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -31,12 +27,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   const [activeRun] = await db
     .select()
     .from(runs)
-    .where(
-      and(
-        eq(runs.sessionId, sessionId),
-        eq(runs.status, "running"),
-      ),
-    )
+    .where(and(eq(runs.sessionId, sessionId), eq(runs.status, "running")))
     .limit(1);
 
   if (!activeRun) {

@@ -52,7 +52,10 @@
         "properties": {
           "ticker": { "type": "string" },
           "data_timestamp": { "type": "string" },
-          "pm_rating": { "type": "string", "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"] },
+          "pm_rating": {
+            "type": "string",
+            "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"]
+          },
           "pm_summary": { "type": "string" },
           "pm_investment_thesis": { "type": "string" },
           "pm_price_target": { "type": ["number", "null"] },

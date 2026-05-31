@@ -1,27 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import Link from "next/link";
-import {
-  BarChart3,
-  Database,
-  FileText,
-  ChevronLeft,
-  ChevronRight,
-  Sun,
-  Moon,
-  Globe,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useTheme } from "@/hooks/useTheme";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useTheme } from "@/hooks/useTheme";
+import { type SessionEntry, type SessionStatus, normalizeSessions } from "@/lib/sessions";
+import { cn } from "@/lib/utils";
 import { useAgentStore } from "@/stores/agent";
 import {
-  normalizeSessions,
-  type SessionEntry,
-  type SessionStatus,
-} from "@/lib/sessions";
+  BarChart3,
+  ChevronLeft,
+  ChevronRight,
+  Database,
+  FileText,
+  Globe,
+  Moon,
+  Sun,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -117,8 +113,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
   useEffect(() => {
     fetchSessions();
     window.addEventListener("stock-skills:sessions-updated", fetchSessions);
-    return () =>
-      window.removeEventListener("stock-skills:sessions-updated", fetchSessions);
+    return () => window.removeEventListener("stock-skills:sessions-updated", fetchSessions);
   }, [fetchSessions]);
 
   const handleSessionClick = useCallback(
@@ -137,37 +132,28 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       failed: "bg-destructive",
       due_review: "bg-warning",
     };
-    return (
-      <span
-        className={cn("inline-block h-2 w-2 rounded-full shrink-0", colors[status])}
-      />
-    );
+    return <span className={cn("inline-block h-2 w-2 rounded-full shrink-0", colors[status])} />;
   }, []);
 
   return (
     <aside
       className={cn(
         "flex flex-col h-screen border-r border-sidebar-border bg-sidebar-background text-sidebar-foreground transition-[width] duration-200 overflow-hidden",
-        collapsed ? "w-12" : "w-60"
+        collapsed ? "w-12" : "w-60",
       )}
     >
       {/* Brand header */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-sidebar-border">
         {!collapsed && (
-          <span className="text-sm font-semibold tracking-tight truncate">
-            {labels.brand}
-          </span>
+          <span className="text-sm font-semibold tracking-tight truncate">{labels.brand}</span>
         )}
         <button
+          type="button"
           onClick={onToggleCollapse}
           className="p-1 rounded hover:bg-sidebar-accent text-sidebar-foreground/70 hover:text-sidebar-foreground"
           aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </div>
 
@@ -183,14 +169,12 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
                 "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
                 active
                   ? "bg-sidebar-accent text-sidebar-primary font-medium"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
               )}
               title={collapsed ? labels[item.labelKey] : undefined}
             >
               <item.icon className="h-4 w-4 shrink-0" />
-              {!collapsed && (
-                <span className="truncate">{labels[item.labelKey]}</span>
-              )}
+              {!collapsed && <span className="truncate">{labels[item.labelKey]}</span>}
             </Link>
           );
         })}
@@ -199,9 +183,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       {/* Overview section */}
       {!collapsed && (
         <div className="px-3 py-2 border-t border-sidebar-border">
-          <p className="text-xs font-medium text-sidebar-foreground/50 mb-1">
-            {labels.overview}
-          </p>
+          <p className="text-xs font-medium text-sidebar-foreground/50 mb-1">{labels.overview}</p>
           <div className="flex gap-3 text-xs text-sidebar-foreground/70">
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
@@ -228,6 +210,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           <div className="flex flex-col gap-0.5">
             {sessions.map((session) => (
               <button
+                type="button"
                 key={session.id}
                 onClick={() => handleSessionClick(session.id)}
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground text-left truncate"
@@ -247,6 +230,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
       <div className="flex flex-col gap-1 px-2 py-2 border-t border-sidebar-border">
         {/* Language switcher */}
         <button
+          type="button"
           onClick={toggleLanguage}
           className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           title={collapsed ? "Language" : undefined}
@@ -257,6 +241,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
         {/* Theme toggle */}
         <button
+          type="button"
           onClick={toggleTheme}
           className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
           title={collapsed ? "Toggle theme" : undefined}
@@ -266,9 +251,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           ) : (
             <Moon className="h-4 w-4 shrink-0" />
           )}
-          {!collapsed && (
-            <span>{theme === "dark" ? labels.lightMode : labels.darkMode}</span>
-          )}
+          {!collapsed && <span>{theme === "dark" ? labels.lightMode : labels.darkMode}</span>}
         </button>
       </div>
     </aside>

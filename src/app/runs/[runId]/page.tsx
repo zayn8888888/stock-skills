@@ -1,25 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { Skeleton } from "@/components/common/Skeleton";
+import { DataTab } from "@/components/run/DataTab";
+import { LogsTab } from "@/components/run/LogsTab";
+import { ReportTab } from "@/components/run/ReportTab";
+import { cn } from "@/lib/utils";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
   ArrowLeft,
-  FileText,
-  Database,
-  ScrollText,
-  Clock,
   CheckCircle2,
-  XCircle,
+  Clock,
+  Database,
+  FileText,
   Loader2,
+  ScrollText,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
-import { ReportTab } from "@/components/run/ReportTab";
-import { DataTab } from "@/components/run/DataTab";
-import { LogsTab } from "@/components/run/LogsTab";
-import { Skeleton } from "@/components/common/Skeleton";
-import { ErrorBoundary } from "@/components/common/ErrorBoundary";
-import { cn } from "@/lib/utils";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface RunDetail {
   run_id: string;
@@ -55,10 +55,7 @@ interface RunDetail {
   }[];
 }
 
-const statusConfig: Record<
-  string,
-  { icon: typeof CheckCircle2; color: string; label: string }
-> = {
+const statusConfig: Record<string, { icon: typeof CheckCircle2; color: string; label: string }> = {
   success: { icon: CheckCircle2, color: "text-green-500", label: "Success" },
   failed: { icon: XCircle, color: "text-destructive", label: "Failed" },
   running: { icon: Loader2, color: "text-blue-500", label: "Running" },
@@ -130,12 +127,8 @@ export default function RunDetailPage() {
   const st = statusConfig[run.status] ?? statusConfig.pending;
   const StatusIcon = st.icon;
 
-  const reportArtifact = run.artifacts.find(
-    (a) => a.name === "report.md" || a.kind === "report"
-  );
-  const resultArtifact = run.artifacts.find(
-    (a) => a.name === "result.json"
-  );
+  const reportArtifact = run.artifacts.find((a) => a.name === "report.md" || a.kind === "report");
+  const resultArtifact = run.artifacts.find((a) => a.name === "result.json");
 
   return (
     <ErrorBoundary>
@@ -175,9 +168,7 @@ export default function RunDetailPage() {
               className="rounded-lg border border-border bg-muted/30 px-4 py-2.5"
             >
               <p className="text-xs text-muted-foreground">{item.label}</p>
-              <p className="mt-0.5 text-sm font-medium text-foreground truncate">
-                {item.value}
-              </p>
+              <p className="mt-0.5 text-sm font-medium text-foreground truncate">{item.value}</p>
             </div>
           ))}
         </div>

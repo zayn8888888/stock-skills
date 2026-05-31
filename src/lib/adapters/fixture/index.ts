@@ -33,7 +33,14 @@ const NVDA_KLINE = {
     { date: "2026-05-27", open: 131.8, high: 134.1, low: 131.0, close: 133.2, volume: 260_000_000 },
     { date: "2026-05-28", open: 133.0, high: 134.5, low: 132.1, close: 132.9, volume: 210_000_000 },
     { date: "2026-05-29", open: 132.5, high: 133.8, low: 131.6, close: 131.8, volume: 195_000_000 },
-    { date: "2026-05-30", open: 132.0, high: 135.2, low: 131.5, close: 134.66, volume: 287_400_000 },
+    {
+      date: "2026-05-30",
+      open: 132.0,
+      high: 135.2,
+      low: 131.5,
+      close: 134.66,
+      volume: 287_400_000,
+    },
   ],
 };
 
@@ -72,7 +79,8 @@ const NVDA_TECHNICAL = {
     bollinger_lower: 126.1,
     atr_14: 3.2,
   },
-  trend_summary: "Bullish — price above SMA20/50/200, RSI neutral-healthy, MACD positive crossover.",
+  trend_summary:
+    "Bullish — price above SMA20/50/200, RSI neutral-healthy, MACD positive crossover.",
 };
 
 // ──────────────────────────── Operation → Data Map ────────────────
@@ -110,7 +118,7 @@ export class FixtureAdapter implements DataSourceAdapter {
     if (!data) {
       throw new Error(
         `FixtureAdapter does not support operation "${request.operation}". ` +
-          `Supported: ${this.capabilities().join(", ")}`
+          `Supported: ${this.capabilities().join(", ")}`,
       );
     }
 

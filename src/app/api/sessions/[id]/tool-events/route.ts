@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { runs, runEvents } from "@/lib/db/schema";
 import { validateAuth } from "@/lib/auth/middleware";
-import { eq, and, inArray } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import { runEvents, runs } from "@/lib/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 
 /**
  * GET /api/sessions/[id]/tool-events
@@ -33,20 +33,18 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   const events = await db
     .select({ runId: runEvents.runId, data: runEvents.data })
     .from(runEvents)
-    .where(
-      and(
-        eq(runEvents.eventType, "tool_use"),
-        inArray(runEvents.runId, runIds),
-      )
-    );
+    .where(and(eq(runEvents.eventType, "tool_use"), inArray(runEvents.runId, runIds)));
 
-  const toolCallsByRun: Record<string, Array<{
-    id: string;
-    name: string;
-    status: "completed" | "error";
-    args?: string;
-    result?: string;
-  }>> = {};
+  const toolCallsByRun: Record<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      status: "completed" | "error";
+      args?: string;
+      result?: string;
+    }>
+  > = {};
 
   for (const ev of events) {
     if (!ev.data) continue;

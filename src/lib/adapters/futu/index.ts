@@ -14,10 +14,8 @@
  *   FUTU_OPEND_HOST  (default: 127.0.0.1)
  *   FUTU_OPEND_PORT  (default: 11111)
  */
-
 import { nanoid } from "nanoid";
-import { SMA, RSI, MACD, BollingerBands } from "technicalindicators";
-import { FutuClient, Market, KLType, SubType, klTypeToSubType } from "./client";
+import { BollingerBands, MACD, RSI, SMA } from "technicalindicators";
 import type {
   AdapterRequest,
   DataSourceAdapter,
@@ -25,19 +23,26 @@ import type {
   RawResponse,
   SourceHealth,
 } from "../base";
+import { FutuClient, KLType, Market, SubType, klTypeToSubType } from "./client";
 
 // ──────────────────── Market mapping ────────────────────────────────
 
+/** Format Date to "yyyy-MM-dd HH:mm:ss" for Futu API */
+function formatDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 const MARKET_MAP: Record<string, number> = {
-  HK: Market.HK,       // 1
-  US: Market.US,       // 11
-  NASDAQ: Market.US,   // 11
-  NYSE: Market.US,     // 11
-  SSE: Market.CN_SH,   // 21
-  "SH": Market.CN_SH,  // 21
-  SZ: Market.CN_SZ,    // 22
-  SG: Market.SG,       // 31
-  JP: Market.JP,       // 41
+  HK: Market.HK, // 1
+  US: Market.US, // 11
+  NASDAQ: Market.US, // 11
+  NYSE: Market.US, // 11
+  SSE: Market.CN_SH, // 21
+  SH: Market.CN_SH, // 21
+  SZ: Market.CN_SZ, // 22
+  SG: Market.SG, // 31
+  JP: Market.JP, // 41
 };
 
 function resolveMarket(market?: string): number {
@@ -117,9 +122,7 @@ export class FutuAdapter implements DataSourceAdapter {
     switch (request.operation) {
       case "quote.snapshot": {
         // getSecuritySnapshot — 无需订阅，返回完整快照数据
-        const snapshots = await this.client.getSecuritySnapshot([
-          { market, code: ticker },
-        ]);
+        const snapshots = await this.client.getSecuritySnapshot([{ market, code: ticker }]);
         const snap = snapshots[0];
         if (snap) {
           // Flatten: merge basic + equityExData into one object
@@ -166,7 +169,12 @@ export class FutuAdapter implements DataSourceAdapter {
         const endTime = (request.params?.endTime as string) ?? "";
         const maxCount = (request.params?.maxCount as number) ?? 1000;
         const bars = await this.client.requestHistoryKline(
-          market, ticker, klType, beginTime, endTime, maxCount,
+          market,
+          ticker,
+          klType,
+          beginTime,
+          endTime,
+          maxCount,
         );
         data = { ticker, bars };
         break;
@@ -174,7 +182,17 @@ export class FutuAdapter implements DataSourceAdapter {
 
       case "capital.flow": {
         const periodType = (request.params?.periodType as number) ?? 2; // DAY
-        const flow = await this.client.getCapitalFlow(market, ticker, periodType);
+        // Futu requires beginTime/endTime in "yyyy-MM-dd HH:mm:ss" format
+        const now = new Date();
+        const endTime = formatDate(now);
+        const beginTime = formatDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+        const flow = await this.client.getCapitalFlow(
+          market,
+          ticker,
+          periodType,
+          beginTime,
+          endTime,
+        );
         data = { ticker, ...flow };
         break;
       }
@@ -189,10 +207,16 @@ export class FutuAdapter implements DataSourceAdapter {
         // Fetch recent K-line data — 60 calendar days (~42 trading days) covers all indicators
         const now = new Date();
         const beginDate = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000)
-          .toISOString().slice(0, 10);
+          .toISOString()
+          .slice(0, 10);
         const endDate = now.toISOString().slice(0, 10);
         const bars = await this.client.requestHistoryKline(
-          market, ticker, KLType.Day, beginDate, endDate, 60,
+          market,
+          ticker,
+          KLType.Day,
+          beginDate,
+          endDate,
+          60,
         );
 
         const closes = bars
@@ -205,16 +229,19 @@ export class FutuAdapter implements DataSourceAdapter {
         }
 
         // Calculate indicators
-        const sma5  = SMA.calculate({ period: 5, values: closes });
+        const sma5 = SMA.calculate({ period: 5, values: closes });
         const sma10 = SMA.calculate({ period: 10, values: closes });
         const sma20 = SMA.calculate({ period: 20, values: closes });
         const rsi14 = RSI.calculate({ period: 14, values: closes });
-        const macd  = MACD.calculate({
-          fastPeriod: 12, slowPeriod: 26, signalPeriod: 9,
-          SimpleMAOscillator: false, SimpleMASignal: false,
+        const macd = MACD.calculate({
+          fastPeriod: 12,
+          slowPeriod: 26,
+          signalPeriod: 9,
+          SimpleMAOscillator: false,
+          SimpleMASignal: false,
           values: closes,
         });
-        const boll  = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes });
+        const boll = BollingerBands.calculate({ period: 20, stdDev: 2, values: closes });
 
         const last = <T>(arr: T[]): T | undefined => arr[arr.length - 1];
         const macdLast = last(macd);
@@ -223,18 +250,22 @@ export class FutuAdapter implements DataSourceAdapter {
         data = {
           ticker,
           indicators: {
-            sma:  { sma5: last(sma5), sma10: last(sma10), sma20: last(sma20) },
-            rsi:  { period: 14, value: last(rsi14) },
-            macd: macdLast ? {
-              macd: macdLast.MACD,
-              signal: macdLast.signal,
-              histogram: macdLast.histogram,
-            } : null,
-            boll: bollLast ? {
-              upper: bollLast.upper,
-              middle: bollLast.middle,
-              lower: bollLast.lower,
-            } : null,
+            sma: { sma5: last(sma5), sma10: last(sma10), sma20: last(sma20) },
+            rsi: { period: 14, value: last(rsi14) },
+            macd: macdLast
+              ? {
+                  macd: macdLast.MACD,
+                  signal: macdLast.signal,
+                  histogram: macdLast.histogram,
+                }
+              : null,
+            boll: bollLast
+              ? {
+                  upper: bollLast.upper,
+                  middle: bollLast.middle,
+                  lower: bollLast.lower,
+                }
+              : null,
           },
           // Return the K-line dates for reference
           dataPoints: closes.length,
@@ -250,21 +281,34 @@ export class FutuAdapter implements DataSourceAdapter {
         const equity = snap?.equityExData ?? {};
         data = {
           ticker,
-          snapshot: basic ? {
-            name: basic.name, curPrice: basic.curPrice,
-            highPrice: basic.highPrice, lowPrice: basic.lowPrice,
-            openPrice: basic.openPrice, lastClosePrice: basic.lastClosePrice,
-            volume: basic.volume, turnover: basic.turnover,
-            turnoverRate: basic.turnoverRate, amplitude: basic.amplitude,
-            updateTime: basic.updateTime, isSuspended: basic.isSuspended,
-            listTime: basic.listTime, lotSize: basic.lotSize,
-          } : null,
+          snapshot: basic
+            ? {
+                name: basic.name,
+                curPrice: basic.curPrice,
+                highPrice: basic.highPrice,
+                lowPrice: basic.lowPrice,
+                openPrice: basic.openPrice,
+                lastClosePrice: basic.lastClosePrice,
+                volume: basic.volume,
+                turnover: basic.turnover,
+                turnoverRate: basic.turnoverRate,
+                amplitude: basic.amplitude,
+                updateTime: basic.updateTime,
+                isSuspended: basic.isSuspended,
+                listTime: basic.listTime,
+                lotSize: basic.lotSize,
+              }
+            : null,
           valuation: {
-            pe: equity.peRate ?? equity.peTTMRate, pb: equity.pbRate,
-            marketCap: equity.issuedMarketVal, earningsPerShare: equity.earningsPershare,
+            pe: equity.peRate ?? equity.peTTMRate,
+            pb: equity.pbRate,
+            marketCap: equity.issuedMarketVal,
+            earningsPerShare: equity.earningsPershare,
             netAssetPerShare: equity.netAssetPershare,
-            dividendTTM: equity.dividendTTM, dividendRatioTTM: equity.dividendRatioTTM,
-            totalShares: equity.issuedShares, outstandingShares: equity.outstandingShares,
+            dividendTTM: equity.dividendTTM,
+            dividendRatioTTM: equity.dividendRatioTTM,
+            totalShares: equity.issuedShares,
+            outstandingShares: equity.outstandingShares,
           },
         };
         break;
@@ -274,7 +318,13 @@ export class FutuAdapter implements DataSourceAdapter {
         const stType = (request.params?.statementType as number) ?? 1;
         const finType = (request.params?.financialType as number) ?? 1;
         const num = (request.params?.num as number) ?? 8;
-        const result = await this.client.getFinancialsStatements(market, ticker, stType, finType, num);
+        const result = await this.client.getFinancialsStatements(
+          market,
+          ticker,
+          stType,
+          finType,
+          num,
+        );
         data = { ticker, ...result };
         break;
       }

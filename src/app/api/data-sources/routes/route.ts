@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { validateAuth } from "@/lib/auth/middleware";
-import { getDb } from "@/lib/db";
-import { listRoutes, createRoute } from "@/lib/data-source/service";
 import { getRouter, reloadRouter } from "@/lib/adapters/init";
+import { validateAuth } from "@/lib/auth/middleware";
+import { createRoute, listRoutes } from "@/lib/data-source/service";
+import { getDb } from "@/lib/db";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** GET /api/data-sources/routes */
 export async function GET(req: NextRequest) {

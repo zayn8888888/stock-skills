@@ -1,11 +1,10 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import path from "node:path";
+import { getConfig } from "@/lib/config";
+import { seed } from "@/lib/data-source/seed";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import path from "node:path";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { getConfig } from "@/lib/config";
 import * as schema from "./schema";
-import { seed } from "@/lib/data-source/seed";
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
@@ -23,11 +22,9 @@ function applySqlMigrations(sqlite: Database.Database, migrationsDir: string): v
   `);
 
   const applied = new Set(
-    (
-      sqlite
-        .prepare("SELECT tag FROM _drizzle_migrations")
-        .all() as { tag: string }[]
-    ).map((r) => r.tag),
+    (sqlite.prepare("SELECT tag FROM _drizzle_migrations").all() as { tag: string }[]).map(
+      (r) => r.tag,
+    ),
   );
 
   const sqlFiles = readdirSync(migrationsDir)

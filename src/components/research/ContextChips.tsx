@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  TrendingUp,
-  Target,
-  Paperclip,
-  Workflow,
-  User,
-  X,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
+import { cn } from "@/lib/utils";
+import { Paperclip, Target, TrendingUp, User, Workflow, X } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,7 +35,13 @@ const CHIP_ICONS: Record<string, typeof TrendingUp> = {
 };
 
 const CHIP_LABELS: Record<string, Record<string, string>> = {
-  en: { ticker: "Ticker", goal: "Goal", attachment: "Attachment", workflow: "Workflow", owner: "Owner" },
+  en: {
+    ticker: "Ticker",
+    goal: "Goal",
+    attachment: "Attachment",
+    workflow: "Workflow",
+    owner: "Owner",
+  },
   zh: { ticker: "标的", goal: "目标", attachment: "附件", workflow: "工作流", owner: "所有者" },
 };
 
@@ -53,9 +52,10 @@ const CHIP_LABELS: Record<string, Record<string, string>> = {
 export function ContextChips({ context, onDismiss, className }: ContextChipsProps) {
   const { language } = useLanguage();
   const labels = CHIP_LABELS[language];
-  const entries = Object.entries(context).filter(
-    ([, v]) => v !== undefined && v !== ""
-  ) as [keyof ContextChipsData, string][];
+  const entries = Object.entries(context).filter(([, v]) => v !== undefined && v !== "") as [
+    keyof ContextChipsData,
+    string,
+  ][];
 
   if (entries.length === 0) return null;
 
@@ -70,7 +70,7 @@ export function ContextChips({ context, onDismiss, className }: ContextChipsProp
             key={key}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs",
-              "text-muted-foreground"
+              "text-muted-foreground",
             )}
           >
             <Icon className="h-3 w-3" />
@@ -78,6 +78,7 @@ export function ContextChips({ context, onDismiss, className }: ContextChipsProp
             <span className="text-foreground">{value}</span>
             {onDismiss && (
               <button
+                type="button"
                 onClick={() => onDismiss(key)}
                 className="ml-0.5 text-muted-foreground/60 hover:text-destructive transition-colors"
                 aria-label={`Remove ${label}`}

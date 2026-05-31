@@ -1,16 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, Loader2 } from "lucide-react";
-import { useAgentStore } from "@/stores/agent";
-import { useSSE } from "@/hooks/useSSE";
-import { Timeline } from "@/components/research/Timeline";
 import { Composer, type ComposerContext } from "@/components/research/Composer";
-import { WelcomeScreen } from "@/components/research/WelcomeScreen";
 import { ContextChips, type ContextChipsData } from "@/components/research/ContextChips";
-import type { AgentMessage } from "@/stores/agent";
-import { authFetch } from "@/lib/api/auth-fetch";
+import { Timeline } from "@/components/research/Timeline";
+import { WelcomeScreen } from "@/components/research/WelcomeScreen";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useSSE } from "@/hooks/useSSE";
+import { authFetch } from "@/lib/api/auth-fetch";
+import { useAgentStore } from "@/stores/agent";
+import type { AgentMessage } from "@/stores/agent";
+import { FileText, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ---------------------------------------------------------------------------
 // Page
@@ -64,7 +64,6 @@ export default function Home() {
     updateToolCall,
     clearStreaming,
     setSSEStatus,
-    setSSERetryAttempt,
     setPendingRunId,
     fetchRunArtifacts,
     syncFromServer,
@@ -76,6 +75,31 @@ export default function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [composerContext, setComposerContext] = useState<ComposerContext>({});
   const [requestPending, setRequestPending] = useState(false);
+  const skipNextHistoryLoad = useRef(false);
+  // Ref to hold latest store functions — prevents SSE effect from re-running
+  // on every store state change (Zustand selector returns new function refs).
+  const storeFnsRef = useRef({
+    appendDelta,
+    addToolCall,
+    updateToolCall,
+    addMessage,
+    clearStreaming,
+    setPendingRunId,
+    fetchRunArtifacts,
+    syncFromServer,
+    setRequestPending,
+  });
+  storeFnsRef.current = {
+    appendDelta,
+    addToolCall,
+    updateToolCall,
+    addMessage,
+    clearStreaming,
+    setPendingRunId,
+    fetchRunArtifacts,
+    syncFromServer,
+    setRequestPending,
+  };
 
   // ---------------------------------------------------------------------------
   // SSE connection on session change
@@ -88,36 +112,35 @@ export default function Home() {
     }
 
     const handlers = {
-      "text_delta": (data: string) => {
+      text_delta: (data: string) => {
         try {
           const parsed = JSON.parse(data);
-          appendDelta(parsed.delta ?? parsed.text ?? data);
+          storeFnsRef.current.appendDelta(parsed.delta ?? parsed.text ?? data);
         } catch {
-          appendDelta(data);
+          storeFnsRef.current.appendDelta(data);
         }
       },
-      "tool_call": (data: string) => {
+      tool_call: (data: string) => {
         try {
           const parsed = JSON.parse(data);
-          // Server sends: { runId, toolName, toolId, input }
-          // Store expects: { id, name, status, args }
-          addToolCall({
+          storeFnsRef.current.addToolCall({
             id: parsed.toolId ?? parsed.id,
             name: parsed.toolName ?? parsed.name,
-            args: typeof parsed.input === "string" ? parsed.input : JSON.stringify(parsed.input ?? {}),
+            args:
+              typeof parsed.input === "string" ? parsed.input : JSON.stringify(parsed.input ?? {}),
             status: "running",
           });
         } catch {
           // ignore malformed events
         }
       },
-      "tool_result": (data: string) => {
+      tool_result: (data: string) => {
         try {
           const parsed = JSON.parse(data);
           const id = parsed.toolId ?? parsed.id;
           if (id) {
-            updateToolCall(id, {
-              status: parsed.error ? "error" : "completed",
+            storeFnsRef.current.updateToolCall(id, {
+              status: parsed.status ?? (parsed.error ? "error" : "completed"),
               result: parsed.result ?? parsed.error,
             });
           }
@@ -129,7 +152,7 @@ export default function Home() {
         try {
           const parsed = JSON.parse(data);
           if (parsed.runId) {
-            setPendingRunId(parsed.runId);
+            storeFnsRef.current.setPendingRunId(parsed.runId);
           }
         } catch {
           // ignore
@@ -138,48 +161,48 @@ export default function Home() {
       "run.updated": (data: string) => {
         try {
           const parsed = JSON.parse(data);
-          if (parsed.status === "success" || parsed.status === "failed" || parsed.status === "cancelled") {
-            // Fetch artifacts if run succeeded
+          if (
+            parsed.status === "success" ||
+            parsed.status === "failed" ||
+            parsed.status === "cancelled"
+          ) {
             if (parsed.status === "success" && parsed.runId) {
-              fetchRunArtifacts(parsed.runId);
+              storeFnsRef.current.fetchRunArtifacts(parsed.runId);
             }
-            // Clear streaming state (creates assistant message from streamed text)
-            clearStreaming();
-            setRequestPending(false);
+            storeFnsRef.current.clearStreaming();
+            storeFnsRef.current.setRequestPending(false);
             window.dispatchEvent(new Event("stock-skills:sessions-updated"));
-            // After a brief delay, sync from server to ensure we have the
-            // DB-persisted assistant message (covers SSE event loss)
             const currentSessionId = sessionId;
             if (currentSessionId) {
               setTimeout(() => {
-                syncFromServer(currentSessionId);
+                storeFnsRef.current.syncFromServer(currentSessionId);
               }, 500);
             }
           }
         } catch {
-          clearStreaming();
-          setRequestPending(false);
+          storeFnsRef.current.clearStreaming();
+          storeFnsRef.current.setRequestPending(false);
         }
       },
-      "error": (data: string) => {
+      error: (data: string) => {
         try {
           const parsed = JSON.parse(data);
-          addMessage({
+          storeFnsRef.current.addMessage({
             id: crypto.randomUUID(),
             role: "system",
             content: `${labels.errorPrefix}: ${parsed.message ?? parsed.error ?? data}`,
             timestamp: Date.now(),
           });
         } catch {
-          addMessage({
+          storeFnsRef.current.addMessage({
             id: crypto.randomUUID(),
             role: "system",
             content: `${labels.errorPrefix}: ${data}`,
             timestamp: Date.now(),
           });
         }
-        clearStreaming();
-        setRequestPending(false);
+        storeFnsRef.current.clearStreaming();
+        storeFnsRef.current.setRequestPending(false);
       },
     };
 
@@ -188,7 +211,7 @@ export default function Home() {
     return () => {
       disconnect();
     };
-  }, [sessionId, connect, disconnect, appendDelta, addToolCall, updateToolCall, addMessage, clearStreaming, setPendingRunId, fetchRunArtifacts, labels.errorPrefix, setRequestPending, syncFromServer]);
+  }, [sessionId, connect, disconnect, labels.errorPrefix]);
 
   // Sync SSE status to store
   useEffect(() => {
@@ -206,6 +229,12 @@ export default function Home() {
     if (!sessionId) return;
     // Skip fetch if messages were already loaded from cache
     if (!sessionLoading) return;
+    // Skip if we just created this session (user message already in store)
+    if (skipNextHistoryLoad.current) {
+      skipNextHistoryLoad.current = false;
+      useAgentStore.setState({ sessionLoading: false });
+      return;
+    }
 
     Promise.all([
       fetch(`/api/sessions/${sessionId}/messages`).then((r) => (r.ok ? r.json() : [])),
@@ -225,7 +254,7 @@ export default function Home() {
             content: m.content,
             timestamp: new Date(m.created_at).getTime(),
             runId: m.metadata?.runId,
-          })
+          }),
         );
         loadHistory(sessionId, agentMessages, toolCallsByRun);
       })
@@ -236,11 +265,61 @@ export default function Home() {
   // Auto-scroll on new messages
   // ---------------------------------------------------------------------------
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: auto-scroll intentionally reruns when timeline content changes.
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, streamingText, toolCalls]);
+
+  // ---------------------------------------------------------------------------
+  // Polling fallback — if SSE events never arrive, poll for final result
+  // ---------------------------------------------------------------------------
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!requestPending || !sessionId) return;
+
+    // Wait 5s for SSE events; if no assistant message appears, start polling
+    const timer = setTimeout(() => {
+      pollRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/sessions/${sessionId}/messages`);
+          if (!res.ok) return;
+          const msgs: Array<{
+            message_id: string;
+            role: string;
+            content: string;
+            created_at: string;
+            metadata?: { runId?: string } | null;
+          }> = await res.json();
+          const assistantMsg = msgs.find((m) => m.role === "assistant");
+          if (assistantMsg) {
+            // Agent finished — sync from server
+            if (pollRef.current) {
+              clearInterval(pollRef.current);
+              pollRef.current = null;
+            }
+            storeFnsRef.current.syncFromServer(sessionId);
+            storeFnsRef.current.clearStreaming();
+            storeFnsRef.current.setRequestPending(false);
+            window.dispatchEvent(new Event("stock-skills:sessions-updated"));
+          }
+        } catch {
+          /* retry on next interval */
+        }
+      }, 3000);
+    }, 5000);
+
+    return () => {
+      clearTimeout(timer);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, [requestPending, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------
   // Send message
@@ -268,9 +347,9 @@ export default function Home() {
           }
           const { session_id } = await res.json();
           switchSession(session_id);
+          skipNextHistoryLoad.current = true;
           window.dispatchEvent(new Event("stock-skills:sessions-updated"));
-          // Send message after session is created
-          // Use a slight delay to allow SSE connection to establish
+          // Send message after a slight delay to allow SSE connection to establish
           setTimeout(() => {
             sendMessage(session_id, content, ctx);
           }, 300);
@@ -278,9 +357,7 @@ export default function Home() {
           addMessage({
             id: crypto.randomUUID(),
             role: "system",
-            content: `${labels.fallbackError}: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
+            content: `${labels.fallbackError}: ${err instanceof Error ? err.message : String(err)}`,
             timestamp: Date.now(),
           });
           return;
@@ -289,7 +366,7 @@ export default function Home() {
         sendMessage(sessionId, content, ctx);
       }
     },
-    [sessionId, switchSession, addMessage, labels.fallbackError]
+    [sessionId, switchSession, addMessage, labels.fallbackError],
   );
 
   function sendMessage(sid: string, content: string, ctx?: ComposerContext) {
@@ -312,25 +389,25 @@ export default function Home() {
         content,
         context: buildMessageContext(content, ctx),
       }),
-    }).then((res) => {
-      if (!res.ok) {
+    })
+      .then((res) => {
+        if (!res.ok) {
+          addMessage({
+            id: crypto.randomUUID(),
+            role: "system",
+            content: `${labels.fallbackError}: ${res.status}`,
+            timestamp: Date.now(),
+          });
+        }
+      })
+      .catch((err) => {
         addMessage({
           id: crypto.randomUUID(),
           role: "system",
-          content: `${labels.fallbackError}: ${res.status}`,
+          content: `${labels.fallbackError}: ${err instanceof Error ? err.message : String(err)}`,
           timestamp: Date.now(),
         });
-      }
-    }).catch((err) => {
-      addMessage({
-        id: crypto.randomUUID(),
-        role: "system",
-        content: `${labels.fallbackError}: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-        timestamp: Date.now(),
       });
-    });
   }
 
   const handleStop = useCallback(() => {
@@ -341,13 +418,13 @@ export default function Home() {
     }
     clearStreaming(true); // force-clear, don't create partial message
     setRequestPending(false);
-  }, [clearStreaming, sessionId, setRequestPending]);
+  }, [clearStreaming, sessionId]);
 
   const handlePromptClick = useCallback(
     (query: string) => {
       handleSend(query);
     },
-    [handleSend]
+    [handleSend],
   );
 
   const handleClearContext = useCallback((key: keyof ComposerContext) => {
@@ -378,9 +455,7 @@ export default function Home() {
           </span>
         )}
         {sessionId && (
-          <span className="text-xs text-muted-foreground font-mono ml-auto">
-            {sessionId}
-          </span>
+          <span className="text-xs text-muted-foreground font-mono ml-auto">{sessionId}</span>
         )}
       </header>
 
@@ -402,7 +477,11 @@ export default function Home() {
           </div>
         ) : hasMessages ? (
           <div className="px-8 py-4 max-w-5xl mx-auto">
-            <Timeline messages={messages} streamingText={streamingText} pendingToolCalls={toolCalls} />
+            <Timeline
+              messages={messages}
+              streamingText={streamingText}
+              pendingToolCalls={toolCalls}
+            />
           </div>
         ) : (
           <WelcomeScreen

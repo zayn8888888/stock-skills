@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Sidebar } from "./Sidebar";
-import { ConnectionBanner } from "./ConnectionBanner";
 import { useTheme } from "@/hooks/useTheme";
+import { useCallback, useEffect, useState } from "react";
+import { ConnectionBanner } from "./ConnectionBanner";
+import { Sidebar } from "./Sidebar";
 
 const SIDEBAR_STORAGE_KEY = "sidebar-collapsed";
 

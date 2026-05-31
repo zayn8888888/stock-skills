@@ -1,11 +1,11 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+import { Braces, FileText } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
-import { FileText, Braces } from "lucide-react";
-import { cn } from "@/lib/utils";
+import remarkGfm from "remark-gfm";
 
 interface ReportTabProps {
   reportMarkdown: string | null;
@@ -28,12 +28,13 @@ export function ReportTab({ reportMarkdown, resultJson }: ReportTabProps) {
       {/* Toggle button */}
       <div className="flex justify-end">
         <button
+          type="button"
           onClick={() => setShowJson((v) => !v)}
           className={cn(
             "inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors border",
             showJson
               ? "bg-primary text-primary-foreground border-primary"
-              : "bg-background text-foreground border-border hover:bg-muted"
+              : "bg-background text-foreground border-border hover:bg-muted",
           )}
         >
           {showJson ? (

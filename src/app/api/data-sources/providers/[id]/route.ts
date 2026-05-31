@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { validateAuth } from "@/lib/auth/middleware";
-import { getDb } from "@/lib/db";
-import { getProvider, updateProvider, deleteProvider } from "@/lib/data-source/service";
 import { reloadRouter } from "@/lib/adapters/init";
+import { validateAuth } from "@/lib/auth/middleware";
+import { deleteProvider, getProvider, updateProvider } from "@/lib/data-source/service";
+import { getDb } from "@/lib/db";
+import { type NextRequest, NextResponse } from "next/server";
 
 type Ctx = { params: Promise<{ id: string }> };
 

@@ -31,7 +31,10 @@
       "description": "早停判断结果",
       "properties": {
         "triggered": { "type": "boolean" },
-        "branch": { "type": "string", "enum": ["full", "single_sector", "stop_chase", "defense_pool"] },
+        "branch": {
+          "type": "string",
+          "enum": ["full", "single_sector", "stop_chase", "defense_pool"]
+        },
         "reason": { "type": "string" }
       }
     },
@@ -43,7 +46,10 @@
         "properties": {
           "topic": { "type": "string" },
           "market": { "type": "string", "enum": ["CN", "HK", "US"] },
-          "source_credibility": { "type": "string", "enum": ["tier1", "tier2", "tier3", "warning"] },
+          "source_credibility": {
+            "type": "string",
+            "enum": ["tier1", "tier2", "tier3", "warning"]
+          },
           "mapped_sectors": { "type": "array", "items": { "type": "string" } }
         }
       }
@@ -151,7 +157,10 @@
           "target_sector": { "type": "string" },
           "target_tickers": { "type": "array", "items": { "type": "string" } },
           "rebuttal": { "type": "string" },
-          "status": { "type": "string", "enum": ["already_moving", "starting", "not_yet", "weakening"] },
+          "status": {
+            "type": "string",
+            "enum": ["already_moving", "starting", "not_yet", "weakening"]
+          },
           "is_inference": { "type": "boolean" }
         }
       }

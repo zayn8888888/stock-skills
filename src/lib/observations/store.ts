@@ -8,16 +8,14 @@
  * column. This store follows that convention.
  */
 
-import { and, desc, eq, gte, type SQL } from "drizzle-orm";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { observations } from "@/lib/db/schema";
 import type { Observation } from "@/lib/adapters/base";
+import { observations } from "@/lib/db/schema";
+import { type SQL, and, desc, eq, gte } from "drizzle-orm";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { getFreshnessExpiry, isExpired } from "./freshness";
 
 // Use the Drizzle database type with schema
-type DB = BetterSQLite3Database<
-  typeof import("@/lib/db/schema")
->;
+type DB = BetterSQLite3Database<typeof import("@/lib/db/schema")>;
 
 // ──────────────────────────── Query Options ───────────────────────
 
@@ -36,13 +34,9 @@ export interface ObservationQuery {
  * The observation's detail field receives the JSON-encoded value payload.
  * expiresAt is auto-calculated from the freshness policy if not set.
  */
-export function insert(
-  db: DB,
-  observation: Observation
-): Observation {
+export function insert(db: DB, observation: Observation): Observation {
   const expiresAt =
-    observation.expiresAt ??
-    getFreshnessExpiry(observation.category, observation.createdAt);
+    observation.expiresAt ?? getFreshnessExpiry(observation.category, observation.createdAt);
 
   db.insert(observations)
     .values({
@@ -65,13 +59,8 @@ export function insert(
  * Query observations matching the given filters.
  * Results are ordered by createdAt descending (most recent first).
  */
-export function query(
-  db: DB,
-  opts: ObservationQuery
-): Observation[] {
-  const conditions: SQL[] = [
-    eq(observations.ticker, opts.ticker),
-  ];
+export function query(db: DB, opts: ObservationQuery): Observation[] {
+  const conditions: SQL[] = [eq(observations.ticker, opts.ticker)];
 
   if (opts.category) {
     conditions.push(eq(observations.category, opts.category));
@@ -96,10 +85,7 @@ export function query(
  * Return all observations for a ticker that have not yet expired,
  * ordered by createdAt descending.
  */
-export function getUnexpired(
-  db: DB,
-  ticker: string
-): Observation[] {
+export function getUnexpired(db: DB, ticker: string): Observation[] {
   const now = new Date();
 
   const rows = db

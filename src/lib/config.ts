@@ -1,6 +1,6 @@
-import path from "node:path";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
 export interface Config {
   analysisRoot: string;
@@ -10,6 +10,8 @@ export interface Config {
   anthropicApiKey: string;
   anthropicBaseUrl?: string;
   llmModel: string;
+  contextWindow: number;
+  maxTokens: number;
 }
 
 let _config: Config | null = null;
@@ -17,8 +19,8 @@ let _config: Config | null = null;
 export function getConfig(): Config {
   if (_config) return _config;
 
-  const analysisRoot = process.env.STOCK_SKILLS_ANALYSIS_ROOT
-    ?? path.resolve(process.cwd(), "analysis");
+  const analysisRoot =
+    process.env.STOCK_SKILLS_ANALYSIS_ROOT ?? path.resolve(process.cwd(), "analysis");
   const dbPath = path.resolve(analysisRoot, "stock_skills.sqlite");
 
   if (!existsSync(analysisRoot)) {
@@ -38,10 +40,9 @@ export function getConfig(): Config {
     maxUploadBytes: 50 * 1024 * 1024,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
     anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL,
-    llmModel:
-      process.env.MODEL_ID ??
-      process.env.LLM_MODEL ??
-      "claude-sonnet-4-20250514",
+    llmModel: process.env.MODEL_ID ?? process.env.LLM_MODEL ?? "claude-sonnet-4-20250514",
+    contextWindow: Number.parseInt(process.env.CONTEXT_WINDOW ?? "", 10) || 1048576,
+    maxTokens: Number.parseInt(process.env.MAX_TOKENS ?? "", 10) || 131072,
   };
   return _config;
 }

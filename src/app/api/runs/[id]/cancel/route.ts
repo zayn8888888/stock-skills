@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
 import { runs } from "@/lib/db/schema";
-import { validateAuth } from "@/lib/auth/middleware";
 import { eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -14,22 +14,14 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   const { id } = await ctx.params;
   const db = getDb();
 
-  const [run] = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.id, id))
-    .limit(1);
+  const [run] = await db.select().from(runs).where(eq(runs.id, id)).limit(1);
 
   if (!run) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
   }
 
   // Only allow cancelling runs that are not already in a terminal state
-  if (
-    run.status === "success" ||
-    run.status === "failed" ||
-    run.status === "cancelled"
-  ) {
+  if (run.status === "success" || run.status === "failed" || run.status === "cancelled") {
     return NextResponse.json(
       { error: `Cannot cancel run in "${run.status}" status` },
       { status: 409 },

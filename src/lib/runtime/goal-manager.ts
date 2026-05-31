@@ -1,7 +1,7 @@
-import { nanoid } from "nanoid";
+import * as schema from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "@/lib/db/schema";
+import { nanoid } from "nanoid";
 
 type DB = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -26,17 +26,18 @@ export interface GoalSnapshot {
  * Create a new research goal. Any existing "active" goal in the same
  * session is automatically superseded.
  */
-export function createGoal(db: DB, sessionId: string, data: CreateGoalData): typeof schema.researchGoals.$inferSelect {
+export function createGoal(
+  db: DB,
+  sessionId: string,
+  data: CreateGoalData,
+): typeof schema.researchGoals.$inferSelect {
   const now = new Date().toISOString();
 
   // Supersede any existing active goal for this session
   db.update(schema.researchGoals)
     .set({ status: "superseded", updatedAt: now })
     .where(
-      and(
-        eq(schema.researchGoals.sessionId, sessionId),
-        eq(schema.researchGoals.status, "active"),
-      ),
+      and(eq(schema.researchGoals.sessionId, sessionId), eq(schema.researchGoals.status, "active")),
     )
     .run();
 
@@ -66,7 +67,7 @@ export function addCriterion(
   db: DB,
   goalId: string,
   text: string,
-  required: boolean = false,
+  required = false,
 ): typeof schema.goalCriteria.$inferSelect {
   const now = new Date().toISOString();
 
@@ -100,18 +101,13 @@ export function addEvidence(
     .select({ id: schema.goalCriteria.id })
     .from(schema.goalCriteria)
     .where(
-      and(
-        eq(schema.goalCriteria.id, data.criterionId),
-        eq(schema.goalCriteria.goalId, goalId),
-      ),
+      and(eq(schema.goalCriteria.id, data.criterionId), eq(schema.goalCriteria.goalId, goalId)),
     )
     .limit(1)
     .all();
 
   if (!criterion) {
-    throw new Error(
-      `Criterion "${data.criterionId}" does not belong to goal "${goalId}"`,
-    );
+    throw new Error(`Criterion "${data.criterionId}" does not belong to goal "${goalId}"`);
   }
 
   const evidence = {
@@ -177,10 +173,7 @@ export function updateStatus(
     values.completedAt = now;
   }
 
-  db.update(schema.researchGoals)
-    .set(values)
-    .where(eq(schema.researchGoals.id, goalId))
-    .run();
+  db.update(schema.researchGoals).set(values).where(eq(schema.researchGoals.id, goalId)).run();
 }
 
 /**
@@ -204,11 +197,7 @@ export function getGoalSnapshot(db: DB, goalId: string): GoalSnapshot | undefine
 
   // Collect all evidence for every criterion on this goal
   const evidence = criteria.flatMap((c) =>
-    db
-      .select()
-      .from(schema.goalEvidence)
-      .where(eq(schema.goalEvidence.criterionId, c.id))
-      .all(),
+    db.select().from(schema.goalEvidence).where(eq(schema.goalEvidence.criterionId, c.id)).all(),
   );
 
   return { goal, criteria, evidence };

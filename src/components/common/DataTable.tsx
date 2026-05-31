@@ -1,18 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { cn } from "@/lib/utils";
 import {
   type ColumnDef,
-  type SortingState,
   type PaginationState,
+  type SortingState,
   flexRender,
   getCoreRowModel,
-  getSortedRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronUp, ChevronDown } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -34,9 +34,7 @@ export function DataTable<TData, TValue>({
     pageIndex: 0,
     pageSize,
   });
-  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>(
-    {}
-  );
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const table = useReactTable({
     data,
@@ -59,21 +57,23 @@ export function DataTable<TData, TValue>({
                 {hg.headers.map((h) => (
                   <th
                     key={h.id}
+                    tabIndex={h.column.getCanSort() ? 0 : undefined}
                     className={cn(
                       "px-4 py-2.5 text-left font-medium text-muted-foreground select-none",
-                      h.column.getCanSort() &&
-                        "cursor-pointer hover:text-foreground"
+                      h.column.getCanSort() && "cursor-pointer hover:text-foreground",
                     )}
                     onClick={h.column.getToggleSortingHandler()}
+                    onKeyDown={(event) => {
+                      if (!h.column.getCanSort()) return;
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      h.column.getToggleSortingHandler()?.(event);
+                    }}
                   >
                     <div className="flex items-center gap-1">
                       {flexRender(h.column.columnDef.header, h.getContext())}
-                      {h.column.getIsSorted() === "asc" && (
-                        <ChevronUp className="h-3 w-3" />
-                      )}
-                      {h.column.getIsSorted() === "desc" && (
-                        <ChevronDown className="h-3 w-3" />
-                      )}
+                      {h.column.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3" />}
+                      {h.column.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3" />}
                     </div>
                   </th>
                 ))}
@@ -93,22 +93,25 @@ export function DataTable<TData, TValue>({
             ) : (
               table.getRowModel().rows.map((row) => {
                 const rowId = row.id;
-                const isExpanded = expandedRows[rowId] ?? false;
+                const _isExpanded = expandedRows[rowId] ?? false;
                 return (
                   <tr
                     key={rowId}
+                    tabIndex={renderExpanded ? 0 : undefined}
                     className="border-t border-border hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() =>
-                      renderExpanded &&
-                      setExpandedRows((p) => ({ ...p, [rowId]: !p[rowId] }))
+                      renderExpanded && setExpandedRows((p) => ({ ...p, [rowId]: !p[rowId] }))
                     }
+                    onKeyDown={(event) => {
+                      if (!renderExpanded) return;
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      setExpandedRows((p) => ({ ...p, [rowId]: !p[rowId] }));
+                    }}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-2.5">
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
                   </tr>
@@ -124,6 +127,7 @@ export function DataTable<TData, TValue>({
         <span>{table.getFilteredRowModel().rows.length} row(s) total</span>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
             className="px-2 py-1 rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors"
@@ -131,10 +135,10 @@ export function DataTable<TData, TValue>({
             Previous
           </button>
           <span>
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
+            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
           </span>
           <button
+            type="button"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
             className="px-2 py-1 rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors"

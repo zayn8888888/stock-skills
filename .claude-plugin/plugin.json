@@ -16,10 +16,5 @@
     "polymarket",
     "finnhub"
   ],
-  "skills": [
-    "./skills/core",
-    "./skills/stock",
-    "./skills/crypto",
-    "./skills/futu"
-  ]
+  "skills": ["./skills/core", "./skills/stock", "./skills/crypto", "./skills/futu"]
 }

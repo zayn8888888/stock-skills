@@ -1,7 +1,7 @@
-import { nanoid } from "nanoid";
+import * as schema from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "@/lib/db/schema";
+import { nanoid } from "nanoid";
 
 type DB = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -48,12 +48,7 @@ export function createRun(db: DB, data: CreateRunData): typeof schema.runs.$infe
  *
  * @param errorMessage  Optional message stored in resultSummary when status is "failed".
  */
-export function updateStatus(
-  db: DB,
-  runId: string,
-  status: string,
-  errorMessage?: string,
-): void {
+export function updateStatus(db: DB, runId: string, status: string, errorMessage?: string): void {
   const now = new Date().toISOString();
   const isTerminal = status === "success" || status === "failed" || status === "cancelled";
 
@@ -116,7 +111,9 @@ export function addRunEvent(
 export function getRun(
   db: DB,
   runId: string,
-): (typeof schema.runs.$inferSelect & { artifacts: (typeof schema.artifacts.$inferSelect)[] }) | undefined {
+):
+  | (typeof schema.runs.$inferSelect & { artifacts: (typeof schema.artifacts.$inferSelect)[] })
+  | undefined {
   const results = db
     .select()
     .from(schema.runs)

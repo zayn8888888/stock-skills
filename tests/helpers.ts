@@ -1,9 +1,9 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import * as schema from "@/lib/db/schema";
 import { seed } from "@/lib/data-source/seed";
+import * as schema from "@/lib/db/schema";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 
 /**
  * Create an in-memory test database with migrations applied and seed data loaded.

@@ -1,11 +1,11 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { eq } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import type { SourceRouter } from "@/lib/data-source/router";
+import * as schema from "@/lib/db/schema";
 import type * as artifactWriterModule from "@/lib/runtime/artifact-writer";
 import type * as goalManager from "@/lib/runtime/goal-manager";
+import type Anthropic from "@anthropic-ai/sdk";
+import { eq } from "drizzle-orm";
 import type { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "@/lib/db/schema";
+import { nanoid } from "nanoid";
 
 type DB = ReturnType<typeof drizzle<typeof schema>>;
 
@@ -73,23 +73,34 @@ const updateGoalEvidenceTool: Anthropic.Tool = {
  * Convention: tool name is `get_{capability_slug_dots_to_underscores}`.
  * For example, capability "quote.snapshot" becomes "get_quote_snapshot".
  */
-function buildCapabilityTool(
-  cap: { slug: string; displayName: string; description: string | null; paramsSchema: string | null; responseSchema: string | null },
-): Anthropic.Tool {
+function buildCapabilityTool(cap: {
+  slug: string;
+  displayName: string;
+  description: string | null;
+  paramsSchema: string | null;
+  responseSchema: string | null;
+}): Anthropic.Tool {
   const toolName = `get_${cap.slug.replace(/\./g, "_")}`;
 
   // Build description: name + description + response schema summary
   let desc = `${cap.displayName}${cap.description ? `: ${cap.description}` : ""}`;
   if (cap.responseSchema) {
     try {
-      const schema = JSON.parse(cap.responseSchema) as { properties?: Record<string, { type: string; description?: string }> };
+      const schema = JSON.parse(cap.responseSchema) as {
+        properties?: Record<string, { type: string; description?: string }>;
+      };
       if (schema.properties) {
         const fields = Object.entries(schema.properties)
-          .map(([name, prop]) => `${name}(${prop.type})${prop.description ? `: ${prop.description}` : ""}`)
+          .map(
+            ([name, prop]) =>
+              `${name}(${prop.type})${prop.description ? `: ${prop.description}` : ""}`,
+          )
           .join("; ");
         desc += `\n返回字段: ${fields}`;
       }
-    } catch { /* ignore parse errors */ }
+    } catch {
+      /* ignore parse errors */
+    }
   }
 
   // Build input schema from paramsSchema or use default
@@ -113,8 +124,15 @@ function buildDefaultInputSchema(): Anthropic.Tool["input_schema"] {
     type: "object" as const,
     properties: {
       ticker: { type: "string", description: "Ticker symbol (e.g. 'NVDA', '00700', 'BTC')" },
-      market: { type: "string", description: "Market identifier (e.g. 'HK', 'US', 'CN', 'CRYPTO')" },
-      params: { type: "object", description: "Additional operation-specific parameters", additionalProperties: true },
+      market: {
+        type: "string",
+        description: "Market identifier (e.g. 'HK', 'US', 'CN', 'CRYPTO')",
+      },
+      params: {
+        type: "object",
+        description: "Additional operation-specific parameters",
+        additionalProperties: true,
+      },
     },
     required: [],
   };
@@ -154,9 +172,7 @@ export function createTools(
 
 // ──────────────────── tool executor factory ─────────────────────────
 
-export interface ToolExecutorFn {
-  (toolName: string, input: Record<string, unknown>): Promise<string>;
-}
+export type ToolExecutorFn = (toolName: string, input: Record<string, unknown>) => Promise<string>;
 
 /**
  * Create a tool executor function that dispatches tool calls to the
@@ -167,7 +183,7 @@ export function createToolExecutor(
   artifactWriter: typeof artifactWriterModule,
   goalManagerModule: typeof goalManager,
   runId: string,
-  sessionId: string,
+  _sessionId: string,
   db: DB,
 ): ToolExecutorFn {
   return async (toolName: string, input: Record<string, unknown>): Promise<string> => {

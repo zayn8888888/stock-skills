@@ -32,5 +32,21 @@
   },
   "files": {
     "ignore": ["node_modules", ".next", "dist", "src/lib/db/migrations"]
-  }
+  },
+  "overrides": [
+    {
+      "include": [
+        "src/lib/adapters/eastmoney/index.ts",
+        "src/lib/adapters/futu/client.ts",
+        "src/lib/adapters/futu/index.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    }
+  ]
 }

@@ -14,21 +14,25 @@
  *   offset 16: SHA1 of body (20 bytes)
  *   offset 36: reserved (8 bytes)
  */
-
-import { connect, type Socket } from "node:net";
 import { createHash } from "node:crypto";
+import { type Socket, connect } from "node:net";
 import protoRoot from "futu-api/proto.js";
 
 // ── Minimal protobuf field decoder (for fallback when proto decode fails) ──
 
-interface DecodedField { field: number; wireType: number; value: number | Uint8Array }
+interface DecodedField {
+  field: number;
+  wireType: number;
+  value: number | Uint8Array;
+}
 
 function decodeFields(buf: Uint8Array): DecodedField[] {
   const fields: DecodedField[] = [];
   let offset = 0;
   while (offset < buf.length) {
     // Read tag
-    let tag = 0, shift = 0;
+    let tag = 0;
+    let shift = 0;
     while (offset < buf.length) {
       const b = buf[offset++];
       tag |= (b & 0x7f) << shift;
@@ -38,8 +42,10 @@ function decodeFields(buf: Uint8Array): DecodedField[] {
     const fieldNumber = tag >>> 3;
     const wireType = tag & 0x7;
 
-    if (wireType === 0) { // varint
-      let val = 0, s = 0;
+    if (wireType === 0) {
+      // varint
+      let val = 0;
+      let s = 0;
       while (offset < buf.length) {
         const b = buf[offset++];
         val |= (b & 0x7f) << s;
@@ -47,8 +53,10 @@ function decodeFields(buf: Uint8Array): DecodedField[] {
         s += 7;
       }
       fields.push({ field: fieldNumber, wireType, value: val });
-    } else if (wireType === 2) { // length-delimited
-      let len = 0, s = 0;
+    } else if (wireType === 2) {
+      // length-delimited
+      let len = 0;
+      let s = 0;
       while (offset < buf.length) {
         const b = buf[offset++];
         len |= (b & 0x7f) << s;
@@ -57,10 +65,17 @@ function decodeFields(buf: Uint8Array): DecodedField[] {
       }
       fields.push({ field: fieldNumber, wireType, value: buf.slice(offset, offset + len) });
       offset += len;
-    } else if (wireType === 5) { // 32-bit
-      fields.push({ field: fieldNumber, wireType, value: buf[offset] | (buf[offset+1] << 8) | (buf[offset+2] << 16) | (buf[offset+3] << 24) });
+    } else if (wireType === 5) {
+      // 32-bit
+      fields.push({
+        field: fieldNumber,
+        wireType,
+        value:
+          buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24),
+      });
       offset += 4;
-    } else if (wireType === 1) { // 64-bit
+    } else if (wireType === 1) {
+      // 64-bit
       offset += 8;
     } else {
       break; // unknown wire type
@@ -117,12 +132,12 @@ const PROTO_NAME: Record<number, string> = {
 // ──────────────────── Market enum (QotMarket from Futu proto) ─────
 
 export const Market = {
-  HK: 1,       // QotMarket_HK_Security
-  US: 11,      // QotMarket_US_Security
-  CN_SH: 21,   // QotMarket_CNSH_Security
-  CN_SZ: 22,   // QotMarket_CNSZ_Security
-  SG: 31,      // QotMarket_SG_Security
-  JP: 41,      // QotMarket_JP_Security
+  HK: 1, // QotMarket_HK_Security
+  US: 11, // QotMarket_US_Security
+  CN_SH: 21, // QotMarket_CNSH_Security
+  CN_SZ: 22, // QotMarket_CNSZ_Security
+  SG: 31, // QotMarket_SG_Security
+  JP: 41, // QotMarket_JP_Security
 } as const;
 
 // ──────────────────── KLType enum ──────────────────────────────────
@@ -183,7 +198,12 @@ export function klTypeToSubType(klType: number): number {
 function convertLongs(obj: any): any {
   if (obj == null || typeof obj !== "object") return obj;
   // Check for Long { low, high, unsigned }
-  if ("low" in obj && "high" in obj && typeof obj.low === "number" && typeof obj.high === "number") {
+  if (
+    "low" in obj &&
+    "high" in obj &&
+    typeof obj.low === "number" &&
+    typeof obj.high === "number"
+  ) {
     // If it fits in a safe integer, return number; otherwise return string
     const val = obj.high === 0 ? obj.low : Number(obj);
     return Number.isSafeInteger(val) ? val : String(obj);
@@ -334,8 +354,14 @@ export class FutuClient {
       }, 10_000);
 
       this.pending.set(serialNo, {
-        resolve: (r) => { clearTimeout(timer); resolve(r); },
-        reject: (e) => { clearTimeout(timer); reject(e); },
+        resolve: (r) => {
+          clearTimeout(timer);
+          resolve(r);
+        },
+        reject: (e) => {
+          clearTimeout(timer);
+          reject(e);
+        },
         protoId,
       });
 
@@ -384,7 +410,7 @@ export class FutuClient {
         continue;
       }
 
-      const protoId = this.buffer.readUInt32LE(2);
+      const _protoId = this.buffer.readUInt32LE(2);
       const serialNo = this.buffer.readUInt32LE(8);
       const bodyLen = this.buffer.readUInt32LE(12);
       const totalLen = HEADER_LEN + bodyLen;
@@ -452,9 +478,7 @@ export class FutuClient {
    * Get market snapshot (no subscription required).
    * Returns comprehensive data including price, volume, PE, market cap, etc.
    */
-  async getSecuritySnapshot(
-    securities: Array<{ market: number; code: string }>,
-  ): Promise<any[]> {
+  async getSecuritySnapshot(securities: Array<{ market: number; code: string }>): Promise<any[]> {
     const securityList = securities.map((s) => ({
       market: s.market,
       code: s.code,
@@ -468,9 +492,7 @@ export class FutuClient {
     return (rsp.s2c?.snapshotList ?? []).map((s: any) => convertLongs(s));
   }
 
-  async getBasicQot(
-    securities: Array<{ market: number; code: string }>,
-  ): Promise<any[]> {
+  async getBasicQot(securities: Array<{ market: number; code: string }>): Promise<any[]> {
     const securityList = securities.map((s) => ({
       market: s.market,
       code: s.code,
@@ -484,12 +506,7 @@ export class FutuClient {
     return (rsp.s2c?.basicQotList ?? []).map((q: any) => convertLongs(q));
   }
 
-  async getKline(
-    market: number,
-    code: string,
-    klType: number,
-    num: number,
-  ): Promise<any[]> {
+  async getKline(market: number, code: string, klType: number, num: number): Promise<any[]> {
     const rsp: any = await this.request(ProtoID.Qot_GetKL, {
       security: { market, code },
       klType,
@@ -502,11 +519,7 @@ export class FutuClient {
     return (rsp.s2c?.klList ?? []).map((bar: any) => convertLongs(bar));
   }
 
-  async getOrderBook(
-    market: number,
-    code: string,
-    num: number,
-  ): Promise<any> {
+  async getOrderBook(market: number, code: string, num: number): Promise<any> {
     const rsp: any = await this.request(ProtoID.Qot_GetOrderBook, {
       security: { market, code },
       num,
@@ -572,10 +585,7 @@ export class FutuClient {
   /**
    * Get capital distribution by size (super/big/mid/small) (no subscription required).
    */
-  async getCapitalDistribution(
-    market: number,
-    code: string,
-  ): Promise<any> {
+  async getCapitalDistribution(market: number, code: string): Promise<any> {
     const rsp: any = await this.request(ProtoID.Qot_GetCapitalDistribution, {
       security: { market, code },
     });
@@ -630,10 +640,7 @@ export class FutuClient {
   /**
    * Get shareholders overview (top holders, holder types, holding periods).
    */
-  async getShareholdersOverview(
-    market: number,
-    code: string,
-  ): Promise<any> {
+  async getShareholdersOverview(market: number, code: string): Promise<any> {
     const rsp: any = await this.request(ProtoID.Qot_GetShareholdersOverview, {
       security: { market, code },
     });
@@ -644,14 +651,12 @@ export class FutuClient {
   /**
    * Get dividend / corporate actions history.
    */
-  async getCorporateActionsDividends(
-    market: number,
-    code: string,
-  ): Promise<any> {
+  async getCorporateActionsDividends(market: number, code: string): Promise<any> {
     const rsp: any = await this.request(ProtoID.Qot_GetCorporateActionsDividends, {
       security: { market, code },
     });
-    if (rsp.retType !== 0) throw new Error(`Qot_GetCorporateActionsDividends failed: ${rsp.retMsg}`);
+    if (rsp.retType !== 0)
+      throw new Error(`Qot_GetCorporateActionsDividends failed: ${rsp.retMsg}`);
     return convertLongs(rsp.s2c ?? {});
   }
 
@@ -683,10 +688,7 @@ export class FutuClient {
    * Get plate (sector/industry/index) list for a market.
    * plateSetType: 1=All, 2=Industry, 3=Region, 4=Concept, 5=Exchange
    */
-  async getPlateSet(
-    market: number,
-    plateSetType = 1,
-  ): Promise<any[]> {
+  async getPlateSet(market: number, plateSetType = 1): Promise<any[]> {
     const rsp: any = await this.request(ProtoID.Qot_GetPlateSet, {
       market,
       plateSetType,
@@ -698,10 +700,7 @@ export class FutuClient {
   /**
    * Get stocks within a plate (sector/industry/index).
    */
-  async getPlateSecurity(
-    plateMarket: number,
-    plateCode: string,
-  ): Promise<any[]> {
+  async getPlateSecurity(plateMarket: number, plateCode: string): Promise<any[]> {
     const rsp: any = await this.request(ProtoID.Qot_GetPlateSecurity, {
       plate: { market: plateMarket, code: plateCode },
     });

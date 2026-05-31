@@ -3,12 +3,7 @@
   "title": "CryptoResearchResult",
   "description": "加密资产研究 result.json 输出契约",
   "type": "object",
-  "required": [
-    "mode",
-    "research_timestamp",
-    "data_completeness",
-    "sources"
-  ],
+  "required": ["mode", "research_timestamp", "data_completeness", "sources"],
   "properties": {
     "mode": {
       "type": "string",
@@ -26,7 +21,10 @@
         "btc_dominance_pct": { "type": "number" },
         "total_market_cap_usd": { "type": "number" },
         "btc_trend_30d": { "type": "string" },
-        "alt_season_signal": { "type": "string", "enum": ["btc_dominant", "transitioning", "alt_season"] },
+        "alt_season_signal": {
+          "type": "string",
+          "enum": ["btc_dominant", "transitioning", "alt_season"]
+        },
         "macro_events": {
           "type": "array",
           "items": {
@@ -61,7 +59,10 @@
                   "hit_count": { "type": "integer" }
                 }
               },
-              "source_credibility": { "type": "string", "enum": ["tier1", "tier2", "tier3", "warning"] }
+              "source_credibility": {
+                "type": "string",
+                "enum": ["tier1", "tier2", "tier3", "warning"]
+              }
             }
           }
         },
@@ -153,7 +154,10 @@
                 "open_interest_usd": { "type": ["number", "null"] },
                 "premium_vs_spot_pct": { "type": ["number", "null"] },
                 "volume_24h_usd": { "type": ["number", "null"] },
-                "crowding_level": { "type": "string", "enum": ["neutral", "warm", "hot", "extreme"] }
+                "crowding_level": {
+                  "type": "string",
+                  "enum": ["neutral", "warm", "hot", "extreme"]
+                }
               }
             },
             "narrative": {
@@ -162,8 +166,14 @@
               "properties": {
                 "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
                 "categories": { "type": "array", "items": { "type": "string" } },
-                "narrative_strength": { "type": "string", "enum": ["emerging", "mature", "declining"] },
-                "sector_position": { "type": "string", "enum": ["leader", "follower", "differentiated"] }
+                "narrative_strength": {
+                  "type": "string",
+                  "enum": ["emerging", "mature", "declining"]
+                },
+                "sector_position": {
+                  "type": "string",
+                  "enum": ["leader", "follower", "differentiated"]
+                }
               }
             },
             "peers": {
@@ -195,7 +205,10 @@
               "required": ["status"],
               "properties": {
                 "status": { "type": "string", "enum": ["ok", "error", "skipped"] },
-                "overall_sentiment": { "type": "string", "enum": ["positive", "negative", "neutral"] },
+                "overall_sentiment": {
+                  "type": "string",
+                  "enum": ["positive", "negative", "neutral"]
+                },
                 "key_events": {
                   "type": "array",
                   "items": {

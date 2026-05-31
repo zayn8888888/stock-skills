@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { validateAuth } from "@/lib/auth/middleware";
-import { getRouter, registry } from "@/lib/adapters/init";
 import type { SourceHealth } from "@/lib/adapters/base";
+import { getRouter, registry } from "@/lib/adapters/init";
+import { validateAuth } from "@/lib/auth/middleware";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** POST /api/data-sources/check - trigger health check on all adapters */
 export async function POST(req: NextRequest) {

@@ -65,7 +65,7 @@ function cacheSession(
   // Evict oldest if over capacity
   if (sessionCache.size > MAX_CACHED_SESSIONS) {
     let oldestKey: string | null = null;
-    let oldestTime = Infinity;
+    let oldestTime = Number.POSITIVE_INFINITY;
     for (const [key, entry] of sessionCache) {
       if (entry.lastAccess < oldestTime) {
         oldestTime = entry.lastAccess;
@@ -107,7 +107,11 @@ export interface AgentState {
 
   // Actions
   switchSession: (sessionId: string) => void;
-  loadHistory: (sessionId: string, messages: AgentMessage[], toolCallsByRun?: Record<string, ToolCallEntry[]>) => void;
+  loadHistory: (
+    sessionId: string,
+    messages: AgentMessage[],
+    toolCallsByRun?: Record<string, ToolCallEntry[]>,
+  ) => void;
   addMessage: (message: AgentMessage) => void;
   appendDelta: (delta: string) => void;
   addToolCall: (toolCall: ToolCallEntry) => void;
@@ -171,7 +175,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     }
   },
 
-  loadHistory: (sessionId: string, messages: AgentMessage[], toolCallsByRun?: Record<string, ToolCallEntry[]>) => {
+  loadHistory: (
+    sessionId: string,
+    messages: AgentMessage[],
+    toolCallsByRun?: Record<string, ToolCallEntry[]>,
+  ) => {
     // Attach historical tool calls to assistant messages by runId
     let merged = messages;
     if (toolCallsByRun) {
@@ -212,9 +220,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   updateToolCall: (id: string, update: Partial<ToolCallEntry>) => {
     set((s) => ({
-      toolCalls: s.toolCalls.map((tc) =>
-        tc.id === id ? { ...tc, ...update } : tc
-      ),
+      toolCalls: s.toolCalls.map((tc) => (tc.id === id ? { ...tc, ...update } : tc)),
     }));
   },
 
@@ -333,9 +339,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
       // Attach artifacts to the assistant message that has this runId
       set((s) => ({
-        messages: s.messages.map((msg) =>
-          msg.runId === runId ? { ...msg, artifacts } : msg
-        ),
+        messages: s.messages.map((msg) => (msg.runId === runId ? { ...msg, artifacts } : msg)),
       }));
     } catch {
       // silently ignore artifact fetch errors

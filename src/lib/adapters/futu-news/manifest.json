@@ -7,7 +7,7 @@
   },
   "supports": ["news.search", "sentiment.feed"],
   "routes": [
-    { "capabilitySlug": "news.search",    "markets": ["*"], "priority": 1 },
+    { "capabilitySlug": "news.search", "markets": ["*"], "priority": 1 },
     { "capabilitySlug": "sentiment.feed", "markets": ["*"], "priority": 1 }
   ]
 }

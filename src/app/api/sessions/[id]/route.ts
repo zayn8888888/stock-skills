@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { sessions, messages, runs } from "@/lib/db/schema";
 import { validateAuth } from "@/lib/auth/middleware";
+import { getDb } from "@/lib/db";
+import { messages, runs, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -13,11 +13,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 
   const { id } = await ctx.params;
   const db = getDb();
-  const [row] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, id))
-    .limit(1);
+  const [row] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
 
   if (!row) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -48,11 +44,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx) {
   const db = getDb();
 
   // Verify session exists
-  const [existing] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, id))
-    .limit(1);
+  const [existing] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
 
   if (!existing) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -71,11 +63,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx) {
 
   await db.update(sessions).set(updates).where(eq(sessions.id, id));
 
-  const [updated] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, id))
-    .limit(1);
+  const [updated] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
 
   return NextResponse.json({
     session_id: updated.id,
@@ -96,11 +84,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx) {
   const db = getDb();
 
   // Verify session exists
-  const [existing] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, id))
-    .limit(1);
+  const [existing] = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
 
   if (!existing) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });

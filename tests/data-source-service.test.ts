@@ -1,22 +1,29 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import * as schema from "@/lib/db/schema";
-import { createTestDB } from "./helpers";
 import {
-  listProviders,
-  getProvider,
-  createProvider,
-  updateProvider,
-  deleteProvider,
-  listCapabilities,
-  getCapability,
   createCapability,
-  updateCapability,
-  deleteCapability,
-  listRoutes,
+  createProvider,
   createRoute,
-  updateRoute,
+  deleteCapability,
+  deleteProvider,
   deleteRoute,
+  getCapability,
+  getProvider,
+  listCapabilities,
+  listProviders,
+  listRoutes,
+  updateCapability,
+  updateProvider,
+  updateRoute,
 } from "@/lib/data-source/service";
+import { beforeEach, describe, expect, it } from "vitest";
+import { createTestDB } from "./helpers";
+
+function expectPresent<T>(value: T | undefined, label: string): T {
+  expect(value).toBeDefined();
+  if (value === undefined) {
+    throw new Error(`${label} should be present`);
+  }
+  return value;
+}
 
 describe("data-source service", () => {
   let db: ReturnType<typeof createTestDB>;
@@ -52,7 +59,7 @@ describe("data-source service", () => {
       const p = createProvider(db, { name: "Test", adapterId: "test" });
       const found = getProvider(db, p.id);
       expect(found).not.toBeNull();
-      expect(found!.name).toBe("Test");
+      expect(found?.name).toBe("Test");
     });
 
     it("updates a provider", () => {
@@ -65,7 +72,8 @@ describe("data-source service", () => {
     it("deletes a provider and cascades routes", () => {
       const p = createProvider(db, { name: "Temp", adapterId: "temp" });
       const caps = listCapabilities(db);
-      createRoute(db, { providerId: p.id, capabilityId: caps[0].id });
+      const cap = expectPresent(caps[0], "seed capability");
+      createRoute(db, { providerId: p.id, capabilityId: cap.id });
 
       expect(listRoutes(db, { providerId: p.id }).length).toBe(1);
       deleteProvider(db, p.id);
@@ -110,7 +118,8 @@ describe("data-source service", () => {
     it("deletes a capability and cascades routes", () => {
       const c = createCapability(db, { slug: "temp.test", category: "test", displayName: "Temp" });
       const provs = listProviders(db);
-      createRoute(db, { providerId: provs[0].id, capabilityId: c.id });
+      const prov = expectPresent(provs[0], "seed provider");
+      createRoute(db, { providerId: prov.id, capabilityId: c.id });
 
       deleteCapability(db, c.id);
       expect(getCapability(db, c.id)).toBeNull();
@@ -129,8 +138,14 @@ describe("data-source service", () => {
       const provs = listProviders(db);
       const caps = listCapabilities(db);
       // Use a capability that doesn't have a route for this provider yet
-      const cap = caps.find((c) => c.slug === "news.search")!;
-      const prov = provs.find((p) => p.adapterId === "futu")!;
+      const cap = expectPresent(
+        caps.find((c) => c.slug === "news.search"),
+        "news.search capability",
+      );
+      const prov = expectPresent(
+        provs.find((p) => p.adapterId === "futu"),
+        "futu provider",
+      );
       const r = createRoute(db, {
         providerId: prov.id,
         capabilityId: cap.id,
@@ -143,13 +158,16 @@ describe("data-source service", () => {
 
     it("filters routes by providerId", () => {
       const provs = listProviders(db);
-      const futuRoutes = listRoutes(db, { providerId: provs.find((p) => p.adapterId === "futu")!.id });
+      const futuRoutes = listRoutes(db, {
+        providerId: provs.find((p) => p.adapterId === "futu")?.id,
+      });
       expect(futuRoutes.length).toBe(15); // all futu-supported capabilities
     });
 
     it("updates a route", () => {
       const routes = listRoutes(db);
-      const updated = updateRoute(db, routes[0].id, { priority: 10, enabled: 0 });
+      const route = expectPresent(routes[0], "seed route");
+      const updated = updateRoute(db, route.id, { priority: 10, enabled: 0 });
       expect(updated.priority).toBe(10);
       expect(updated.enabled).toBe(0);
     });
@@ -157,7 +175,8 @@ describe("data-source service", () => {
     it("deletes a route", () => {
       const routes = listRoutes(db);
       const countBefore = routes.length;
-      deleteRoute(db, routes[0].id);
+      const route = expectPresent(routes[0], "seed route");
+      deleteRoute(db, route.id);
       expect(listRoutes(db).length).toBe(countBefore - 1);
     });
   });

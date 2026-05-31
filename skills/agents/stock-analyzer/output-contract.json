@@ -39,7 +39,17 @@
     },
     "dimensions": {
       "type": "object",
-      "required": ["quote", "technical", "valuation", "capital", "orderbook", "peers", "news", "options", "calendar"],
+      "required": [
+        "quote",
+        "technical",
+        "valuation",
+        "capital",
+        "orderbook",
+        "peers",
+        "news",
+        "options",
+        "calendar"
+      ],
       "properties": {
         "quote": {
           "type": "object",
@@ -91,7 +101,10 @@
                 "vs_benchmark_5d": { "type": "number" },
                 "vs_sector_5d": { "type": "number" },
                 "alpha_5d": { "type": "number" },
-                "signal": { "type": "string", "enum": ["stock_driven", "beta_driven", "underperform"] }
+                "signal": {
+                  "type": "string",
+                  "enum": ["stock_driven", "beta_driven", "underperform"]
+                }
               }
             },
             "technical_signals": { "type": "array", "items": { "type": "string" } }
@@ -143,7 +156,10 @@
                 "funding_apr_now": { "type": "number" },
                 "funding_apr_24h_avg": { "type": "number" },
                 "open_interest_usd": { "type": "number" },
-                "crowding_level": { "type": "string", "enum": ["neutral", "warm", "hot", "extreme"] }
+                "crowding_level": {
+                  "type": "string",
+                  "enum": ["neutral", "warm", "hot", "extreme"]
+                }
               }
             }
           }
@@ -267,7 +283,11 @@
         "bulls": { "type": "array", "items": { "type": "string" } },
         "bears": { "type": "array", "items": { "type": "string" } },
         "risks": { "type": "array", "items": { "type": "string" } },
-        "key_signals": { "type": "array", "items": { "type": "string" }, "description": "等待什么信号确认拐点" }
+        "key_signals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "等待什么信号确认拐点"
+        }
       }
     },
     "data_completeness": {

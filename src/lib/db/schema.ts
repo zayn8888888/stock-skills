@@ -205,7 +205,5 @@ export const dataSourceRoutes = sqliteTable(
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
-  (t) => [
-    uniqueIndex("idx_route_provider_cap").on(t.providerId, t.capabilityId),
-  ],
+  (t) => [uniqueIndex("idx_route_provider_cap").on(t.providerId, t.capabilityId)],
 );

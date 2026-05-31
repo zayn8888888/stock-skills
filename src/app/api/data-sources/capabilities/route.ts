@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { validateAuth } from "@/lib/auth/middleware";
-import { getDb } from "@/lib/db";
-import { listCapabilities, createCapability } from "@/lib/data-source/service";
 import { getRouter, reloadRouter } from "@/lib/adapters/init";
+import { validateAuth } from "@/lib/auth/middleware";
+import { createCapability, listCapabilities } from "@/lib/data-source/service";
+import { getDb } from "@/lib/db";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** GET /api/data-sources/capabilities */
 export async function GET(_req: NextRequest) {

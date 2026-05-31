@@ -1,20 +1,26 @@
-import { NextRequest, NextResponse } from "next/server";
-import { customAlphabet } from "nanoid";
-import { getDb } from "@/lib/db";
-import { sessions, messages, runs } from "@/lib/db/schema";
-import { validateAuth } from "@/lib/auth/middleware";
-import { eq, asc } from "drizzle-orm";
-import { loadAgent } from "@/lib/agent/skill-loader";
-import { buildAgentContext } from "@/lib/agent/context";
-import { createTools, createToolExecutor } from "@/lib/agent/tools";
-import { AgentLoop } from "@/lib/agent/loop";
-import { registerLoop, unregisterLoop } from "@/lib/agent/loop-registry";
-import { taskRunner } from "@/lib/agent/task-runner";
-import { getLLMClient, getModelName, isApiKeyConfigured } from "@/lib/agent/llm-provider";
-import { eventBus } from "@/lib/runtime/event-bus";
 import { getRouter } from "@/lib/adapters/init";
+import { buildAgentContext } from "@/lib/agent/context";
+import {
+  getBaseUrl,
+  getContextWindow,
+  getMaxTokens,
+  getModelName,
+  isApiKeyConfigured,
+} from "@/lib/agent/llm-provider";
+import { registerLoop, unregisterLoop } from "@/lib/agent/loop-registry";
+import { PiAgentRunner } from "@/lib/agent/pi-runner";
+import { createPiTools } from "@/lib/agent/pi-tools";
+import { loadAgent } from "@/lib/agent/skill-loader";
+import { taskRunner } from "@/lib/agent/task-runner";
+import { validateAuth } from "@/lib/auth/middleware";
+import { getDb } from "@/lib/db";
+import { messages, runs, sessions } from "@/lib/db/schema";
 import * as artifactWriter from "@/lib/runtime/artifact-writer";
+import { eventBus } from "@/lib/runtime/event-bus";
 import * as goalManager from "@/lib/runtime/goal-manager";
+import { asc, eq } from "drizzle-orm";
+import { customAlphabet } from "nanoid";
+import { type NextRequest, NextResponse } from "next/server";
 
 const genId = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 12);
 
@@ -41,20 +47,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   const body: MessageBody = await req.json();
 
   if (!body.content || typeof body.content !== "string") {
-    return NextResponse.json(
-      { error: "content is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "content is required" }, { status: 400 });
   }
 
   const db = getDb();
 
   // Verify session exists
-  const [session] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
+  const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
 
   if (!session) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -84,10 +83,11 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   let linkedRunId: string | undefined;
 
   if (body.context?.ticker || body.context?.skill_name) {
-    linkedRunId = genId();
+    const runId = genId();
+    linkedRunId = runId;
 
     await db.insert(runs).values({
-      id: linkedRunId,
+      id: runId,
       sessionId,
       skillName: body.context.skill_name ?? "unknown",
       status: "pending",
@@ -100,10 +100,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
     });
 
     // Update session updated_at
-    await db
-      .update(sessions)
-      .set({ updatedAt: now })
-      .where(eq(sessions.id, sessionId));
+    await db.update(sessions).set({ updatedAt: now }).where(eq(sessions.id, sessionId));
+
+    eventBus.emit(sessionId, "run.created", {
+      runId,
+      skillName: body.context.skill_name ?? "unknown",
+      status: "pending",
+    });
 
     // ── Wire AgentLoop via TaskRunner ──────────────────────────────
     const agentName = body.context.skill_name ?? "stock-analyzer";
@@ -115,178 +118,168 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
         id: genId(),
         sessionId,
         role: "system",
-        content: "⚠️ ANTHROPIC_API_KEY is not configured. The agent cannot run without a valid API key. Please set the ANTHROPIC_API_KEY environment variable.",
+        content:
+          "⚠️ ANTHROPIC_API_KEY is not configured. The agent cannot run without a valid API key. Please set the ANTHROPIC_API_KEY environment variable.",
         createdAt: now2,
-        metadata: JSON.stringify({ runId: linkedRunId, error: true }),
+        metadata: JSON.stringify({ runId, error: true }),
       });
       await db
         .update(runs)
         .set({ status: "failed", finishedAt: now2, resultSummary: "API key not configured" })
-        .where(eq(runs.id, linkedRunId!));
+        .where(eq(runs.id, runId));
       eventBus.emit(sessionId, "run.updated", {
-        runId: linkedRunId,
+        runId,
         status: "failed",
         message: "API key not configured",
       });
     } else {
+      const agent = loadAgent(agentName);
+      const goalId: string | undefined = undefined; // will be resolved from active goal if present
+      const ticker = body.context.ticker;
 
-    const agent = loadAgent(agentName);
-    const goalId: string | undefined = undefined; // will be resolved from active goal if present
-    const ticker = body.context.ticker;
+      const agentCtx = buildAgentContext(db, sessionId, goalId, ticker);
+      const model = getModelName();
+      const baseUrl = getBaseUrl();
+      const contextWindow = getContextWindow();
+      const maxTokens = getMaxTokens();
 
-    const agentCtx = buildAgentContext(db, sessionId, goalId, ticker);
-    const model = getModelName();
-    const client = getLLMClient();
+      const piTools = createPiTools(
+        router,
+        artifactWriter,
+        goalManager,
+        runId,
+        sessionId,
+        db,
+        eventBus,
+      );
 
-    const toolDefs = createTools(
-      router,
-      artifactWriter,
-      goalManager,
-      linkedRunId,
-      sessionId,
-      db,
-    );
-
-    const toolExecutor = createToolExecutor(
-      router,
-      artifactWriter,
-      goalManager,
-      linkedRunId,
-      sessionId,
-      db,
-    );
-
-    // Build conversation history from context messages (excluding the
-    // message we just inserted which is already at the end).
-    const history: Array<{ role: "user" | "assistant"; content: string }> =
-      agentCtx.messages
+      // Build conversation history from context messages (excluding the
+      // message we just inserted which is already at the end).
+      const history: Array<{ role: "user" | "assistant"; content: string }> = agentCtx.messages
         .filter((m) => m.id !== messageId)
         .map((m) => ({
           role: m.role as "user" | "assistant",
           content: m.content,
         }));
 
-    // Enqueue as background task — return 200 immediately
-    taskRunner
-      .enqueue(linkedRunId, async (signal) => {
-        const loop = new AgentLoop(
-          client,
-          model,
-          agent.prompt,
-          toolDefs,
-          toolExecutor,
-          eventBus,
-          sessionId,
-          linkedRunId!,
-          db,
-        );
+      // Enqueue as background task — return 200 immediately
+      taskRunner
+        .enqueue(runId, async (signal) => {
+          let onAbort: (() => void) | undefined;
 
-        registerLoop(linkedRunId!, loop);
+          try {
+            const loop = new PiAgentRunner(
+              model,
+              baseUrl,
+              agent.prompt,
+              piTools,
+              eventBus,
+              sessionId,
+              runId,
+              undefined,
+              contextWindow,
+              maxTokens,
+            );
 
-        // Wire taskRunner signal to the loop's abort controller
-        const onAbort = () => loop.cancel();
-        signal.addEventListener("abort", onAbort, { once: true });
+            registerLoop(runId, loop);
 
-        try {
-          // Update run to running
-          const startedAt = new Date().toISOString();
-          await db
-            .update(runs)
-            .set({ status: "running", startedAt })
-            .where(eq(runs.id, linkedRunId!));
+            // Wire taskRunner signal to the loop's abort controller
+            onAbort = () => loop.cancel();
+            signal.addEventListener("abort", onAbort, { once: true });
 
-          eventBus.emit(sessionId, "run.created", {
-            runId: linkedRunId,
-            skillName: agentName,
-            status: "running",
-          });
+            // Update run to running
+            const startedAt = new Date().toISOString();
+            await db.update(runs).set({ status: "running", startedAt }).where(eq(runs.id, runId));
 
-          // Run the agent loop
-          const result = await loop.run(body.content, history);
+            eventBus.emit(sessionId, "run.updated", {
+              runId,
+              status: "running",
+            });
 
-          // Save assistant message
-          const assistantMsgId = genId();
-          const finishedAt = new Date().toISOString();
-          await db.insert(messages).values({
-            id: assistantMsgId,
-            sessionId,
-            role: "assistant",
-            content: result.text,
-            createdAt: finishedAt,
-            metadata: JSON.stringify({
-              runId: linkedRunId,
-              toolIterations: result.toolIterations,
-              inputTokens: result.inputTokens,
-              outputTokens: result.outputTokens,
-            }),
-          });
+            // Run the agent loop
+            const result = await loop.run(body.content, history);
 
-          // Update run to succeeded
-          await db
-            .update(runs)
-            .set({
+            // Save assistant message
+            const assistantMsgId = genId();
+            const finishedAt = new Date().toISOString();
+            await db.insert(messages).values({
+              id: assistantMsgId,
+              sessionId,
+              role: "assistant",
+              content: result.text,
+              createdAt: finishedAt,
+              metadata: JSON.stringify({
+                runId,
+                toolIterations: result.toolIterations,
+                inputTokens: result.inputTokens,
+                outputTokens: result.outputTokens,
+              }),
+            });
+
+            // Update run to succeeded
+            await db
+              .update(runs)
+              .set({
+                status: "success",
+                finishedAt,
+                resultSummary: result.text.slice(0, 500),
+              })
+              .where(eq(runs.id, runId));
+
+            eventBus.emit(sessionId, "run.updated", {
+              runId,
               status: "success",
-              finishedAt,
               resultSummary: result.text.slice(0, 500),
-            })
-            .where(eq(runs.id, linkedRunId!));
+            });
+          } catch (err) {
+            const finishedAt = new Date().toISOString();
+            const isCancelled =
+              signal.aborted || (err instanceof Error && err.message === "AgentLoop was cancelled");
 
-          eventBus.emit(sessionId, "run.updated", {
-            runId: linkedRunId,
-            status: "success",
-            resultSummary: result.text.slice(0, 500),
-          });
-        } catch (err) {
-          const finishedAt = new Date().toISOString();
-          const isCancelled =
-            signal.aborted ||
-            (err instanceof Error && err.message === "AgentLoop was cancelled");
+            // Save error message
+            const errorMsgId = genId();
+            const errorContent = isCancelled
+              ? "Run was cancelled."
+              : `Run failed: ${err instanceof Error ? err.message : String(err)}`;
 
-          // Save error message
-          const errorMsgId = genId();
-          const errorContent = isCancelled
-            ? "Run was cancelled."
-            : `Run failed: ${err instanceof Error ? err.message : String(err)}`;
+            await db.insert(messages).values({
+              id: errorMsgId,
+              sessionId,
+              role: "assistant",
+              content: errorContent,
+              createdAt: finishedAt,
+              metadata: JSON.stringify({ runId, error: true }),
+            });
 
-          await db.insert(messages).values({
-            id: errorMsgId,
-            sessionId,
-            role: "assistant",
-            content: errorContent,
-            createdAt: finishedAt,
-            metadata: JSON.stringify({ runId: linkedRunId, error: true }),
-          });
+            // Update run status
+            await db
+              .update(runs)
+              .set({
+                status: isCancelled ? "cancelled" : "failed",
+                finishedAt,
+                resultSummary: errorContent.slice(0, 500),
+              })
+              .where(eq(runs.id, runId));
 
-          // Update run status
-          await db
-            .update(runs)
-            .set({
+            eventBus.emit(sessionId, isCancelled ? "run.updated" : "error", {
+              runId,
               status: isCancelled ? "cancelled" : "failed",
-              finishedAt,
-              resultSummary: errorContent.slice(0, 500),
-            })
-            .where(eq(runs.id, linkedRunId!));
-
-          eventBus.emit(sessionId, isCancelled ? "run.updated" : "error", {
-            runId: linkedRunId,
-            status: isCancelled ? "cancelled" : "failed",
-            message: errorContent,
-          });
-        } finally {
-          signal.removeEventListener("abort", onAbort);
-          unregisterLoop(linkedRunId!);
-        }
-      })
-      .catch(() => {
-        // swallow — errors are already handled inside the task
-      });
+              message: errorContent,
+            });
+          } finally {
+            if (onAbort) {
+              signal.removeEventListener("abort", onAbort);
+            }
+            unregisterLoop(runId);
+          }
+        })
+        .catch(() => {
+          // swallow — errors are already handled inside the task
+        });
     } // end isApiKeyConfigured else
   } else {
     // Still update session updated_at for the new message
-    await db
-      .update(sessions)
-      .set({ updatedAt: now })
-      .where(eq(sessions.id, sessionId));
+    await db.update(sessions).set({ updatedAt: now }).where(eq(sessions.id, sessionId));
   }
 
   const response: Record<string, unknown> = {
@@ -310,11 +303,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   const db = getDb();
 
   // Verify session exists
-  const [session] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
+  const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
 
   if (!session) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });

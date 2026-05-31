@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { customAlphabet } from "nanoid";
+import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
 import { sessions } from "@/lib/db/schema";
-import { validateAuth } from "@/lib/auth/middleware";
 import { eventBus } from "@/lib/runtime/event-bus";
 import { desc } from "drizzle-orm";
+import { customAlphabet } from "nanoid";
+import { type NextRequest, NextResponse } from "next/server";
 
 const genId = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 12);
 
@@ -47,10 +47,7 @@ export async function GET(req: NextRequest) {
   if (authErr) return authErr;
 
   const db = getDb();
-  const rows = await db
-    .select()
-    .from(sessions)
-    .orderBy(desc(sessions.updatedAt));
+  const rows = await db.select().from(sessions).orderBy(desc(sessions.updatedAt));
 
   const items = rows.map((row) => ({
     session_id: row.id,

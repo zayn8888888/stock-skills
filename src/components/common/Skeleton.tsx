@@ -16,20 +16,13 @@ export function Skeleton({ className, variant = "text", style }: SkeletonProps) 
   };
 
   return (
-    <div
-      className={cn(
-        "animate-pulse bg-muted",
-        variants[variant],
-        className
-      )}
-      style={style}
-    />
+    <div className={cn("animate-pulse bg-muted", variants[variant], className)} style={style} />
   );
 }
 
 export function SkeletonTable({
   rows = 5,
-  cols = 4,
+  cols: _cols = 4,
   className,
 }: {
   rows?: number;
@@ -39,9 +32,9 @@ export function SkeletonTable({
   return (
     <div className={cn("space-y-3", className)}>
       <Skeleton variant="table-row" className="h-8 opacity-50" />
-      {Array.from({ length: rows }).map((_, i) => (
+      {Array.from({ length: rows }, (_, i) => `skeleton-row-${i}`).map((rowId, i) => (
         <Skeleton
-          key={i}
+          key={rowId}
           variant="table-row"
           className="h-10"
           style={{ animationDelay: `${i * 100}ms` }}

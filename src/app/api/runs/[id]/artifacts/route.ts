@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
-import { getDb } from "@/lib/db";
-import { runs, artifacts } from "@/lib/db/schema";
 import { validateAuth } from "@/lib/auth/middleware";
+import { getDb } from "@/lib/db";
+import { artifacts, runs } from "@/lib/db/schema";
 import { writeArtifact } from "@/lib/runtime/artifact-writer";
 import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { type NextRequest, NextResponse } from "next/server";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -33,10 +33,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   };
 
   if (!artifact_type || typeof artifact_type !== "string") {
-    return NextResponse.json(
-      { error: "artifact_type is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "artifact_type is required" }, { status: 400 });
   }
 
   if (!VALID_ARTIFACT_TYPES.has(artifact_type)) {
@@ -49,20 +46,13 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
   }
 
   if (!producer || typeof producer !== "string") {
-    return NextResponse.json(
-      { error: "producer is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "producer is required" }, { status: 400 });
   }
 
   const db = getDb();
 
   // Verify run exists
-  const [run] = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.id, runId))
-    .limit(1);
+  const [run] = await db.select().from(runs).where(eq(runs.id, runId)).limit(1);
 
   if (!run) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
@@ -136,20 +126,13 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   const db = getDb();
 
   // Verify run exists
-  const [run] = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.id, runId))
-    .limit(1);
+  const [run] = await db.select().from(runs).where(eq(runs.id, runId)).limit(1);
 
   if (!run) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
   }
 
-  const rows = await db
-    .select()
-    .from(artifacts)
-    .where(eq(artifacts.runId, runId));
+  const rows = await db.select().from(artifacts).where(eq(artifacts.runId, runId));
 
   const items = rows.map((a) => ({
     artifact_id: a.id,

@@ -1,5 +1,5 @@
-import { type NextRequest, NextResponse } from "next/server";
 import { getConfig } from "@/lib/config";
+import { type NextRequest, NextResponse } from "next/server";
 
 /**
  * Check whether the given Origin header value matches the request's Host.
@@ -36,10 +36,7 @@ export function validateAuth(req: NextRequest): NextResponse | null {
   const origin = req.headers.get("origin");
   const host = req.headers.get("host");
   if (!origin || !host || !isAllowedOrigin(origin, host)) {
-    return NextResponse.json(
-      { error: "Forbidden: invalid origin" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Forbidden: invalid origin" }, { status: 403 });
   }
 
   // 2. X-Requested-With check
@@ -64,10 +61,7 @@ export function validateAuth(req: NextRequest): NextResponse | null {
   const { token: expectedToken } = getConfig();
 
   if (!expectedToken || token !== expectedToken) {
-    return NextResponse.json(
-      { error: "Forbidden: invalid token" },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: "Forbidden: invalid token" }, { status: 403 });
   }
 
   return null;

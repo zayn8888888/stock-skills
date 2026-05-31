@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
+import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
 import { runs } from "@/lib/db/schema";
-import { validateAuth } from "@/lib/auth/middleware";
 import { eventBus } from "@/lib/runtime/event-bus";
 import { desc } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** POST /api/runs - create a new run */
 export async function POST(req: NextRequest) {
@@ -35,24 +35,15 @@ export async function POST(req: NextRequest) {
   };
 
   if (!skill_name || typeof skill_name !== "string") {
-    return NextResponse.json(
-      { error: "skill_name is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "skill_name is required" }, { status: 400 });
   }
 
   if (!session_id || typeof session_id !== "string") {
-    return NextResponse.json(
-      { error: "session_id is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "session_id is required" }, { status: 400 });
   }
 
   if (!workflow_type || typeof workflow_type !== "string") {
-    return NextResponse.json(
-      { error: "workflow_type is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "workflow_type is required" }, { status: 400 });
   }
 
   const db = getDb();
@@ -108,11 +99,7 @@ export async function GET(req: NextRequest) {
   if (authErr) return authErr;
 
   const db = getDb();
-  const rows = await db
-    .select()
-    .from(runs)
-    .orderBy(desc(runs.createdAt))
-    .limit(50);
+  const rows = await db.select().from(runs).orderBy(desc(runs.createdAt)).limit(50);
 
   const items = rows.map((row) => {
     const meta = row.metadata ? JSON.parse(row.metadata) : {};

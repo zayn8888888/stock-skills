@@ -1,9 +1,22 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { eq } from "drizzle-orm";
-import * as schema from "@/lib/db/schema";
+import type {
+  AdapterRequest,
+  DataSourceAdapter,
+  RawResponse,
+  SourceHealth,
+} from "@/lib/adapters/base";
 import { SourceRouter } from "@/lib/data-source/router";
-import type { DataSourceAdapter, AdapterRequest, RawResponse, SourceHealth } from "@/lib/adapters/base";
+import * as schema from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { beforeEach, describe, expect, it } from "vitest";
 import { createTestDB } from "./helpers";
+
+function expectPresent<T>(value: T | undefined, label: string): T {
+  expect(value).toBeDefined();
+  if (value === undefined) {
+    throw new Error(`${label} should be present`);
+  }
+  return value;
+}
 
 // ── Mock adapter factory ─────────────────────────────────────────
 
@@ -113,10 +126,11 @@ describe("SourceRouter", () => {
         .select()
         .from(dataSourceRoutes)
         .all()
-        .find((r) => r.providerId === "prov_futu")!;
+        .find((r) => r.providerId === "prov_futu");
+      const routeToDisable = expectPresent(futuRoute, "futu route");
       db.update(dataSourceRoutes)
         .set({ enabled: 0 })
-        .where(eq(dataSourceRoutes.id, futuRoute.id))
+        .where(eq(dataSourceRoutes.id, routeToDisable.id))
         .run();
 
       const router = createRouter();
@@ -205,9 +219,9 @@ describe("SourceRouter", () => {
 
     it("throws when no routes available", async () => {
       const router = createRouter();
-      await expect(
-        router.execute({ operation: "unknown.cap", ticker: "X" }),
-      ).rejects.toThrow("No available source");
+      await expect(router.execute({ operation: "unknown.cap", ticker: "X" })).rejects.toThrow(
+        "No available source",
+      );
     });
   });
 
@@ -224,10 +238,11 @@ describe("SourceRouter", () => {
         .select()
         .from(schema.dataSourceRoutes)
         .all()
-        .find((r) => r.providerId === "prov_futu")!;
+        .find((r) => r.providerId === "prov_futu");
+      const routeToDisable = expectPresent(futuRoute, "futu route");
       db.update(schema.dataSourceRoutes)
         .set({ enabled: 0 })
-        .where(eq(schema.dataSourceRoutes.id, futuRoute.id))
+        .where(eq(schema.dataSourceRoutes.id, routeToDisable.id))
         .run();
 
       // Before reload: still 2

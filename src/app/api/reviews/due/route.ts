@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { decisions } from "@/lib/db/schema";
+import { desc } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 
 /**
  * GET /api/reviews/due - list decisions pending review.

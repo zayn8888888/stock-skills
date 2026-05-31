@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/common/DataTable";
+import type { ColumnDef } from "@tanstack/react-table";
+import { useMemo } from "react";
 
 interface RunEvent {
   event_id: string;
@@ -61,10 +61,7 @@ export function LogsTab({ events }: LogsTabProps) {
         id: "severity",
         header: "Severity",
         cell: ({ row }) => {
-          const severity = inferSeverity(
-            row.original.event_type,
-            row.original.data
-          );
+          const severity = inferSeverity(row.original.event_type, row.original.data);
           return (
             <span
               className={`text-xs font-medium ${severityColors[severity] ?? "text-muted-foreground"}`}
@@ -84,14 +81,12 @@ export function LogsTab({ events }: LogsTabProps) {
         ),
       },
     ],
-    []
+    [],
   );
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        {events.length} event(s)
-      </p>
+      <p className="text-xs text-muted-foreground">{events.length} event(s)</p>
       <DataTable columns={columns} data={events} pageSize={20} />
     </div>
   );

@@ -7,10 +7,9 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import { eq } from "drizzle-orm";
 import type * as schema from "@/lib/db/schema";
-import { dataProviders, dataCapabilities, dataSourceRoutes } from "@/lib/db/schema";
+import { dataCapabilities, dataProviders, dataSourceRoutes } from "@/lib/db/schema";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 type DB = BetterSQLite3Database<typeof schema>;
 
@@ -98,42 +97,55 @@ export function seed(db: DB): void {
 
   // ── UPSERT providers (preserve enabled + status from UI) ──────
   const existingProviders = new Map(
-    db.select({ id: dataProviders.id, enabled: dataProviders.enabled, status: dataProviders.status, lastCheckAt: dataProviders.lastCheckAt, lastError: dataProviders.lastError })
-      .from(dataProviders).all().map((p) => [p.id, p])
+    db
+      .select({
+        id: dataProviders.id,
+        enabled: dataProviders.enabled,
+        status: dataProviders.status,
+        lastCheckAt: dataProviders.lastCheckAt,
+        lastError: dataProviders.lastError,
+      })
+      .from(dataProviders)
+      .all()
+      .map((p) => [p.id, p]),
   );
   db.delete(dataProviders).run();
 
   for (const manifest of manifests) {
     const { provider } = manifest;
     const existing = existingProviders.get(provider.id);
-    db.insert(dataProviders).values({
-      id: provider.id,
-      name: provider.name,
-      adapterId: provider.adapterId,
-      enabled: existing?.enabled ?? 1,
-      connectionConfig: provider.connectionConfig
-        ? JSON.stringify(provider.connectionConfig)
-        : null,
-      status: existing?.status ?? "unknown",
-      lastCheckAt: existing?.lastCheckAt ?? null,
-      lastError: existing?.lastError ?? null,
-      createdAt: now,
-      updatedAt: now,
-    }).run();
+    db.insert(dataProviders)
+      .values({
+        id: provider.id,
+        name: provider.name,
+        adapterId: provider.adapterId,
+        enabled: existing?.enabled ?? 1,
+        connectionConfig: provider.connectionConfig
+          ? JSON.stringify(provider.connectionConfig)
+          : null,
+        status: existing?.status ?? "unknown",
+        lastCheckAt: existing?.lastCheckAt ?? null,
+        lastError: existing?.lastError ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
   }
 
   // ── INSERT capabilities ────────────────────────────────────────
   for (const cap of capabilities) {
-    db.insert(dataCapabilities).values({
-      id: cap.id,
-      slug: cap.slug,
-      category: cap.category,
-      displayName: cap.displayName,
-      description: cap.description ?? null,
-      paramsSchema: cap.paramsSchema ? JSON.stringify(cap.paramsSchema) : null,
-      responseSchema: cap.responseSchema ? JSON.stringify(cap.responseSchema) : null,
-      createdAt: now,
-    }).run();
+    db.insert(dataCapabilities)
+      .values({
+        id: cap.id,
+        slug: cap.slug,
+        category: cap.category,
+        displayName: cap.displayName,
+        description: cap.description ?? null,
+        paramsSchema: cap.paramsSchema ? JSON.stringify(cap.paramsSchema) : null,
+        responseSchema: cap.responseSchema ? JSON.stringify(cap.responseSchema) : null,
+        createdAt: now,
+      })
+      .run();
   }
 
   // Build slug → id map for route resolution
@@ -151,16 +163,18 @@ export function seed(db: DB): void {
         console.warn(`[seed] capability "${route.capabilitySlug}" not found, skipping route`);
         continue;
       }
-      db.insert(dataSourceRoutes).values({
-        id: `rt_${provider.id}_${route.capabilitySlug.replace(/\./g, "_")}`,
-        providerId: provider.id,
-        capabilityId: capId,
-        markets: JSON.stringify(route.markets),
-        priority: route.priority,
-        enabled: 1,
-        createdAt: now,
-        updatedAt: now,
-      }).run();
+      db.insert(dataSourceRoutes)
+        .values({
+          id: `rt_${provider.id}_${route.capabilitySlug.replace(/\./g, "_")}`,
+          providerId: provider.id,
+          capabilityId: capId,
+          markets: JSON.stringify(route.markets),
+          priority: route.priority,
+          enabled: 1,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
     }
   }
 

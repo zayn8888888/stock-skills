@@ -3,12 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": [
-      "@biomejs/biome",
-      "better-sqlite3",
-      "esbuild",
-      "sharp"
-    ]
+    "onlyBuiltDependencies": ["@biomejs/biome", "better-sqlite3", "esbuild", "sharp"]
   },
   "scripts": {
     "dev": "next dev",
@@ -21,6 +16,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
+    "@earendil-works/pi-agent-core": "^0.78.0",
+    "@earendil-works/pi-ai": "^0.78.0",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-collapsible": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -53,6 +50,7 @@
     "sonner": "^2.0.3",
     "tailwind-merge": "^3.3.0",
     "technicalindicators": "^3.1.0",
+    "typebox": "^1.1.39",
     "zod": "^3.25.56",
     "zustand": "^5.0.5"
   },

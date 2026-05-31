@@ -9,7 +9,7 @@ type HandlerMap = Record<string, (data: string) => void>;
 interface LRUSet {
   set: Set<string>;
   order: string[];
-  add(id: string): boolean; // returns true if new
+  add(id: string): boolean;
 }
 
 function createLRUSet(capacity: number): LRUSet {
@@ -29,8 +29,8 @@ function createLRUSet(capacity: number): LRUSet {
   };
 }
 
-const INITIAL_BACKOFF = 1000; // 1s
-const MAX_BACKOFF = 30000; // 30s
+const INITIAL_BACKOFF = 1000;
+const MAX_BACKOFF = 30000;
 const DEDUP_CAPACITY = 500;
 
 export interface UseSSEReturn {
@@ -38,6 +38,7 @@ export interface UseSSEReturn {
   disconnect: () => void;
   getStatus: () => SSEStatus;
   onStatusChange: (cb: (status: SSEStatus) => void) => () => void;
+  waitForConnection: () => Promise<void>;
 }
 
 export function useSSE(): UseSSEReturn {
@@ -50,6 +51,8 @@ export function useSSE(): UseSSEReturn {
   const dedupRef = useRef<LRUSet>(createLRUSet(DEDUP_CAPACITY));
   const lastEventIdRef = useRef<string | null>(null);
   const listenersRef = useRef<Set<(s: SSEStatus) => void>>(new Set());
+  const connectedResolversRef = useRef<Array<() => void>>([]);
+  const doConnectRef = useRef<() => void>(() => {});
 
   const setStatus = useCallback((s: SSEStatus) => {
     if (statusRef.current === s) return;
@@ -58,7 +61,7 @@ export function useSSE(): UseSSEReturn {
       try {
         cb(s);
       } catch {
-        // swallow listener errors
+        /* swallow */
       }
     }
   }, []);
@@ -79,9 +82,9 @@ export function useSSE(): UseSSEReturn {
     backoffRef.current = Math.min(backoffRef.current * 2, MAX_BACKOFF);
     setStatus("reconnecting");
     retryTimerRef.current = setTimeout(() => {
-      doConnect();
+      doConnectRef.current();
     }, delay);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [setStatus]);
 
   const doConnect = useCallback(() => {
     cleanup();
@@ -98,6 +101,10 @@ export function useSSE(): UseSSEReturn {
     es.onopen = () => {
       backoffRef.current = INITIAL_BACKOFF;
       setStatus("connected");
+      for (const resolve of connectedResolversRef.current) {
+        resolve();
+      }
+      connectedResolversRef.current = [];
     };
 
     es.onmessage = (event: MessageEvent) => {
@@ -105,13 +112,9 @@ export function useSSE(): UseSSEReturn {
         lastEventIdRef.current = event.lastEventId;
       }
       const eventId = event.lastEventId || event.data;
-      if (!dedupRef.current.add(eventId)) {
-        return; // duplicate, skip
-      }
-      const handlers = handlersRef.current;
-      if (handlers["message"]) {
-        handlers["message"](event.data);
-      }
+      if (!dedupRef.current.add(eventId)) return;
+      const handler = handlersRef.current.message;
+      if (handler) handler(event.data);
     };
 
     es.onerror = () => {
@@ -121,22 +124,29 @@ export function useSSE(): UseSSEReturn {
       scheduleReconnect();
     };
 
-    // Register named event handlers
     for (const eventName of Object.keys(handlersRef.current)) {
-      if (eventName === "message") continue; // already handled via onmessage
+      if (eventName === "message") continue;
       es.addEventListener(eventName, ((event: MessageEvent) => {
         if (event.lastEventId) {
           lastEventIdRef.current = event.lastEventId;
         }
         const eventId = event.lastEventId || event.data;
-        if (!dedupRef.current.add(eventId)) {
-          return;
-        }
+        if (!dedupRef.current.add(eventId)) return;
         const handler = handlersRef.current[eventName];
         if (handler) handler(event.data);
       }) as EventListener);
     }
   }, [cleanup, scheduleReconnect, setStatus]);
+
+  useEffect(() => {
+    doConnectRef.current = doConnect;
+  }, [doConnect]);
+
+  const disconnect = useCallback(() => {
+    cleanup();
+    setStatus("disconnected");
+    backoffRef.current = INITIAL_BACKOFF;
+  }, [cleanup, setStatus]);
 
   const connect = useCallback(
     (url: string, handlers?: HandlerMap) => {
@@ -148,42 +158,31 @@ export function useSSE(): UseSSEReturn {
       dedupRef.current = createLRUSet(DEDUP_CAPACITY);
       doConnect();
     },
-    [] // eslint-disable-line react-hooks/exhaustive-deps
+    [disconnect, doConnect],
   );
-
-  const disconnect = useCallback(() => {
-    cleanup();
-    setStatus("disconnected");
-    backoffRef.current = INITIAL_BACKOFF;
-  }, [cleanup, setStatus]);
 
   const getStatus = useCallback(() => statusRef.current, []);
 
-  const onStatusChange = useCallback(
-    (cb: (status: SSEStatus) => void) => {
-      listenersRef.current.add(cb);
-      // Fire immediately with current status
-      cb(statusRef.current);
-      return () => {
-        listenersRef.current.delete(cb);
-      };
-    },
-    []
-  );
+  const waitForConnection = useCallback((): Promise<void> => {
+    if (statusRef.current === "connected") return Promise.resolve();
+    return new Promise((resolve) => {
+      connectedResolversRef.current.push(resolve);
+    });
+  }, []);
 
-  // Cleanup on unmount
+  const onStatusChange = useCallback((cb: (status: SSEStatus) => void) => {
+    listenersRef.current.add(cb);
+    cb(statusRef.current);
+    return () => {
+      listenersRef.current.delete(cb);
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       cleanup();
     };
   }, [cleanup]);
 
-  // Workaround: keep connect/disconnect stable while doConnect references them.
-  // We bind them imperatively via refs to avoid circular deps.
-  const connectRef = useRef(connect);
-  connectRef.current = connect;
-  const disconnectRef = useRef(disconnect);
-  disconnectRef.current = disconnect;
-
-  return { connect, disconnect, getStatus, onStatusChange };
+  return { connect, disconnect, getStatus, onStatusChange, waitForConnection };
 }

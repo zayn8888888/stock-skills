@@ -183,38 +183,88 @@ pre code.hljs {
   background: transparent;
 }
 
-.hljs-keyword { color: hsl(270 60% 45%); }
-.hljs-string { color: hsl(152 55% 35%); }
-.hljs-number { color: hsl(30 70% 45%); }
-.hljs-comment { color: hsl(215 16% 47%); font-style: italic; }
-.hljs-function { color: hsl(190 70% 40%); }
-.hljs-title { color: hsl(190 70% 40%); }
-.hljs-params { color: hsl(215 20% 35%); }
-.hljs-built_in { color: hsl(40 70% 40%); }
-.hljs-attr { color: hsl(30 70% 45%); }
-.hljs-literal { color: hsl(30 70% 45%); }
+.hljs-keyword {
+  color: hsl(270 60% 45%);
+}
+.hljs-string {
+  color: hsl(152 55% 35%);
+}
+.hljs-number {
+  color: hsl(30 70% 45%);
+}
+.hljs-comment {
+  color: hsl(215 16% 47%);
+  font-style: italic;
+}
+.hljs-function {
+  color: hsl(190 70% 40%);
+}
+.hljs-title {
+  color: hsl(190 70% 40%);
+}
+.hljs-params {
+  color: hsl(215 20% 35%);
+}
+.hljs-built_in {
+  color: hsl(40 70% 40%);
+}
+.hljs-attr {
+  color: hsl(30 70% 45%);
+}
+.hljs-literal {
+  color: hsl(30 70% 45%);
+}
 
 .dark pre code.hljs {
   background: transparent;
 }
 
-.dark .hljs-keyword { color: hsl(270 70% 70%); }
-.dark .hljs-string { color: hsl(152 65% 60%); }
-.dark .hljs-number { color: hsl(30 80% 65%); }
-.dark .hljs-comment { color: hsl(215 15% 45%); font-style: italic; }
-.dark .hljs-function { color: hsl(190 80% 70%); }
-.dark .hljs-title { color: hsl(190 80% 70%); }
-.dark .hljs-params { color: hsl(210 30% 80%); }
-.dark .hljs-built_in { color: hsl(40 80% 65%); }
-.dark .hljs-attr { color: hsl(30 80% 65%); }
-.dark .hljs-literal { color: hsl(30 80% 65%); }
+.dark .hljs-keyword {
+  color: hsl(270 70% 70%);
+}
+.dark .hljs-string {
+  color: hsl(152 65% 60%);
+}
+.dark .hljs-number {
+  color: hsl(30 80% 65%);
+}
+.dark .hljs-comment {
+  color: hsl(215 15% 45%);
+  font-style: italic;
+}
+.dark .hljs-function {
+  color: hsl(190 80% 70%);
+}
+.dark .hljs-title {
+  color: hsl(190 80% 70%);
+}
+.dark .hljs-params {
+  color: hsl(210 30% 80%);
+}
+.dark .hljs-built_in {
+  color: hsl(40 80% 65%);
+}
+.dark .hljs-attr {
+  color: hsl(30 80% 65%);
+}
+.dark .hljs-literal {
+  color: hsl(30 80% 65%);
+}
 
 /* ── Trading-specific utility classes ───────────────────────────── */
 
-.text-gain { color: hsl(var(--gain)); }
-.text-loss { color: hsl(var(--loss)); }
-.bg-gain\/10 { background-color: hsl(var(--gain) / 0.1); }
-.bg-loss\/10 { background-color: hsl(var(--loss) / 0.1); }
+.text-gain {
+  color: hsl(var(--gain));
+}
+.text-loss {
+  color: hsl(var(--loss));
+}
+.bg-gain\/10 {
+  background-color: hsl(var(--gain) / 0.1);
+}
+.bg-loss\/10 {
+  background-color: hsl(var(--loss) / 0.1);
+}
 
 /* ── Scrollbar styling for dark theme ───────────────────────────── */
 
@@ -236,8 +286,13 @@ pre code.hljs {
 /* ── Streaming cursor animation ─────────────────────────────────── */
 
 @keyframes stream-cursor {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
 }
 
 .animate-stream-cursor {

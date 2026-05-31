@@ -1,7 +1,7 @@
 "use client";
 
-import { useAgentStore } from "@/stores/agent";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAgentStore } from "@/stores/agent";
 
 const LABELS = {
   en: {

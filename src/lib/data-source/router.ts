@@ -5,11 +5,16 @@
  * and provides resolve/execute methods for tool dispatch.
  */
 
-import { eq, and, or, isNull } from "drizzle-orm";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import type {
+  AdapterRequest,
+  DataSourceAdapter,
+  RawResponse,
+  SourceHealth,
+} from "@/lib/adapters/base";
 import type * as schema from "@/lib/db/schema";
-import { dataProviders, dataCapabilities, dataSourceRoutes } from "@/lib/db/schema";
-import type { DataSourceAdapter, AdapterRequest, RawResponse, SourceHealth } from "@/lib/adapters/base";
+import { dataCapabilities, dataProviders, dataSourceRoutes } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 type DB = BetterSQLite3Database<typeof schema>;
 
@@ -152,7 +157,6 @@ export class SourceRouter {
         return { raw, adapter: route.adapter };
       } catch (err) {
         errors.push(`${route.providerName}: ${err instanceof Error ? err.message : String(err)}`);
-        continue;
       }
     }
 
@@ -205,9 +209,13 @@ export class SourceRouter {
 
   /** Get all registered capabilities from the DB. */
   getCapabilities(): Array<{
-    id: string; slug: string; category: string;
-    displayName: string; description: string | null;
-    paramsSchema: string | null; responseSchema: string | null;
+    id: string;
+    slug: string;
+    category: string;
+    displayName: string;
+    description: string | null;
+    paramsSchema: string | null;
+    responseSchema: string | null;
   }> {
     const rows = this.db.select().from(dataCapabilities).all();
     return rows.map((r) => ({

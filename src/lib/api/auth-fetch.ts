@@ -2,18 +2,16 @@ let tokenPromise: Promise<string> | null = null;
 
 async function getAuthToken(): Promise<string> {
   if (!tokenPromise) {
-    tokenPromise = fetch("/api/auth/token", { cache: "no-store" }).then(
-      async (res) => {
-        if (!res.ok) {
-          throw new Error(`Unable to load auth token (${res.status})`);
-        }
-        const data = (await res.json()) as { token?: string };
-        if (!data.token) {
-          throw new Error("Auth token response did not include a token");
-        }
-        return data.token;
-      },
-    );
+    tokenPromise = fetch("/api/auth/token", { cache: "no-store" }).then(async (res) => {
+      if (!res.ok) {
+        throw new Error(`Unable to load auth token (${res.status})`);
+      }
+      const data = (await res.json()) as { token?: string };
+      if (!data.token) {
+        throw new Error("Auth token response did not include a token");
+      }
+      return data.token;
+    });
   }
   return tokenPromise;
 }

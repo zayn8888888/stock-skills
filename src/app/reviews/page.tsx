@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { DataTable } from "@/components/common/DataTable";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { Skeleton } from "@/components/common/Skeleton";
+import { authFetch } from "@/lib/api/auth-fetch";
+import { cn } from "@/lib/utils";
 import * as Tabs from "@radix-ui/react-tabs";
 import type { ColumnDef } from "@tanstack/react-table";
 import { BarChart3, Calendar, CheckCircle2, Clock } from "lucide-react";
-import { DataTable } from "@/components/common/DataTable";
-import { Skeleton } from "@/components/common/Skeleton";
-import { ErrorBoundary } from "@/components/common/ErrorBoundary";
-import { authFetch } from "@/lib/api/auth-fetch";
-import { cn } from "@/lib/utils";
+import { useEffect, useMemo, useState } from "react";
 
 interface Decision {
   id: string;
@@ -61,7 +61,7 @@ export default function ReviewsPage() {
               "text-sm cursor-pointer hover:underline",
               selectedId === row.original.id
                 ? "font-medium text-foreground"
-                : "text-muted-foreground"
+                : "text-muted-foreground",
             )}
           >
             {row.original.decision}
@@ -78,11 +78,7 @@ export default function ReviewsPage() {
             <span
               className={cn(
                 "text-sm font-medium",
-                c >= 0.7
-                  ? "text-green-500"
-                  : c >= 0.4
-                    ? "text-yellow-500"
-                    : "text-red-500"
+                c >= 0.7 ? "text-green-500" : c >= 0.4 ? "text-yellow-500" : "text-red-500",
               )}
             >
               {(c * 100).toFixed(0)}%
@@ -100,7 +96,7 @@ export default function ReviewsPage() {
         ),
       },
     ],
-    [selectedId]
+    [selectedId],
   );
 
   return (
@@ -135,20 +131,14 @@ export default function ReviewsPage() {
               <Tabs.Content value="due" className="lg:col-span-3 contents">
                 {/* Decision table */}
                 <div className="lg:col-span-2">
-                  <DataTable
-                    columns={columns}
-                    data={due}
-                    pageSize={10}
-                  />
+                  <DataTable columns={columns} data={due} pageSize={10} />
                 </div>
 
                 {/* Selected detail + lesson editor */}
                 <div className="lg:col-span-1">
                   {selected ? (
                     <div className="rounded-lg border border-border p-4 space-y-4 sticky top-6">
-                      <h3 className="text-sm font-semibold text-foreground">
-                        Decision Detail
-                      </h3>
+                      <h3 className="text-sm font-semibold text-foreground">Decision Detail</h3>
                       <div className="space-y-2 text-sm">
                         <p>
                           <span className="text-muted-foreground">Decision: </span>
@@ -168,16 +158,21 @@ export default function ReviewsPage() {
 
                       {/* Lesson editor */}
                       <div className="pt-2 border-t border-border space-y-2">
-                        <label className="text-sm font-medium text-foreground">
+                        <label
+                          htmlFor="lesson-draft"
+                          className="text-sm font-medium text-foreground"
+                        >
                           Lesson
                         </label>
                         <textarea
+                          id="lesson-draft"
                           value={lessonDraft}
                           onChange={(e) => setLessonDraft(e.target.value)}
                           placeholder="Record a lesson learned from this decision..."
                           className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none h-24 placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                         />
                         <button
+                          type="button"
                           onClick={() => {
                             if (!lessonDraft.trim()) return;
                             authFetch("/api/lessons", {

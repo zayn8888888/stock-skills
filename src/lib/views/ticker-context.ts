@@ -6,20 +6,14 @@
  * the current state of a ticker before acting.
  */
 
+import type { Observation } from "@/lib/adapters/base";
+import { decisions, observations, runs } from "@/lib/db/schema";
+import { isExpired } from "@/lib/observations/freshness";
 import { desc, eq } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import {
-  observations,
-  runs,
-  decisions,
-} from "@/lib/db/schema";
-import type { Observation } from "@/lib/adapters/base";
-import { isExpired } from "@/lib/observations/freshness";
 
 // Reuse the DB type alias from the store module
-type DB = BetterSQLite3Database<
-  typeof import("@/lib/db/schema")
->;
+type DB = BetterSQLite3Database<typeof import("@/lib/db/schema")>;
 
 // ──────────────────────────── Types ───────────────────────────────
 
@@ -67,14 +61,7 @@ export interface TickerContext {
 
 // ──────────────────────────── Expected Categories ─────────────────
 
-const EXPECTED_CATEGORIES = [
-  "quote",
-  "kline",
-  "technical",
-  "news",
-  "fundamental",
-  "sentiment",
-];
+const EXPECTED_CATEGORIES = ["quote", "kline", "technical", "news", "fundamental", "sentiment"];
 
 // ──────────────────────────── Builder ─────────────────────────────
 
@@ -88,10 +75,7 @@ const EXPECTED_CATEGORIES = [
  * 4. Open decisions linked to this ticker's observations
  * 5. Data gaps (expected categories with no fresh observation)
  */
-export function buildTickerContext(
-  db: DB,
-  ticker: string
-): TickerContext {
+export function buildTickerContext(db: DB, ticker: string): TickerContext {
   const now = new Date();
   const nowISO = now.toISOString();
 
@@ -131,9 +115,7 @@ export function buildTickerContext(
     createdAt: row.createdAt,
   }));
 
-  const unexpiredObservations = allObservations.filter(
-    (obs) => !isExpired(obs, now)
-  );
+  const unexpiredObservations = allObservations.filter((obs) => !isExpired(obs, now));
 
   // 4. Open decisions — find decisions that belong to sessions where
   //    we have observations for this ticker, and that don't have a
@@ -156,16 +138,12 @@ export function buildTickerContext(
       .orderBy(desc(decisions.createdAt))
       .all();
 
-    openDecisions = decisionRows
-      .filter((d) => sessionIds.has(d.sessionId))
-      .slice(0, 20);
+    openDecisions = decisionRows.filter((d) => sessionIds.has(d.sessionId)).slice(0, 20);
   }
 
   // 5. Data gaps — determine which expected categories are missing
   //    or have only expired observations
-  const freshByCategory = new Set(
-    unexpiredObservations.map((o) => o.category)
-  );
+  const freshByCategory = new Set(unexpiredObservations.map((o) => o.category));
   const anyByCategory = new Map<string, string>();
   for (const obs of allObservations) {
     if (!anyByCategory.has(obs.category)) {
@@ -178,10 +156,12 @@ export function buildTickerContext(
     if (!anyByCategory.has(category)) {
       dataGaps.push({ category, status: "missing", lastObservation: null });
     } else if (!freshByCategory.has(category)) {
+      const lastObservation = anyByCategory.get(category);
+      if (!lastObservation) continue;
       dataGaps.push({
         category,
         status: "expired",
-        lastObservation: anyByCategory.get(category)!,
+        lastObservation,
       });
     }
   }

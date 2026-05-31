@@ -34,7 +34,18 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["stage0_data", "stage1_masters", "stage2_debate", "stage3_rm", "stage4_trader", "stage5_risk", "stage6_pm", "stage7_review", "stage8_reflection", "p1_p4_portfolio"]
+        "enum": [
+          "stage0_data",
+          "stage1_masters",
+          "stage2_debate",
+          "stage3_rm",
+          "stage4_trader",
+          "stage5_risk",
+          "stage6_pm",
+          "stage7_review",
+          "stage8_reflection",
+          "p1_p4_portfolio"
+        ]
       }
     },
     "required_skills_called": {
@@ -94,7 +105,10 @@
       "type": "object",
       "description": "阶段 3 Research Manager 输出",
       "properties": {
-        "recommendation": { "type": "string", "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"] },
+        "recommendation": {
+          "type": "string",
+          "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"]
+        },
         "rationale": { "type": "string" },
         "strategic_actions": { "type": "string" }
       }
@@ -164,7 +178,10 @@
       "description": "阶段 6 Portfolio Manager 最终决策",
       "required": ["rating", "executive_summary", "investment_thesis"],
       "properties": {
-        "rating": { "type": "string", "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"] },
+        "rating": {
+          "type": "string",
+          "enum": ["Buy", "Overweight", "Hold", "Underweight", "Sell"]
+        },
         "executive_summary": { "type": "string" },
         "investment_thesis": { "type": "string" },
         "price_target": { "type": "number" },

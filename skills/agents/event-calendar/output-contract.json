@@ -3,13 +3,7 @@
   "title": "EventCalendarResult",
   "description": "前瞻事件日历 result.json 输出契约",
   "type": "object",
-  "required": [
-    "calendar_timestamp",
-    "window",
-    "data_sources_status",
-    "events",
-    "sources"
-  ],
+  "required": ["calendar_timestamp", "window", "data_sources_status", "events", "sources"],
   "properties": {
     "calendar_timestamp": {
       "type": "string",
@@ -71,7 +65,16 @@
           "event_name": { "type": "string" },
           "type": {
             "type": "string",
-            "enum": ["earnings", "economic_data", "monetary_policy", "fiscal_policy", "regulatory", "geopolitical", "industry", "other"]
+            "enum": [
+              "earnings",
+              "economic_data",
+              "monetary_policy",
+              "fiscal_policy",
+              "regulatory",
+              "geopolitical",
+              "industry",
+              "other"
+            ]
           },
           "affected_symbols": { "type": "array", "items": { "type": "string" } },
           "market_expectation": { "type": "string", "description": "市场预期值/共识值" },

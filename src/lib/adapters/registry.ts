@@ -13,9 +13,7 @@ export class AdapterRegistry {
   /** Register an adapter. Throws if an adapter with the same name already exists. */
   register(adapter: DataSourceAdapter): void {
     if (this.adapters.has(adapter.name)) {
-      throw new Error(
-        `Adapter "${adapter.name}" is already registered. Use a unique name.`
-      );
+      throw new Error(`Adapter "${adapter.name}" is already registered. Use a unique name.`);
     }
     this.adapters.set(adapter.name, adapter);
   }

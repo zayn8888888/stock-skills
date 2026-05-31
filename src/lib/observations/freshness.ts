@@ -15,7 +15,7 @@ export interface FreshnessPolicy {
 // ──────────────────────────── Policies ────────────────────────────
 
 const HOUR = 60 * 60 * 1000;
-const DAY = 24 * HOUR;
+const _DAY = 24 * HOUR;
 
 export const FRESHNESS_POLICIES: FreshnessPolicy[] = [
   { category: "quote", maxAgeMs: 4 * HOUR },
@@ -28,9 +28,7 @@ export const FRESHNESS_POLICIES: FreshnessPolicy[] = [
   { category: "options", maxAgeMs: 24 * HOUR },
 ];
 
-const POLICY_MAP = new Map<string, number>(
-  FRESHNESS_POLICIES.map((p) => [p.category, p.maxAgeMs])
-);
+const POLICY_MAP = new Map<string, number>(FRESHNESS_POLICIES.map((p) => [p.category, p.maxAgeMs]));
 
 // Default TTL for categories without an explicit policy
 const DEFAULT_MAX_AGE_MS = 4 * HOUR;
@@ -41,13 +39,9 @@ const DEFAULT_MAX_AGE_MS = 4 * HOUR;
  * Calculate the expiration timestamp for an observation of the given
  * category, based on the time the data was observed.
  */
-export function getFreshnessExpiry(
-  category: string,
-  observedAt: string | Date
-): string {
+export function getFreshnessExpiry(category: string, observedAt: string | Date): string {
   const maxAge = POLICY_MAP.get(category) ?? DEFAULT_MAX_AGE_MS;
-  const observed =
-    typeof observedAt === "string" ? new Date(observedAt) : observedAt;
+  const observed = typeof observedAt === "string" ? new Date(observedAt) : observedAt;
   return new Date(observed.getTime() + maxAge).toISOString();
 }
 
@@ -57,10 +51,7 @@ export function getFreshnessExpiry(
  * If the observation has no expiresAt field, it is considered expired
  * as a safety measure.
  */
-export function isExpired(
-  observation: { expiresAt?: string | null },
-  now?: Date
-): boolean {
+export function isExpired(observation: { expiresAt?: string | null }, now?: Date): boolean {
   if (!observation.expiresAt) return true;
   const currentTime = now ?? new Date();
   return currentTime.getTime() > new Date(observation.expiresAt).getTime();

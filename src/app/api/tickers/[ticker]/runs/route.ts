@@ -1,20 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
-import { desc, like } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { runs } from "@/lib/db/schema";
+import { desc, like } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** GET /api/tickers/[ticker]/runs - list recent runs for a ticker */
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ ticker: string }> },
-) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await params;
 
   if (!ticker || typeof ticker !== "string") {
-    return NextResponse.json(
-      { error: "ticker is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "ticker is required" }, { status: 400 });
   }
 
   const db = getDb();

@@ -17,11 +17,7 @@ export interface WriteResult {
  * @param filename  Target filename (must not contain path separators that escape the boundary)
  * @param content  UTF-8 string content to write
  */
-export function writeArtifact(
-  runDir: string,
-  filename: string,
-  content: string,
-): WriteResult {
+export function writeArtifact(runDir: string, filename: string, content: string): WriteResult {
   const { analysisRoot } = getConfig();
   const artifactsRoot = path.resolve(analysisRoot, "artifacts");
   const targetDir = path.resolve(artifactsRoot, runDir);

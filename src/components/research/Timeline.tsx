@@ -1,15 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
-import { ChevronDown, ChevronRight, Bot, Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { MarkdownContent } from "@/components/common/MarkdownContent";
 import { useLanguage } from "@/hooks/useLanguage";
+import { cn } from "@/lib/utils";
+import type { AgentMessage } from "@/stores/agent";
+import { Bot, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { ThinkingTimeline } from "./ThinkingTimeline";
-import type { AgentMessage } from "@/stores/agent";
 
 const LABELS = {
   en: { turn: "Turn", runs: "run", runsPlural: "runs", thinking: "Thinking..." },
@@ -41,10 +39,7 @@ function groupIntoTurns(messages: AgentMessage[]): Turn[] {
     } else if (currentTurn) {
       currentTurn.subsequent.push(msg);
       if (msg.toolCalls?.length) {
-        currentTurn.toolCalls = [
-          ...(currentTurn.toolCalls ?? []),
-          ...msg.toolCalls,
-        ];
+        currentTurn.toolCalls = [...(currentTurn.toolCalls ?? []), ...msg.toolCalls];
       }
     } else {
       currentTurn = {
@@ -75,26 +70,23 @@ function TurnView({ turn, index, defaultExpanded }: TurnViewProps) {
   const labels = LABELS[language];
 
   const summary = turn.userMessage.content.slice(0, 50);
-  const runCount = turn.subsequent.length;
 
   return (
     <div className="space-y-3">
       {/* Turn header - collapsible for older turns */}
       {!defaultExpanded && (
         <button
+          type="button"
           onClick={() => setExpanded((v) => !v)}
           className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors w-full group"
         >
-          {expanded ? (
-            <ChevronDown className="h-3 w-3" />
-          ) : (
-            <ChevronRight className="h-3 w-3" />
-          )}
+          {expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
           <span className="text-muted-foreground/60">
             {labels.turn} {index + 1}
           </span>
           <span className="text-muted-foreground/40 truncate">
-            {summary}{summary.length >= 50 ? "..." : ""}
+            {summary}
+            {summary.length >= 50 ? "..." : ""}
           </span>
         </button>
       )}
@@ -123,6 +115,7 @@ function TurnView({ turn, index, defaultExpanded }: TurnViewProps) {
 function StreamingIndicator({ text }: { text?: string }) {
   const { language } = useLanguage();
   const labels = LABELS[language];
+  const indicatorText = text ?? labels.thinking;
 
   return (
     <div className="flex gap-2 items-start">
@@ -131,7 +124,7 @@ function StreamingIndicator({ text }: { text?: string }) {
       </div>
       <div className="flex items-center gap-2 px-3 py-2">
         <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-        <span className="text-xs text-muted-foreground">{labels.thinking}</span>
+        <span className="text-xs text-muted-foreground">{indicatorText}</span>
       </div>
     </div>
   );
@@ -147,22 +140,7 @@ function StreamingContent({ text }: { text: string }) {
       <div className="flex-shrink-0 w-7 h-7 rounded-full bg-primary/15 flex items-center justify-center mt-0.5">
         <Bot className="h-3.5 w-3.5 text-primary" />
       </div>
-      <div
-        className={cn(
-          "rounded-2xl rounded-tl-md px-4 py-3 flex-1 min-w-0",
-          "bg-card border border-border/50 shadow-sm",
-          "prose prose-sm max-w-none",
-          "prose-pre:p-0 prose-pre:border-0 prose-pre:bg-transparent"
-        )}
-      >
-        <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
-          rehypePlugins={[rehypeHighlight]}
-        >
-          {text}
-        </ReactMarkdown>
-        <span className="inline-block w-1.5 h-4 bg-primary animate-stream-cursor ml-0.5 align-text-bottom rounded-sm" />
-      </div>
+      <MarkdownContent content={text} streaming className="flex-1 min-w-0" />
     </div>
   );
 }

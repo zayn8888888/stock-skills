@@ -105,7 +105,7 @@ export const optionsValueSchema = z.object({
         type: z.enum(["call", "put"]),
         open_interest: z.number(),
         volume: z.number(),
-      })
+      }),
     )
     .optional(),
   summary: z.string(),

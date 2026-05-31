@@ -13,7 +13,7 @@ describe("getConfig", () => {
     process.env.ANTHROPIC_API_KEY = "test-key";
     process.env.ANTHROPIC_BASE_URL = "https://example.test/anthropic";
     process.env.MODEL_ID = "mimo-v2.5-pro";
-    delete process.env.LLM_MODEL;
+    process.env.LLM_MODEL = undefined;
 
     const { getConfig } = await import("@/lib/config");
 

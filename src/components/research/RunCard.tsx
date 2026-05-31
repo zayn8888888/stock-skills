@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ExternalLink, Loader2, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { CheckCircle2, Clock, ExternalLink, Loader2, XCircle } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,10 +27,7 @@ interface RunCardProps {
 // Status config
 // ---------------------------------------------------------------------------
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; color: string; icon: typeof Clock }
-> = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Clock }> = {
   queued: { label: "Queued", color: "bg-muted text-muted-foreground", icon: Clock },
   pending: { label: "Pending", color: "bg-muted text-muted-foreground", icon: Clock },
   running: {
@@ -68,9 +65,7 @@ export function RunCard({ run, className }: RunCardProps) {
   const config = STATUS_CONFIG[run.status] ?? STATUS_CONFIG.pending;
   const Icon = config.icon;
 
-  const durationStr = run.duration_ms
-    ? `${(run.duration_ms / 1000).toFixed(1)}s`
-    : null;
+  const durationStr = run.duration_ms ? `${(run.duration_ms / 1000).toFixed(1)}s` : null;
 
   return (
     <a
@@ -79,29 +74,22 @@ export function RunCard({ run, className }: RunCardProps) {
         "flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2",
         "hover:border-primary/50 hover:bg-primary/5 transition-colors",
         "group text-sm",
-        className
+        className,
       )}
     >
       {/* Status badge */}
       <span
         className={cn(
           "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-          config.color
+          config.color,
         )}
       >
-        <Icon
-          className={cn(
-            "h-3 w-3",
-            run.status === "running" && "animate-spin"
-          )}
-        />
+        <Icon className={cn("h-3 w-3", run.status === "running" && "animate-spin")} />
         {config.label}
       </span>
 
       {/* Skill name */}
-      <span className="font-medium text-foreground truncate">
-        {run.skill_name}
-      </span>
+      <span className="font-medium text-foreground truncate">{run.skill_name}</span>
 
       {/* Ticker */}
       {run.ticker && (
@@ -111,16 +99,10 @@ export function RunCard({ run, className }: RunCardProps) {
       )}
 
       {/* Timing */}
-      {durationStr && (
-        <span className="text-xs text-muted-foreground ml-auto">
-          {durationStr}
-        </span>
-      )}
+      {durationStr && <span className="text-xs text-muted-foreground ml-auto">{durationStr}</span>}
 
       {/* Run ID (truncated) */}
-      <span className="text-xs text-muted-foreground/50 font-mono">
-        {run.run_id.slice(0, 8)}
-      </span>
+      <span className="text-xs text-muted-foreground/50 font-mono">{run.run_id.slice(0, 8)}</span>
 
       {/* External link icon */}
       <ExternalLink className="h-3 w-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />

@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
-import { ChevronRight, ExternalLink } from "lucide-react";
 import { DataTable } from "@/components/common/DataTable";
 import { cn } from "@/lib/utils";
+import type { ColumnDef } from "@tanstack/react-table";
+import { ChevronRight, ExternalLink } from "lucide-react";
+import { useMemo, useState } from "react";
 
 interface Artifact {
   artifact_id: string;
@@ -50,10 +50,7 @@ export function DataTab({ artifacts }: DataTabProps) {
   // Trust summary derived from artifacts
   const summary = useMemo(() => {
     const kinds = new Set(artifacts.map((a) => a.kind));
-    const totalSize = artifacts.reduce(
-      (s, a) => s + (a.content?.length ?? 0),
-      0
-    );
+    const totalSize = artifacts.reduce((s, a) => s + (a.content?.length ?? 0), 0);
     return {
       schemaVersion: "1.0",
       generatedAt: artifacts[0]?.created_at ?? "N/A",
@@ -93,8 +90,7 @@ export function DataTab({ artifacts }: DataTabProps) {
       {
         accessorKey: "created_at",
         header: "Created",
-        cell: ({ row }) =>
-          new Date(row.original.created_at).toLocaleString(),
+        cell: ({ row }) => new Date(row.original.created_at).toLocaleString(),
       },
       {
         id: "expand",
@@ -103,14 +99,14 @@ export function DataTab({ artifacts }: DataTabProps) {
           <ChevronRight
             className={cn(
               "h-4 w-4 text-muted-foreground transition-transform",
-              expandedId === row.original.artifact_id && "rotate-90"
+              expandedId === row.original.artifact_id && "rotate-90",
             )}
           />
         ),
         enableSorting: false,
       },
     ],
-    [expandedId]
+    [expandedId],
   );
 
   return (
@@ -127,17 +123,12 @@ export function DataTab({ artifacts }: DataTabProps) {
             warn: !!summary.warnings,
           },
         ].map((item) => (
-          <div
-            key={item.label}
-            className="rounded-lg border border-border bg-muted/30 px-4 py-3"
-          >
+          <div key={item.label} className="rounded-lg border border-border bg-muted/30 px-4 py-3">
             <p className="text-xs text-muted-foreground">{item.label}</p>
             <p
               className={cn(
                 "mt-1 text-sm font-medium",
-                "warn" in item && item.warn
-                  ? "text-warning"
-                  : "text-foreground"
+                "warn" in item && item.warn ? "text-warning" : "text-foreground",
               )}
             >
               {item.value}
@@ -147,19 +138,14 @@ export function DataTab({ artifacts }: DataTabProps) {
       </div>
 
       {/* Artifact table */}
-      <DataTable
-        columns={columns}
-        data={artifacts}
-        pageSize={10}
-      />
+      <DataTable columns={columns} data={artifacts} pageSize={10} />
 
       {/* Source provenance (expanded detail) */}
-      {expandedId && (
-        <ProvenanceDetail
-          artifact={artifacts.find((a) => a.artifact_id === expandedId)!}
-          onClose={() => setExpandedId(null)}
-        />
-      )}
+      {(() => {
+        const expandedArtifact = artifacts.find((a) => a.artifact_id === expandedId);
+        if (!expandedArtifact) return null;
+        return <ProvenanceDetail artifact={expandedArtifact} onClose={() => setExpandedId(null)} />;
+      })()}
     </div>
   );
 }
@@ -180,6 +166,7 @@ function ProvenanceDetail({
           Source Provenance: {artifact.name}
         </h4>
         <button
+          type="button"
           onClick={onClose}
           className="text-xs text-muted-foreground hover:text-foreground"
         >

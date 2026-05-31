@@ -1,7 +1,7 @@
 "use client";
 
-import { FileText, BarChart3, Database, Box, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BarChart3, Box, Database, ExternalLink, FileText } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,12 +51,13 @@ export function ArtifactCard({ artifact, onView, className }: ArtifactCardProps)
 
   return (
     <button
+      type="button"
       onClick={() => onView?.(artifact)}
       className={cn(
         "flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2 w-full text-left",
         "hover:border-primary/50 hover:bg-primary/5 transition-colors",
         "group text-sm",
-        className
+        className,
       )}
     >
       <Icon className={cn("h-4 w-4 shrink-0", color)} />

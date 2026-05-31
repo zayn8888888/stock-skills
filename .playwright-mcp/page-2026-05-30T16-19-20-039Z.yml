@@ -1,0 +1,68 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: Stock Skills
+      - button "Collapse sidebar" [ref=e6]:
+        - img [ref=e7]
+    - navigation [ref=e9]:
+      - link "Research Desk" [ref=e10] [cursor=pointer]:
+        - /url: /
+        - img [ref=e11]
+        - generic [ref=e14]: Research Desk
+      - link "Data Sources" [ref=e15] [cursor=pointer]:
+        - /url: /data-sources
+        - img [ref=e16]
+        - generic [ref=e20]: Data Sources
+      - link "Reviews" [ref=e21] [cursor=pointer]:
+        - /url: /reviews
+        - img [ref=e22]
+        - generic [ref=e24]: Reviews
+    - generic [ref=e25]:
+      - paragraph [ref=e26]: Overview
+      - generic [ref=e27]:
+        - generic [ref=e28]: 0 running
+        - generic [ref=e30]: 0 failed
+        - generic [ref=e32]: 0 due
+    - generic [ref=e35]:
+      - button "中文" [ref=e36]:
+        - img [ref=e37]
+        - generic [ref=e40]: 中文
+      - button "Light mode" [ref=e41]:
+        - img [ref=e42]
+        - generic [ref=e48]: Light mode
+  - main [ref=e49]:
+    - generic [ref=e51]:
+      - generic [ref=e52]:
+        - img [ref=e53]
+        - heading "Research Desk" [level=1] [ref=e56]
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - img [ref=e62]
+          - heading "Research Desk" [level=2] [ref=e64]
+          - paragraph [ref=e65]: Ask anything about stocks, markets, or crypto. I'll analyze data, run models, and deliver structured reports.
+        - generic [ref=e66]:
+          - button "Analyze NVDA" [ref=e67] [cursor=pointer]:
+            - img [ref=e69]
+            - generic [ref=e72]: Analyze NVDA
+          - button "BTC market scan" [ref=e73] [cursor=pointer]:
+            - img [ref=e75]
+            - generic [ref=e78]: BTC market scan
+          - button "AAPL bull/bear debate" [ref=e79] [cursor=pointer]:
+            - img [ref=e81]
+            - generic [ref=e85]: AAPL bull/bear debate
+          - button "Next week's events" [ref=e86] [cursor=pointer]:
+            - img [ref=e88]
+            - generic [ref=e90]: Next week's events
+        - paragraph [ref=e91]: Press Enter to send · Shift+Enter for new line
+      - generic [ref=e93]:
+        - generic [ref=e94]:
+          - button "More actions" [ref=e96]:
+            - img [ref=e97]
+          - textbox "Ask a research question..." [ref=e98]
+          - button "Send" [disabled] [ref=e99]:
+            - img [ref=e100]
+        - generic [ref=e103]:
+          - button "Analyze" [ref=e104]
+          - button "Debate" [ref=e105]
+          - button "Scan" [ref=e106]
+          - button "Review" [ref=e107]

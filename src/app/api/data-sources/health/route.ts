@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { listProviders } from "@/lib/data-source/service";
 import { getRouter } from "@/lib/adapters/init";
+import { listProviders } from "@/lib/data-source/service";
+import { getDb } from "@/lib/db";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** GET /api/data-sources/health - list all providers with health status */
 export async function GET(_req: NextRequest) {

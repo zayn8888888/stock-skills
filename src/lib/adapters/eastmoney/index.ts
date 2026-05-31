@@ -9,7 +9,6 @@
  *   - 板块成分股（按 5 日涨幅排序）
  *   - 板块历史 K 线（周度轮动分析）
  */
-
 import { nanoid } from "nanoid";
 import type {
   AdapterRequest,
@@ -19,10 +18,7 @@ import type {
   SourceHealth,
 } from "../base";
 
-const EM_NODES = [
-  "http://push2delay.eastmoney.com",
-  "http://push2.eastmoney.com",
-];
+const EM_NODES = ["http://push2delay.eastmoney.com", "http://push2.eastmoney.com"];
 const EM_HIS_NODE = "http://push2his.eastmoney.com";
 const EM_HEADERS: Record<string, string> = {
   "User-Agent": "Mozilla/5.0",
@@ -32,10 +28,33 @@ const EM_HEADERS: Record<string, string> = {
 // ── Noise keywords to filter from board names ────────────────────
 
 const NOISE_KEYWORDS = [
-  "昨日", "历史新高", "百日新高", "连板", "涨停", "跌停", "首板",
-  "大盘股", "中盘股", "小盘股", "龙头股", "高价股", "低价股", "近期新高",
-  "破净", "破发", "回购", "增持", "社保", "QFII", "融资融券",
-  "沪股通", "深股通", "A股通", "富时", "MSCI", "标普",
+  "昨日",
+  "历史新高",
+  "百日新高",
+  "连板",
+  "涨停",
+  "跌停",
+  "首板",
+  "大盘股",
+  "中盘股",
+  "小盘股",
+  "龙头股",
+  "高价股",
+  "低价股",
+  "近期新高",
+  "破净",
+  "破发",
+  "回购",
+  "增持",
+  "社保",
+  "QFII",
+  "融资融券",
+  "沪股通",
+  "深股通",
+  "A股通",
+  "富时",
+  "MSCI",
+  "标普",
 ];
 
 function isNoiseBoard(name: string): boolean {
@@ -90,11 +109,24 @@ export class EastMoneyAdapter implements DataSourceAdapter {
   async healthCheck(): Promise<SourceHealth> {
     const start = Date.now();
     try {
-      const data = await emFetch("/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f109&fs=m:90+t:3&fields=f12,f14");
+      const data = await emFetch(
+        "/api/qt/clist/get?pn=1&pz=1&po=1&np=1&fltt=2&invt=2&fid=f109&fs=m:90+t:3&fields=f12,f14",
+      );
       if (!data?.data?.diff) throw new Error("Empty response");
-      return { name: this.name, status: "healthy", latency_ms: Date.now() - start, last_checked_at: new Date().toISOString() };
+      return {
+        name: this.name,
+        status: "healthy",
+        latency_ms: Date.now() - start,
+        last_checked_at: new Date().toISOString(),
+      };
     } catch (err) {
-      return { name: this.name, status: "down", latency_ms: Date.now() - start, last_checked_at: new Date().toISOString(), last_error: err instanceof Error ? err.message : String(err) };
+      return {
+        name: this.name,
+        status: "down",
+        latency_ms: Date.now() - start,
+        last_checked_at: new Date().toISOString(),
+        last_error: err instanceof Error ? err.message : String(err),
+      };
     }
   }
 
@@ -106,7 +138,11 @@ export class EastMoneyAdapter implements DataSourceAdapter {
       case "market.cn_boards": {
         const pages = (request.params?.pages as number) ?? 5;
         const boards: Array<{
-          code: string; name: string; changeRate: number; changeRate5d: number; isNoise: boolean;
+          code: string;
+          name: string;
+          changeRate: number;
+          changeRate5d: number;
+          isNoise: boolean;
         }> = [];
 
         for (let pn = 1; pn <= pages; pn++) {
@@ -138,7 +174,7 @@ export class EastMoneyAdapter implements DataSourceAdapter {
 
         const d = await emFetch(
           `/api/qt/clist/get?pn=1&pz=${limit}&po=1&np=1&fltt=2&invt=2&fid=f109` +
-          `&fs=b:${bkCode}+f:!60&fields=f12,f13,f14,f3,f6,f109,f62`,
+            `&fs=b:${bkCode}+f:!60&fields=f12,f13,f14,f3,f6,f109,f62`,
         );
         const diff = d?.data?.diff ?? [];
 
@@ -168,9 +204,7 @@ export class EastMoneyAdapter implements DataSourceAdapter {
         const endStr = end.toISOString().slice(0, 10).replace(/-/g, "");
 
         const d = await emFetchHis(
-          `/api/qt/stock/kline/get?secid=90.${bkCode}` +
-          `&fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59` +
-          `&klt=101&fqt=1&beg=${beg}&end=${endStr}&lmt=200`,
+          `/api/qt/stock/kline/get?secid=90.${bkCode}&fields1=f1,f2,f3,f4&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59&klt=101&fqt=1&beg=${beg}&end=${endStr}&lmt=200`,
         );
 
         const klines = (d?.data?.klines ?? []).map((line: string) => {

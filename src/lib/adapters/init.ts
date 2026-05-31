@@ -5,13 +5,13 @@
  * and creates the SourceRouter singleton backed by the DB route table.
  */
 
-import { registry } from "./registry";
+import { SourceRouter } from "@/lib/data-source/router";
+import { getDb } from "@/lib/db";
+import { EastMoneyAdapter } from "./eastmoney";
 import { FixtureAdapter } from "./fixture";
 import { FutuAdapter } from "./futu";
 import { FutuNewsAdapter } from "./futu-news";
-import { EastMoneyAdapter } from "./eastmoney";
-import { SourceRouter } from "@/lib/data-source/router";
-import { getDb } from "@/lib/db";
+import { registry } from "./registry";
 
 let adaptersInitialized = false;
 let router: SourceRouter | null = null;

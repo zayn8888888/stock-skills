@@ -1,23 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { Skeleton } from "@/components/common/Skeleton";
 import * as Tabs from "@radix-ui/react-tabs";
 import {
-  ArrowLeft,
   Activity,
-  Swords,
+  ArrowLeft,
+  Eye,
   FileCheck,
+  GraduationCap,
+  History,
   LineChart,
   PlayCircle,
-  History,
   Scale,
-  GraduationCap,
-  Eye,
+  Swords,
 } from "lucide-react";
 import Link from "next/link";
-import { Skeleton } from "@/components/common/Skeleton";
-import { ErrorBoundary } from "@/components/common/ErrorBoundary";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 interface TickerData {
   ticker: string;
@@ -45,9 +45,8 @@ export default function TickerPage() {
           market: "US",
           sessionCount: sessions.length,
           runCount: sessions.reduce(
-            (s: number, sess: { run_count?: number }) =>
-              s + (sess.run_count ?? 0),
-            0
+            (s: number, sess: { run_count?: number }) => s + (sess.run_count ?? 0),
+            0,
           ),
         });
         setLoading(false);
@@ -80,9 +79,21 @@ export default function TickerPage() {
   };
 
   const actions = [
-    { label: "Analyze", icon: Activity, color: "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20" },
-    { label: "Debate", icon: Swords, color: "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20" },
-    { label: "Review", icon: FileCheck, color: "bg-green-500/10 text-green-500 hover:bg-green-500/20" },
+    {
+      label: "Analyze",
+      icon: Activity,
+      color: "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20",
+    },
+    {
+      label: "Debate",
+      icon: Swords,
+      color: "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20",
+    },
+    {
+      label: "Review",
+      icon: FileCheck,
+      color: "bg-green-500/10 text-green-500 hover:bg-green-500/20",
+    },
   ];
 
   return (
@@ -98,9 +109,7 @@ export default function TickerPage() {
             Research Desk
           </Link>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-semibold text-foreground">
-              {tickerData.ticker}
-            </h1>
+            <h1 className="text-xl font-semibold text-foreground">{tickerData.ticker}</h1>
             <span className="inline-block rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
               {tickerData.market}
             </span>
@@ -114,6 +123,7 @@ export default function TickerPage() {
         <div className="flex gap-3">
           {actions.map((action) => (
             <button
+              type="button"
               key={action.label}
               className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${action.color}`}
             >
@@ -157,9 +167,7 @@ export default function TickerPage() {
             <Tabs.Content value="runs">
               <div className="py-12 text-center text-muted-foreground">
                 <History className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">
-                  Run history for {tickerData.ticker}
-                </p>
+                <p className="text-sm">Run history for {tickerData.ticker}</p>
               </div>
             </Tabs.Content>
 
@@ -180,9 +188,7 @@ export default function TickerPage() {
             <Tabs.Content value="observations">
               <div className="py-12 text-center text-muted-foreground">
                 <Eye className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                <p className="text-sm">
-                  Observations for {tickerData.ticker}
-                </p>
+                <p className="text-sm">Observations for {tickerData.ticker}</p>
               </div>
             </Tabs.Content>
           </div>

@@ -1,9 +1,9 @@
 "use client";
 
-import { TrendingUp, Search, Scale, Calendar } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
-import { Composer, type ComposerContext, type ComposerProps } from "./Composer";
+import { cn } from "@/lib/utils";
+import { Calendar, Scale, Search, TrendingUp } from "lucide-react";
+import { Composer, type ComposerProps } from "./Composer";
 
 const EXAMPLE_PROMPTS = [
   { key: "nvda", icon: TrendingUp, query: "分析 NVDA" },
@@ -25,8 +25,7 @@ const LABELS = {
     hint: "Press Enter to send · Shift+Enter for new line",
   },
   zh: {
-    subtitle:
-      "提出关于股票、市场或加密货币的问题。我会分析数据、运行模型、输出结构化报告。",
+    subtitle: "提出关于股票、市场或加密货币的问题。我会分析数据、运行模型、输出结构化报告。",
     prompts: {
       nvda: "分析 NVDA",
       btc: "BTC 市场扫描",
@@ -60,12 +59,7 @@ export function WelcomeScreen({
   const labels = LABELS[language];
 
   return (
-    <div
-      className={cn(
-        "flex h-full flex-col items-center justify-center gap-6 px-4",
-        className
-      )}
-    >
+    <div className={cn("flex h-full flex-col items-center justify-center gap-6 px-4", className)}>
       {/* Subtitle */}
       <p className="text-sm text-muted-foreground max-w-xl text-center leading-relaxed">
         {labels.subtitle}
@@ -95,13 +89,14 @@ export function WelcomeScreen({
           ];
           return (
             <button
+              type="button"
               key={prompt.query}
               onClick={() => onPromptClick(prompt.query)}
               className={cn(
                 "flex items-center gap-2 rounded-xl border border-border/60 bg-gradient-to-br px-3 py-2.5 text-left",
                 "hover:border-primary/40 hover:shadow-md hover:shadow-primary/5 transition-all duration-200",
                 "group cursor-pointer",
-                gradients[i]
+                gradients[i],
               )}
             >
               <div className="h-7 w-7 rounded-lg bg-background/80 flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">

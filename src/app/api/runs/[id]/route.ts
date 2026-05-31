@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
-import { runs, artifacts, runEvents } from "@/lib/db/schema";
 import { validateAuth } from "@/lib/auth/middleware";
+import { getDb } from "@/lib/db";
+import { artifacts, runEvents, runs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { type NextRequest, NextResponse } from "next/server";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -14,25 +14,15 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
   const { id } = await ctx.params;
   const db = getDb();
 
-  const [row] = await db
-    .select()
-    .from(runs)
-    .where(eq(runs.id, id))
-    .limit(1);
+  const [row] = await db.select().from(runs).where(eq(runs.id, id)).limit(1);
 
   if (!row) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
   }
 
-  const artifactRows = await db
-    .select()
-    .from(artifacts)
-    .where(eq(artifacts.runId, id));
+  const artifactRows = await db.select().from(artifacts).where(eq(artifacts.runId, id));
 
-  const eventRows = await db
-    .select()
-    .from(runEvents)
-    .where(eq(runEvents.runId, id));
+  const eventRows = await db.select().from(runEvents).where(eq(runEvents.runId, id));
 
   const meta = row.metadata ? JSON.parse(row.metadata) : {};
 

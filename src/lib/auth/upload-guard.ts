@@ -44,8 +44,6 @@ export function validateUpload(
   }
 
   if (sizeBytes > maxSizeBytes) {
-    throw new Error(
-      `File size ${sizeBytes} bytes exceeds the ${maxSizeBytes} byte limit`,
-    );
+    throw new Error(`File size ${sizeBytes} bytes exceeds the ${maxSizeBytes} byte limit`);
   }
 }

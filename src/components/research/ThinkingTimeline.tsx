@@ -1,21 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Check,
-  X,
-  Wrench,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useLanguage } from "@/hooks/useLanguage";
+import { cn } from "@/lib/utils";
 import type { ToolCallEntry } from "@/stores/agent";
+import { Check, ChevronDown, ChevronRight, Loader2, Wrench, X } from "lucide-react";
+import { useState } from "react";
 
 const LABELS = {
-  en: { toolCalls: "Tool calls", running: "Running", completed: "Done", failed: "Failed", input: "Input", result: "Result" },
-  zh: { toolCalls: "工具调用", running: "执行中", completed: "完成", failed: "失败", input: "参数", result: "结果" },
+  en: {
+    toolCalls: "Tool calls",
+    running: "Running",
+    completed: "Done",
+    failed: "Failed",
+    input: "Input",
+    result: "Result",
+  },
+  zh: {
+    toolCalls: "工具调用",
+    running: "执行中",
+    completed: "完成",
+    failed: "失败",
+    input: "参数",
+    result: "结果",
+  },
 } as const;
 
 interface ThinkingTimelineProps {
@@ -76,19 +83,18 @@ function ToolCallDetail({ tc, labels }: ToolCallDetailProps) {
     <div className="rounded-lg border border-border/40 overflow-hidden">
       {/* Tool header */}
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "flex items-center gap-2.5 w-full px-2.5 py-1.5 text-xs hover:bg-muted/30 transition-colors",
-          tc.status === "running" && "bg-primary/5"
+          tc.status === "running" && "bg-primary/5",
         )}
       >
         <StatusIcon status={tc.status} />
-        <span className="font-mono text-foreground/70 text-[11px]">
-          {formatToolName(tc.name)}
-        </span>
+        <span className="font-mono text-foreground/70 text-[11px]">{formatToolName(tc.name)}</span>
         {tc.args && (
           <span className="truncate text-muted-foreground/40 text-[10px] font-mono ml-auto max-w-[200px]">
-            {tc.args.length > 60 ? tc.args.slice(0, 60) + "…" : tc.args}
+            {tc.args.length > 60 ? `${tc.args.slice(0, 60)}…` : tc.args}
           </span>
         )}
         {open ? (
@@ -147,6 +153,7 @@ export function ThinkingTimeline({ toolCalls, className }: ThinkingTimelineProps
       <div className="flex-1 rounded-xl border border-border/50 bg-card/50 overflow-hidden">
         {/* Header */}
         <button
+          type="button"
           onClick={() => setExpanded((v) => !v)}
           className="flex w-full items-center gap-2.5 px-3 py-2 text-xs hover:bg-muted/30 transition-colors"
         >

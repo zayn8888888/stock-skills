@@ -1,9 +1,4 @@
-export type SessionStatus =
-  | "active"
-  | "running"
-  | "completed"
-  | "failed"
-  | "due_review";
+export type SessionStatus = "active" | "running" | "completed" | "failed" | "due_review";
 
 export interface SessionEntry {
   id: string;

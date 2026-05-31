@@ -62,6 +62,9 @@ export class EventBus {
    */
   emit(sessionId: string, eventType: string, data: unknown): void {
     const channel = this.getOrCreateChannel(sessionId);
+    console.log(
+      `[EventBus] emit ${eventType} session=${sessionId} subs=${channel.subscribers.size}`,
+    );
 
     const event: BusEvent = {
       id: channel.nextId++,
@@ -97,6 +100,7 @@ export class EventBus {
   subscribe(sessionId: string, callback: Subscriber): () => void {
     const channel = this.getOrCreateChannel(sessionId);
     channel.subscribers.add(callback);
+    console.log(`[EventBus] subscribe session=${sessionId} total_subs=${channel.subscribers.size}`);
 
     return () => {
       channel.subscribers.delete(callback);
@@ -123,5 +127,17 @@ export class EventBus {
   }
 }
 
-/** Global singleton event bus. */
-export const eventBus = new EventBus();
+// ── Global singleton (survives Next.js dev server hot reloads) ──────
+// Next.js dev mode may evaluate modules multiple times across separate
+// bundles (RSC, SSR, API routes), creating duplicate singletons.
+// Storing on globalThis ensures all bundles share the same instance.
+
+const globalForEventBus = globalThis as unknown as {
+  __eventBus: EventBus | undefined;
+};
+
+export const eventBus: EventBus = globalForEventBus.__eventBus ?? new EventBus();
+if (!globalForEventBus.__eventBus) {
+  console.log("[EventBus] NEW singleton created");
+}
+globalForEventBus.__eventBus = eventBus;

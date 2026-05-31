@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { getConfig } from "@/lib/config";
 import { validateAuth } from "@/lib/auth/middleware";
 import { validateUpload } from "@/lib/auth/upload-guard";
+import { getConfig } from "@/lib/config";
+import { nanoid } from "nanoid";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** POST /api/uploads - multipart file upload */
 export async function POST(req: NextRequest) {
@@ -15,18 +15,12 @@ export async function POST(req: NextRequest) {
   try {
     formData = await req.formData();
   } catch {
-    return NextResponse.json(
-      { error: "Invalid multipart form data" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Invalid multipart form data" }, { status: 400 });
   }
 
   const file = formData.get("file");
   if (!file || !(file instanceof File)) {
-    return NextResponse.json(
-      { error: "A file field is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "A file field is required" }, { status: 400 });
   }
 
   const filename = file.name;
@@ -54,10 +48,7 @@ export async function POST(req: NextRequest) {
 
   // Path-boundary check
   if (!filePath.startsWith(uploadsDir + path.sep)) {
-    return NextResponse.json(
-      { error: "Path traversal detected in filename" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Path traversal detected in filename" }, { status: 400 });
   }
 
   // Read file buffer and write to disk

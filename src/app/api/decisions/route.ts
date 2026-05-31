@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { nanoid } from "nanoid";
+import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
 import { decisions } from "@/lib/db/schema";
-import { validateAuth } from "@/lib/auth/middleware";
+import { nanoid } from "nanoid";
+import { type NextRequest, NextResponse } from "next/server";
 
 /** POST /api/decisions - create a new decision */
 export async function POST(req: NextRequest) {
@@ -25,17 +25,11 @@ export async function POST(req: NextRequest) {
   };
 
   if (!session_id || typeof session_id !== "string") {
-    return NextResponse.json(
-      { error: "session_id is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "session_id is required" }, { status: 400 });
   }
 
   if (!decisionText || typeof decisionText !== "string") {
-    return NextResponse.json(
-      { error: "decision is required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "decision is required" }, { status: 400 });
   }
 
   const db = getDb();
