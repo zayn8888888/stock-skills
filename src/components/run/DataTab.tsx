@@ -138,14 +138,21 @@ export function DataTab({ artifacts }: DataTabProps) {
       </div>
 
       {/* Artifact table */}
-      <DataTable columns={columns} data={artifacts} pageSize={10} />
-
-      {/* Source provenance (expanded detail) */}
-      {(() => {
-        const expandedArtifact = artifacts.find((a) => a.artifact_id === expandedId);
-        if (!expandedArtifact) return null;
-        return <ProvenanceDetail artifact={expandedArtifact} onClose={() => setExpandedId(null)} />;
-      })()}
+      <DataTable
+        columns={columns}
+        data={artifacts}
+        pageSize={10}
+        getRowId={(artifact) => artifact.artifact_id}
+        selectedRowId={expandedId}
+        onRowClick={(artifact) =>
+          setExpandedId((current) =>
+            current === artifact.artifact_id ? null : artifact.artifact_id,
+          )
+        }
+        renderExpanded={(artifact) => (
+          <ProvenanceDetail artifact={artifact} onClose={() => setExpandedId(null)} />
+        )}
+      />
     </div>
   );
 }

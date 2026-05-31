@@ -19,6 +19,8 @@ const STATE_EVENT_TYPES = new Set([
   "tool_result",
 ]);
 
+const TERMINAL_RUN_STATUSES = new Set(["success", "failed", "cancelled"]);
+
 /** Maximum number of events kept per session in the replay buffer. */
 const REPLAY_BUFFER_SIZE = 500;
 
@@ -44,6 +46,31 @@ interface SessionChannel {
   subscribers: Set<Subscriber>;
   /** Last activity timestamp for eviction. */
   lastActivity: number;
+}
+
+function eventDataRecord(data: unknown): Record<string, unknown> | null {
+  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : null;
+}
+
+function eventRunId(event: BusEvent): string | null {
+  const data = eventDataRecord(event.data);
+  return typeof data?.runId === "string" ? data.runId : null;
+}
+
+function eventStatus(event: BusEvent): string | null {
+  const data = eventDataRecord(event.data);
+  return typeof data?.status === "string" ? data.status : null;
+}
+
+function isRunStreamEvent(event: BusEvent): boolean {
+  return (
+    event.type === "run.created" ||
+    event.type === "run.updated" ||
+    event.type === "text_delta" ||
+    event.type === "tool_call" ||
+    event.type === "tool_result" ||
+    event.type === "error"
+  );
 }
 
 /**
@@ -150,6 +177,45 @@ export class EventBus {
   }
 
   /**
+   * Replay the latest non-terminal run for a fresh client.
+   *
+   * Browser reloads and route changes create a brand-new EventSource with no
+   * Last-Event-ID. In that case we still want to restore the in-progress
+   * stream, but we must not replay completed streams that already have a
+   * persisted assistant message.
+   */
+  replayActiveRun(sessionId: string): BusEvent[] {
+    const channel = this.channels.get(sessionId);
+    if (!channel) return [];
+
+    let targetRunId: string | null = null;
+    let fallbackStart = -1;
+
+    for (let i = channel.buffer.length - 1; i >= 0; i--) {
+      const event = channel.buffer[i];
+      if (!isRunStreamEvent(event)) continue;
+
+      const runId = eventRunId(event);
+      if (!targetRunId && runId) {
+        targetRunId = runId;
+      }
+      if (targetRunId && runId && runId !== targetRunId) continue;
+
+      const status = eventStatus(event);
+      if (status && TERMINAL_RUN_STATUSES.has(status)) {
+        return [];
+      }
+
+      fallbackStart = i;
+      if (event.type === "run.created") {
+        return channel.buffer.slice(i);
+      }
+    }
+
+    return fallbackStart >= 0 ? channel.buffer.slice(fallbackStart) : [];
+  }
+
+  /**
    * Format an event as an SSE string suitable for a `text/event-stream` response.
    */
   toSSE(event: BusEvent): string {
@@ -174,8 +240,21 @@ const globalForEventBus = globalThis as unknown as {
   __eventBus: EventBus | undefined;
 };
 
-export const eventBus: EventBus = globalForEventBus.__eventBus ?? new EventBus();
-if (!globalForEventBus.__eventBus) {
+function isCompatibleEventBus(value: unknown): value is EventBus {
+  const candidate = value as Partial<EventBus> | undefined;
+  return (
+    typeof candidate?.emit === "function" &&
+    typeof candidate.replay === "function" &&
+    typeof candidate.replayActiveRun === "function" &&
+    typeof candidate.subscribe === "function" &&
+    typeof candidate.toSSE === "function"
+  );
+}
+
+export const eventBus: EventBus = isCompatibleEventBus(globalForEventBus.__eventBus)
+  ? globalForEventBus.__eventBus
+  : new EventBus();
+if (!isCompatibleEventBus(globalForEventBus.__eventBus)) {
   console.log("[EventBus] NEW singleton created");
 }
 globalForEventBus.__eventBus = eventBus;

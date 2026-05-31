@@ -80,6 +80,55 @@ describe("session SSE", () => {
     expect(text).toContain('"runId":"run-1"');
   });
 
+  it("replays active run stream events to a fresh session connection", async () => {
+    const { eventBus } = await import("@/lib/runtime/event-bus");
+    const { GET } = await import("@/app/api/sessions/[id]/events/route");
+
+    const sessionId = "session-active-replay";
+    eventBus.emit(sessionId, "run.created", { runId: "run-1" });
+    eventBus.emit(sessionId, "run.updated", { runId: "run-1", status: "running" });
+    eventBus.emit(sessionId, "text_delta", { runId: "run-1", text: "partial answer" });
+
+    const abort = new AbortController();
+    const response = await GET(
+      makeRequest(`/api/sessions/${sessionId}/events`, {
+        signal: abort.signal,
+      }),
+      { params: Promise.resolve({ id: sessionId }) },
+    );
+
+    const text = await readSseText(response, abort);
+
+    expect(text).toContain("event: run.created");
+    expect(text).toContain("event: run.updated");
+    expect(text).toContain("event: text_delta");
+    expect(text).toContain("partial answer");
+  });
+
+  it("does not replay a terminal run to fresh session connections", async () => {
+    const { eventBus } = await import("@/lib/runtime/event-bus");
+    const { GET } = await import("@/app/api/sessions/[id]/events/route");
+
+    const sessionId = "session-terminal-no-replay";
+    eventBus.emit(sessionId, "run.created", { runId: "run-1" });
+    eventBus.emit(sessionId, "text_delta", { runId: "run-1", text: "completed answer" });
+    eventBus.emit(sessionId, "run.updated", { runId: "run-1", status: "success" });
+
+    const abort = new AbortController();
+    const response = await GET(
+      makeRequest(`/api/sessions/${sessionId}/events`, {
+        signal: abort.signal,
+      }),
+      { params: Promise.resolve({ id: sessionId }) },
+    );
+
+    const text = await readSseText(response, abort);
+
+    expect(text).toContain("event: connected");
+    expect(text).not.toContain("event: text_delta");
+    expect(text).not.toContain("completed answer");
+  });
+
   it("emits run.created before reporting a no-api-key run failure", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "");
     vi.doMock("@/lib/agent/pi-runner", () => ({

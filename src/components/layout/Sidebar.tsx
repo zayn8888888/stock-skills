@@ -26,7 +26,7 @@ import { useCallback, useEffect, useState } from "react";
 // ---------------------------------------------------------------------------
 
 interface OverviewStats {
-  running: number;
+  active: number;
   failed: number;
   dueReview: number;
 }
@@ -48,7 +48,7 @@ const LABELS = {
     sources: "Data Sources",
     reviews: "Reviews",
     overview: "Overview",
-    running: "running",
+    active: "active",
     failed: "failed",
     due: "due",
     sessions: "Sessions",
@@ -66,7 +66,7 @@ const LABELS = {
     sources: "数据源",
     reviews: "复盘",
     overview: "概览",
-    running: "运行中",
+    active: "活跃",
     failed: "失败",
     due: "待复盘",
     sessions: "会话",
@@ -100,7 +100,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
 
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [overview, setOverview] = useState<OverviewStats>({
-    running: 0,
+    active: 0,
     failed: 0,
     dueReview: 0,
   });
@@ -112,7 +112,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
         const normalized = normalizeSessions(data);
         setSessions(normalized);
         setOverview({
-          running: normalized.filter((s) => s.status === "active").length,
+          active: normalized.filter((s) => s.status === "active" || s.status === "running").length,
           failed: normalized.filter((s) => s.status === "failed").length,
           dueReview: normalized.filter((s) => s.status === "due_review").length,
         });
@@ -221,7 +221,7 @@ export function Sidebar({ collapsed, onToggleCollapse }: SidebarProps) {
           <div className="flex gap-3 text-xs text-sidebar-foreground/70">
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              {overview.running} {labels.running}
+              {overview.active} {labels.active}
             </span>
             <span className="flex items-center gap-1">
               <span className="h-1.5 w-1.5 rounded-full bg-destructive" />

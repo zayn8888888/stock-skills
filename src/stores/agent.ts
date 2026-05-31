@@ -181,19 +181,45 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     toolCallsByRun?: Record<string, ToolCallEntry[]>,
   ) => {
     // Attach historical tool calls to assistant messages by runId
+    const attachedRunIds = new Set<string>();
     let merged = messages;
     if (toolCallsByRun) {
       merged = messages.map((msg) => {
         if (msg.role === "assistant" && msg.runId && toolCallsByRun[msg.runId]?.length) {
+          attachedRunIds.add(msg.runId);
           return { ...msg, toolCalls: toolCallsByRun[msg.runId] };
         }
         return msg;
       });
     }
-    cacheSession(sessionId, merged);
+
+    // A running session may not have an assistant message yet, but its tool
+    // events can already be persisted. Keep those visible as pending activity.
+    const orphanEntries = Object.entries(toolCallsByRun ?? {}).filter(
+      ([runId, calls]) => !attachedRunIds.has(runId) && calls.length > 0,
+    );
+    const orphanToolCalls = orphanEntries.flatMap(([, calls]) => calls);
+    const orphanRunId = orphanEntries[0]?.[0] ?? null;
+    const current = get();
+    const streamingText = current.sessionId === sessionId ? current.streamingText : "";
+    const pendingToolCalls =
+      orphanToolCalls.length > 0
+        ? orphanToolCalls
+        : current.sessionId === sessionId
+          ? current.toolCalls
+          : [];
+    const pendingRunId =
+      orphanRunId ?? (current.sessionId === sessionId ? current.pendingRunId : null);
+    const isResuming = streamingText.length > 0 || pendingToolCalls.length > 0;
+
+    cacheSession(sessionId, merged, pendingToolCalls, streamingText, pendingRunId);
     set({
       messages: merged,
       sessionId,
+      toolCalls: pendingToolCalls,
+      streamingText,
+      pendingRunId,
+      status: isResuming ? "streaming" : "idle",
       sessionLoading: false,
     });
   },
@@ -212,16 +238,49 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       streamingText: s.streamingText + delta,
       status: "streaming",
     }));
+    const state = get();
+    if (state.sessionId) {
+      cacheSession(
+        state.sessionId,
+        state.messages,
+        state.toolCalls,
+        state.streamingText,
+        state.pendingRunId,
+      );
+    }
   },
 
   addToolCall: (toolCall: ToolCallEntry) => {
-    set((s) => ({ toolCalls: [...s.toolCalls, toolCall] }));
+    set((s) => ({
+      toolCalls: [...s.toolCalls, toolCall],
+      status: "streaming",
+    }));
+    const state = get();
+    if (state.sessionId) {
+      cacheSession(
+        state.sessionId,
+        state.messages,
+        state.toolCalls,
+        state.streamingText,
+        state.pendingRunId,
+      );
+    }
   },
 
   updateToolCall: (id: string, update: Partial<ToolCallEntry>) => {
     set((s) => ({
       toolCalls: s.toolCalls.map((tc) => (tc.id === id ? { ...tc, ...update } : tc)),
     }));
+    const state = get();
+    if (state.sessionId) {
+      cacheSession(
+        state.sessionId,
+        state.messages,
+        state.toolCalls,
+        state.streamingText,
+        state.pendingRunId,
+      );
+    }
   },
 
   /**
@@ -336,7 +395,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   setPendingRunId: (runId: string) => {
-    set({ pendingRunId: runId });
+    set({ pendingRunId: runId, status: "streaming" });
+    const state = get();
+    if (state.sessionId) {
+      cacheSession(state.sessionId, state.messages, state.toolCalls, state.streamingText, runId);
+    }
   },
 
   fetchRunArtifacts: async (runId: string) => {

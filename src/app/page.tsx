@@ -7,6 +7,7 @@ import { WelcomeScreen } from "@/components/research/WelcomeScreen";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useSSE } from "@/hooks/useSSE";
 import { authFetch } from "@/lib/api/auth-fetch";
+import { buildMessageContext } from "@/lib/research/message-context";
 import { useAgentStore } from "@/stores/agent";
 import type { AgentMessage } from "@/stores/agent";
 import { FileText, Loader2 } from "lucide-react";
@@ -30,37 +31,6 @@ const LABELS = {
     processing: "处理中...",
   },
 } as const;
-
-// ── Workflow key → skill name mapping ─────────────────────────────
-const WORKFLOW_SKILL_MAP: Record<string, string> = {
-  analyze: "stock-analyzer",
-  debate: "trading-debate",
-  scan: "market-scanner",
-  review: "portfolio-review",
-};
-
-function inferTicker(content: string): string | undefined {
-  return content.match(/\b[A-Z]{1,6}\b/)?.[0];
-}
-
-function buildMessageContext(content: string, ctx?: ComposerContext) {
-  const ticker = ctx?.ticker ?? inferTicker(content);
-  const workflowType = ctx?.workflow;
-  const workflowKey = ctx?.workflowKey;
-
-  // Determine skill from workflow key or ticker
-  const skillName = workflowKey
-    ? (WORKFLOW_SKILL_MAP[workflowKey] ?? "stock-analyzer")
-    : ticker
-      ? "stock-analyzer"
-      : "stock-analyzer"; // default skill for general questions
-
-  return {
-    ticker,
-    skill_name: skillName,
-    workflow_type: workflowType,
-  };
-}
 
 export default function Home() {
   const {
@@ -167,6 +137,7 @@ export default function Home() {
           const parsed = JSON.parse(data);
           if (parsed.runId) {
             storeFnsRef.current.setPendingRunId(parsed.runId);
+            storeFnsRef.current.setRequestPending(true);
           }
         } catch {
           // ignore
@@ -175,6 +146,11 @@ export default function Home() {
       "run.updated": (data: string) => {
         try {
           const parsed = JSON.parse(data);
+          if (parsed.runId && (parsed.status === "pending" || parsed.status === "running")) {
+            storeFnsRef.current.setPendingRunId(parsed.runId);
+            storeFnsRef.current.setRequestPending(true);
+            return;
+          }
           if (
             parsed.status === "success" ||
             parsed.status === "failed" ||

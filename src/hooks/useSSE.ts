@@ -33,6 +33,11 @@ const INITIAL_BACKOFF = 1000;
 const MAX_BACKOFF = 30000;
 const DEDUP_CAPACITY = 500;
 
+export function getSSEEventData(event: Event): string | null {
+  const data = (event as MessageEvent).data;
+  return typeof data === "string" ? data : null;
+}
+
 export interface UseSSEReturn {
   connect: (url: string, handlers?: HandlerMap) => void;
   disconnect: () => void;
@@ -108,13 +113,15 @@ export function useSSE(): UseSSEReturn {
     };
 
     es.onmessage = (event: MessageEvent) => {
+      const data = getSSEEventData(event);
+      if (data === null) return;
       if (event.lastEventId) {
         lastEventIdRef.current = event.lastEventId;
       }
-      const eventId = event.lastEventId || event.data;
+      const eventId = event.lastEventId || data;
       if (!dedupRef.current.add(eventId)) return;
       const handler = handlersRef.current.message;
-      if (handler) handler(event.data);
+      if (handler) handler(data);
     };
 
     es.onerror = () => {
@@ -127,13 +134,15 @@ export function useSSE(): UseSSEReturn {
     for (const eventName of Object.keys(handlersRef.current)) {
       if (eventName === "message") continue;
       es.addEventListener(eventName, ((event: MessageEvent) => {
+        const data = getSSEEventData(event);
+        if (data === null) return;
         if (event.lastEventId) {
           lastEventIdRef.current = event.lastEventId;
         }
-        const eventId = event.lastEventId || event.data;
+        const eventId = event.lastEventId || data;
         if (!dedupRef.current.add(eventId)) return;
         const handler = handlersRef.current[eventName];
-        if (handler) handler(event.data);
+        if (handler) handler(data);
       }) as EventListener);
     }
   }, [cleanup, scheduleReconnect, setStatus]);

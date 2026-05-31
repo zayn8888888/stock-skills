@@ -1,6 +1,7 @@
 import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
 import { runs } from "@/lib/db/schema";
+import { deriveDurationMs } from "@/lib/runs/duration";
 import { eventBus } from "@/lib/runtime/event-bus";
 import { desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -113,7 +114,7 @@ export async function GET(req: NextRequest) {
       created_at: row.createdAt,
       started_at: row.startedAt,
       finished_at: row.finishedAt,
-      duration_ms: row.durationMs,
+      duration_ms: deriveDurationMs(row),
     };
   });
 

@@ -48,12 +48,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     10 * 60 * 1000,
   );
 
-  // Replay missed events if Last-Event-ID provided
-  if (parsedLastEventId !== null && Number.isFinite(parsedLastEventId)) {
-    const missed = eventBus.replay(sessionId, parsedLastEventId);
-    for (const event of missed) {
-      writer.write(encoder.encode(eventBus.toSSE(event))).catch(() => {});
-    }
+  // Replay missed events. A fresh client has no Last-Event-ID, but still
+  // needs the active run buffer to restore in-progress output after re-entry.
+  const missed =
+    parsedLastEventId !== null && Number.isFinite(parsedLastEventId)
+      ? eventBus.replay(sessionId, parsedLastEventId)
+      : eventBus.replayActiveRun(sessionId);
+
+  for (const event of missed) {
+    writer.write(encoder.encode(eventBus.toSSE(event))).catch(() => {});
   }
 
   // Clean up on disconnect

@@ -54,6 +54,8 @@ const LABELS = {
     p2: "P2+ (fallback)",
     disabled: "Disabled",
     addRoute: "Add route",
+    refresh: "Refresh",
+    toggleProvider: "Toggle provider",
   },
   zh: {
     title: "数据源管理",
@@ -71,6 +73,8 @@ const LABELS = {
     p2: "P2+ (备)",
     disabled: "禁用",
     addRoute: "添加路由",
+    refresh: "刷新",
+    toggleProvider: "切换供应商",
   },
 } as const;
 
@@ -178,7 +182,7 @@ export default function DataSourcesPage() {
           onClick={refresh}
           className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
-          <RefreshCw className="h-4 w-4" /> Refresh
+          <RefreshCw className="h-4 w-4" /> {labels.refresh}
         </button>
       </div>
 
@@ -202,6 +206,7 @@ export default function DataSourcesPage() {
               <button
                 type="button"
                 onClick={() => toggleProvider(p.id, p.enabled)}
+                aria-label={`${labels.toggleProvider}: ${p.name}`}
                 className={cn(
                   "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
                   p.enabled ? "bg-primary" : "bg-muted",

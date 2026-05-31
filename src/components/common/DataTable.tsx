@@ -12,7 +12,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -20,6 +20,16 @@ interface DataTableProps<TData, TValue> {
   pageSize?: number;
   className?: string;
   renderExpanded?: (row: TData) => React.ReactNode;
+  getRowId?: (row: TData) => string;
+  onRowClick?: (row: TData) => void;
+  selectedRowId?: string | null;
+  labels?: Partial<{
+    noData: string;
+    rowsTotal: (count: number) => string;
+    previous: string;
+    next: string;
+    page: (current: number, total: number) => string;
+  }>;
 }
 
 export function DataTable<TData, TValue>({
@@ -28,6 +38,10 @@ export function DataTable<TData, TValue>({
   pageSize = 10,
   className,
   renderExpanded,
+  getRowId,
+  onRowClick,
+  selectedRowId,
+  labels,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -46,6 +60,17 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   });
+
+  const pageCount = table.getPageCount();
+  const currentPage = pageCount === 0 ? 0 : table.getState().pagination.pageIndex + 1;
+  const totalRows = table.getFilteredRowModel().rows.length;
+  const text = {
+    noData: labels?.noData ?? "No data",
+    rowsTotal: labels?.rowsTotal ?? ((count: number) => `${count} row(s) total`),
+    previous: labels?.previous ?? "Previous",
+    next: labels?.next ?? "Next",
+    page: labels?.page ?? ((current: number, total: number) => `Page ${current} of ${total}`),
+  };
 
   return (
     <div className={cn("w-full", className)}>
@@ -87,34 +112,56 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="px-4 py-8 text-center text-muted-foreground"
                 >
-                  No data
+                  {text.noData}
                 </td>
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => {
-                const rowId = row.id;
-                const _isExpanded = expandedRows[rowId] ?? false;
+                const rowId = getRowId?.(row.original) ?? row.id;
+                const isExpanded =
+                  selectedRowId !== undefined
+                    ? selectedRowId === rowId
+                    : (expandedRows[rowId] ?? false);
+                const canInteract = !!renderExpanded || !!onRowClick;
                 return (
-                  <tr
-                    key={rowId}
-                    tabIndex={renderExpanded ? 0 : undefined}
-                    className="border-t border-border hover:bg-muted/30 transition-colors cursor-pointer"
-                    onClick={() =>
-                      renderExpanded && setExpandedRows((p) => ({ ...p, [rowId]: !p[rowId] }))
-                    }
-                    onKeyDown={(event) => {
-                      if (!renderExpanded) return;
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      setExpandedRows((p) => ({ ...p, [rowId]: !p[rowId] }));
-                    }}
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-2.5">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
+                  <Fragment key={rowId}>
+                    <tr
+                      tabIndex={canInteract ? 0 : undefined}
+                      className={cn(
+                        "border-t border-border hover:bg-muted/30 transition-colors",
+                        canInteract && "cursor-pointer",
+                        selectedRowId === rowId && "bg-primary/5",
+                      )}
+                      onClick={() => {
+                        onRowClick?.(row.original);
+                        if (renderExpanded) {
+                          setExpandedRows((p) => ({ ...p, [rowId]: !p[rowId] }));
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (!canInteract) return;
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        onRowClick?.(row.original);
+                        if (renderExpanded) {
+                          setExpandedRows((p) => ({ ...p, [rowId]: !p[rowId] }));
+                        }
+                      }}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td key={cell.id} className="px-4 py-2.5">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                    {renderExpanded && isExpanded && (
+                      <tr key={`${rowId}-expanded`} className="border-t border-border bg-muted/10">
+                        <td colSpan={row.getVisibleCells().length} className="px-4 py-3">
+                          {renderExpanded(row.original)}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })
             )}
@@ -124,7 +171,7 @@ export function DataTable<TData, TValue>({
 
       {/* Pagination */}
       <div className="flex items-center justify-between mt-3 text-sm text-muted-foreground">
-        <span>{table.getFilteredRowModel().rows.length} row(s) total</span>
+        <span>{text.rowsTotal(totalRows)}</span>
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -132,18 +179,16 @@ export function DataTable<TData, TValue>({
             disabled={!table.getCanPreviousPage()}
             className="px-2 py-1 rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors"
           >
-            Previous
+            {text.previous}
           </button>
-          <span>
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-          </span>
+          <span>{text.page(currentPage, pageCount)}</span>
           <button
             type="button"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
             className="px-2 py-1 rounded border border-border disabled:opacity-40 hover:bg-muted transition-colors"
           >
-            Next
+            {text.next}
           </button>
         </div>
       </div>
