@@ -2,7 +2,7 @@
 
 ## 安装与脚本路径
 
-OpenD + futu-api SDK 安装见 `install-futu-opend` skill；命令统一走 `~/.claude/skills/futuapi/scripts/`，与 stock-analyzer 共用脚本集。
+OpenD + futu-api SDK 安装见 `install-futu-opend` skill；命令统一走 `${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/futuapi/scripts/`，与 stock-analyzer 共用脚本集。
 
 ## 常用脚本对照表
 
@@ -26,28 +26,28 @@ OpenD + futu-api SDK 安装见 `install-futu-opend` skill；命令统一走 `~/.
 
 ```bash
 # 仅作参考（不用于 market-scanner 主流程）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_list.py SH --type CONCEPT --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py SH.LIST0463 --ktype 1d --num 30 --json   # PCB概念 K 线可用
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_list.py SH --type CONCEPT --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_kline.py SH.LIST0463 --ktype 1d --num 30 --json   # PCB概念 K 线可用
 
 # ❌ 但这些新板块的成分股拿不到：
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py SH.LIST23120   # 先进封装 → ERROR "未知股票"
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py SH.LIST23084   # 玻璃基板封装 → ERROR
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py SH.LIST23307   # HBM → ERROR
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_stock.py SH.LIST23120   # 先进封装 → ERROR "未知股票"
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_stock.py SH.LIST23084   # 玻璃基板封装 → ERROR
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_stock.py SH.LIST23307   # HBM → ERROR
 ```
 
 ## 港美股板块 K 线代码
 
 ```bash
 # 港股板块：111 个 INDUSTRY + 117 个 CONCEPT = 228 个，代码格式 HK.LIST1xxx
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_list.py HK --type INDUSTRY --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_list.py HK --type CONCEPT --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_list.py HK --type INDUSTRY --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_list.py HK --type CONCEPT --json
 
 # 美股板块：145 个 INDUSTRY + 117 个 CONCEPT = 262 个，代码格式 US.LIST2xxx
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_list.py US --type INDUSTRY --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_list.py US --type CONCEPT --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_list.py US --type INDUSTRY --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_list.py US --type CONCEPT --json
 
 # 板块 N 日涨幅：拉日 K 线，取首尾 close
-python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <PLATE_CODE> --ktype 1d --num $((N+5)) --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_kline.py <PLATE_CODE> --ktype 1d --num $((N+5)) --json
 # JSON.data[] 每条含 close；returnRate = (last.close / data[-(N+1)].close - 1) * 100
 ```
 
@@ -94,7 +94,7 @@ proxy_flow = sum(turnover * change_rate/100 for code in plate_stocks)
 ### 用法
 
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_screen.py \
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_stock_screen.py \
   --config /tmp/screen_hk_quality.json --page-count 50 --json
 ```
 

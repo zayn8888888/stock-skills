@@ -29,7 +29,7 @@ Read references/four-steps.md  # 四步分析框架完整细节（指标定义�
 
 2. **单独运行一次快照验证**，成功后再启动所有并行调用：
    ```bash
-   python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
+   python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
    ```
    - ✅ 成功 → 后续所有调用统一使用 `<NORMALIZED_CODE>`
    - ❌ 格式错误 → 停止，向用户确认代码
@@ -38,8 +38,8 @@ Read references/four-steps.md  # 四步分析框架完整细节（指标定义�
 ### 行情数据（futuapi）
 
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_info.py <NORMALIZED_CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_stock_info.py <NORMALIZED_CODE> --json
 ```
 
 ### 财务与基本面数据（分层数据源）
@@ -49,13 +49,13 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_info.py <NORMALIZED_COD
 #### 层 1：Futu 结构化接口（并行执行，需 OpenD）
 ```bash
 # 财务三大表（A 股返回 report_list=[]，降层 2 Tavily）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_financials_statements.py <NORMALIZED_CODE> --num 8 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_financials_statements.py <NORMALIZED_CODE> --num 8 --json
 # 估值分位数（全市场含 A 股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <NORMALIZED_CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_valuation_detail.py <NORMALIZED_CODE> --json
 # 股东持股（A 股报错，仅港美股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_shareholders_overview.py <NORMALIZED_CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_shareholders_overview.py <NORMALIZED_CODE> --json
 # 分红历史（全市场含 A 股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_dividends.py <NORMALIZED_CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_corporate_actions_dividends.py <NORMALIZED_CODE> --json
 ```
 JSON 字段提取要点：
 - 财务三大表 → `report_list[]`，每条含 `yoy / qoq`

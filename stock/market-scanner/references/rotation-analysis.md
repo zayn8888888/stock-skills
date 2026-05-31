@@ -74,7 +74,7 @@ def classify_rotation(bk_code, bk_name):
 
 ```bash
 # 拉 weeks+1 周的日 K 线
-python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <PLATE_CODE> --ktype 1d --num $((weeks*5+5)) --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_kline.py <PLATE_CODE> --ktype 1d --num $((weeks*5+5)) --json
 ```
 返回 JSON 的 `data[]` 每条含 `time_key / close`，提取后按 `time_key[:10]` → ISO 周分组，套用上方 `classify_rotation` 同款的 `weekly_rets / consec / accelerating` 判定逻辑即可。
 

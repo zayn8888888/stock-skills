@@ -143,7 +143,7 @@
 
 ```bash
 # 第一步：lookup 拿主镜像
-RES=$(./hyperliquid-perps/scripts/lookup.sh $TICKER --json)
+RES=$("${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/hyperliquid-perps/scripts/lookup.sh $TICKER --json)
 
 # 第二步：先看流动性
 OI=$(echo "$RES" | jq '.oiNotionalUsd')

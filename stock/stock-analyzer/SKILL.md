@@ -15,7 +15,7 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 
 ## 前置依赖
 
-富途 OpenAPI（需 OpenD）脚本集安装在 `~/.claude/skills/futuapi/scripts/`，命令→SDK 对照表见 [references/sdk-setup.md](references/sdk-setup.md)。
+富途 OpenAPI（需 OpenD）脚本集安装在 `${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/futuapi/scripts/`，命令→SDK 对照表见 [references/sdk-setup.md](references/sdk-setup.md)。
 
 ### 外部 skill 依赖（需单独安装，非本仓库内置）
 
@@ -30,7 +30,7 @@ description: 个股多维分析助手。基于富途 OpenAPI 实时行情数据 
 | `event-calendar` | 维度 9 事件日历 | 强烈推荐 | Tavily 单源降级并标注 |
 | Tavily MCP | 维度 3/7/9 | 强烈推荐 | 无 Tavily 时对应维度降级或跳过 |
 
-以上社区 skill（`futu-*`）通常随 `futuapi` 相关 skill 包分发，安装后放入 `~/.claude/skills/` 即可。
+以上社区 skill（`futu-*`）通常随 `futuapi` 相关 skill 包分发，安装后放入 `${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/` 即可。
 
 ## 执行前必读（收到任务后第一步，不与任何分析并行）
 
@@ -64,7 +64,7 @@ Read references/report-template.md     # 完整报告模板
 
 2. **单独运行一次快照验证**，确认代码格式和 OpenD 连通性后再展开所有并行：
    ```bash
-   python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
+   python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
    ```
    - ✅ 成功 → 后续所有调用统一使用 `<NORMALIZED_CODE>`
    - ❌ 报格式错误 → 停止，向用户确认代码
@@ -84,7 +84,7 @@ Read references/report-template.md     # 完整报告模板
 
 ### 维度 1：基础行情（必做）
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 ```
 提取：现价 / 开盘 / 最高 / 最低 / 昨收 / 成交量 / 成交额 / 涨跌幅 / 振幅。
 
@@ -92,7 +92,7 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 
 ### 维度 2：技术走势（必做）
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 30 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 30 --json
 ```
 
 拿到 K 线后，**先执行异动强制扫描，再做常规分析**：
@@ -111,7 +111,7 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --
 按市场选择基准代码——美股用 `US.SPY`（若 `get_owner_plate` 板块含 Technology / Semiconductor，改用 `US.QQQ`）；A 股用 `SH.000300`；港股用 `HK.HSI`。
 
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <BENCHMARK_CODE> --ktype 1d --num 30 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_kline.py <BENCHMARK_CODE> --ktype 1d --num 30 --json
 ```
 
 计算并输出三行（放在维度 2 末尾，紧凑格式）：
@@ -128,13 +128,13 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <BENCHMARK_CODE> --k
 
 ### 维度 3：估值与基本面（必做）
 
-**Step A**：`python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_info.py <CODE> --json`  
+**Step A**：`python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_stock_info.py <CODE> --json`  
 提取：PE-TTM / PB / 股息率 / 总市值 / 流通市值 / 52 周高低 / 换手率。
 
 **Step B（并行，需 OpenD）**：
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_research_rating_summary.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_research_rating_summary.py <CODE> --json
 ```
 读取要点：
 - `get_valuation_detail` JSON → `data.trend.valuation_percentile`（历史百分位）/ `data.trend.forward_value`（前瞻 PE）
@@ -148,8 +148,8 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_research_rating_summary.py <C
 
 ### 维度 4：资金流向（必做）
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_flow.py <CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_distribution.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_capital_flow.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_capital_distribution.py <CODE> --json
 ```
 **必须调用** `Skill("futu-capital-anomaly")`（港股买卖经纪商榜 + 卖空异动，不可用 get_capital_flow.py 替代，不可省略）。
 
@@ -157,8 +157,8 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_distribution.py <CODE
 
 ### 维度 5：盘口与成交（必做）
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/subscribe/subscribe.py <CODE> --types ORDER_BOOK TICKER
-python3 ~/.claude/skills/futuapi/scripts/quote/get_orderbook.py <CODE> --num 10 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/subscribe/subscribe.py <CODE> --types ORDER_BOOK TICKER
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_orderbook.py <CODE> --num 10 --json
 ```
 重点：买卖盘深度对比 / 近 30 笔成交方向占比 / 大单集中度。
 
@@ -180,8 +180,8 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_orderbook.py <CODE> --num 10 
 
 ### 维度 6：同行对比（必做）
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_owner_plate.py <CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> --limit 20 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_owner_plate.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> --limit 20 --json
 ```
 选 2-3 家业务相近、市值相近的同行，对比 PE-TTM / PB / 股息率 / 当日涨跌幅。
 
@@ -193,9 +193,9 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_plate_stock.py <PLATE_CODE> -
 
 **Tier 1（必做，并行）**：
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_dividends.py <CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_corporate_actions_stock_splits.py <CODE> --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_research_rating_summary.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_corporate_actions_dividends.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_corporate_actions_stock_splits.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_research_rating_summary.py <CODE> --json
 ```
 
 **Tier 2（有触发线索才做）**：触发线索来自维度 2 的异动强制扫描结论：

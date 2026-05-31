@@ -19,7 +19,7 @@
 ## Step 1：取期权到期日
 
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_option_expiration_date.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_option_expiration_date.py <CODE> --json
 ```
 
 **到期日选择**：默认扫 2 个（近月 + 次近月）。以下情形**追加第 3 个**：
@@ -36,11 +36,11 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_option_expiration_date.py <CO
 
 ```bash
 # 取多个到期日（start ≤ end）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_option_chain.py <CODE> --start <EXPIRY1> --end <EXPIRY2> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_option_chain.py <CODE> --start <EXPIRY1> --end <EXPIRY2> --json
 
 # 取单个到期日（两种等价写法）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_option_chain.py US.FUTU --expiry 2026-06-05 --json
-python3 ~/.claude/skills/futuapi/scripts/quote/get_option_chain.py US.FUTU --start 2026-06-05 --end 2026-06-05 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_option_chain.py US.FUTU --expiry 2026-06-05 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_option_chain.py US.FUTU --start 2026-06-05 --end 2026-06-05 --json
 ```
 
 **扫描范围**：默认 ±10%/15% 不够，机构保护位/sell-put 锚定常在深度 OTM。原则：**由数据决定，不由默认值决定**。
@@ -51,8 +51,8 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_option_chain.py US.FUTU --sta
 
 ```bash
 # 分批，每批 ≤12 合约（超出报错）
-python3 ~/.claude/skills/futuapi/scripts/subscribe/subscribe.py <OPT1..OPT12> --types QUOTE
-python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_quote.py <OPT1..OPT12> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/subscribe/subscribe.py <OPT1..OPT12> --types QUOTE
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_stock_quote.py <OPT1..OPT12> --json
 # 重复直到覆盖完整范围
 ```
 

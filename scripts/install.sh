@@ -127,6 +127,31 @@ done
 echo
 echo "完成。重启 Claude Code 或新开会话即可使用。"
 echo
+
+# --scope project 时自动配置 .claude/settings.json 中的 CLAUDE_SKILLS_DIR
+if [ "${SCOPE:-}" = "project" ]; then
+  SETTINGS_FILE="$PWD/.claude/settings.json"
+  mkdir -p "$PWD/.claude"
+
+  if command -v jq >/dev/null 2>&1; then
+    if [ -f "$SETTINGS_FILE" ]; then
+      # 合并：保留已有字段，注入/更新 env.CLAUDE_SKILLS_DIR
+      jq --arg dir "$SKILLS_DIR" '.env.CLAUDE_SKILLS_DIR = $dir' "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" \
+        && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+    else
+      jq -n --arg dir "$SKILLS_DIR" '{"env": {"CLAUDE_SKILLS_DIR": $dir}}' > "$SETTINGS_FILE"
+    fi
+    echo "已自动配置 ${SETTINGS_FILE}:"
+    echo "  env.CLAUDE_SKILLS_DIR = ${SKILLS_DIR}"
+    echo
+  else
+    echo "⚠️  jq 未安装，无法自动写入 ${SETTINGS_FILE}"
+    echo "   请手动添加以下配置："
+    echo "   {\"env\": {\"CLAUDE_SKILLS_DIR\": \"${SKILLS_DIR}\"}}"
+    echo
+  fi
+fi
+
 echo "提示：event-calendar 的「美国经济日历 / 美股财报日历」需 Finnhub API key（免费）："
 echo "  1. 申请：https://finnhub.io/register"
 echo "  2. 配置：export FINNHUB_API_KEY=xxxxxx"

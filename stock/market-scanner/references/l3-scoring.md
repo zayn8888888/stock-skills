@@ -13,11 +13,11 @@ stocks = em_get_board_stocks(bk_code, limit=50)
 
 ```bash
 # PE/市值/52周高低
-python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 # 精确 10 日涨幅
-python3 ~/.claude/skills/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 12 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_kline.py <CODE> --ktype 1d --num 12 --json
 # 3 日主力净流入详情
-python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_flow.py <CODE> --period-type 2 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_capital_flow.py <CODE> --period-type 2 --json
 ```
 
 ### HK / US：质量阀门加速路径（get_stock_screen）
@@ -25,7 +25,7 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_capital_flow.py <CODE> --peri
 板块成分股 > 30 只时，用 `get_stock_screen` **把质量阀门前移**，直接拿已过滤的成分股列表，减少后续逐个 snapshot 的调用量。脚本封装了请求构造和结果解码，只需写 JSON config。完整 config schema、单位约定、约束见 [api-futu.md](api-futu.md#条件选股-v2get_stock_screen)。
 
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_stock_screen.py \
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_stock_screen.py \
   --config /tmp/screen_<MKT>_quality.json --page-count 50 --json
 ```
 
