@@ -16,6 +16,9 @@ export interface AgentResult {
 /** Maximum tool-call iterations before forced stop. Enforced via beforeToolCall hook. */
 const MAX_ITERATIONS = 20;
 
+/** Maximum time (ms) for a single agent.run() call before forced abort. */
+const RUN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 // ──────────────────── history conversion ────────────────────────────
 
 interface SimpleMessage {
@@ -202,8 +205,19 @@ export class PiAgentRunner {
     });
 
     try {
-      // ── Run the agent ──
-      await this.agent.prompt(userMessage);
+      // ── Run the agent with timeout ──
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const timer = setTimeout(() => {
+          this.agent.abort();
+          reject(new Error(`Agent run timed out after ${RUN_TIMEOUT_MS / 1000}s`));
+        }, RUN_TIMEOUT_MS);
+        // Clear timer if agent finishes normally
+        this.externalAbortController.signal.addEventListener("abort", () => clearTimeout(timer), {
+          once: true,
+        });
+      });
+
+      await Promise.race([this.agent.prompt(userMessage), timeoutPromise]);
 
       // ── Extract final text from state ──
       const allMessages = this.agent.state.messages;

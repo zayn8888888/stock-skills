@@ -65,5 +65,22 @@
     "darkMode": "Dark mode",
     "enabled": "Enabled",
     "never": "Never"
+  },
+  "composer": {
+    "moreActions": "More actions",
+    "stop": "Stop",
+    "send": "Send",
+    "remove": "Remove",
+    "upload": "Upload",
+    "attach": "Attach context",
+    "setGoal": "Set goal",
+    "uploading": "Uploading...",
+    "comingSoon": "Coming soon"
+  },
+  "sidebar": {
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "deleteSession": "Delete session",
+    "newChat": "New chat"
   }
 }

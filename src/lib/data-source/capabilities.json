@@ -9,10 +9,13 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码，如 NVDA、00700、AAPL" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，不含市场前缀）。美股: NVDA、AAPL、FUTU；港股: 00700、09988；A股: 600519、000001"
+          },
           "market": {
             "type": "string",
-            "description": "市场标识: HK(港股) US(美股) CN(沪深) CRYPTO"
+            "description": "市场标识: US(美股，默认) HK(港股) CN(沪深) CRYPTO。不要和 ticker 拼在一起"
           }
         },
         "required": ["ticker"]
@@ -48,15 +51,20 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string", "description": "市场标识" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": {
               "num": { "type": "number", "description": "返回K线根数，默认30" },
               "klType": {
                 "type": "number",
-                "description": "K线类型: 1=1分 2=日 3=周 4=月 5=年 6=5分"
+                "description": "K线类型，默认2（日K）。1=1分 2=日 3=周 4=月 5=年 6=5分",
+                "enum": [1, 2, 3, 4, 5, 6],
+                "default": 2
               }
             }
           }
@@ -96,8 +104,11 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": { "levels": { "type": "number", "description": "盘口档数，默认10" } }
@@ -145,14 +156,19 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": {
               "klType": {
                 "type": "number",
-                "description": "K线类型: 1=1分 2=日 3=周 4=月 5=年 6=5分"
+                "description": "K线类型，默认2（日K）。1=1分 2=日 3=周 4=月 5=年 6=5分",
+                "enum": [1, 2, 3, 4, 5, 6],
+                "default": 2
               },
               "beginTime": { "type": "string", "description": "开始时间，格式 yyyy-MM-dd" },
               "endTime": { "type": "string", "description": "结束时间，格式 yyyy-MM-dd" },
@@ -195,12 +211,20 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": {
-              "periodType": { "type": "number", "description": "周期: 1=日内 2=日 3=周 4=月" }
+              "periodType": {
+                "type": "number",
+                "description": "周期，默认1（日内）。1=日内 2=日 3=周 4=月",
+                "enum": [1, 2, 3, 4],
+                "default": 1
+              }
             }
           }
         },
@@ -237,8 +261,11 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" }
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" }
         },
         "required": ["ticker"]
       },
@@ -267,13 +294,21 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码/关键词" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码或关键词（裸代码，如 NVDA、00700，不要带市场前缀）"
+          },
           "params": {
             "type": "object",
             "properties": {
               "query": { "type": "string", "description": "搜索关键词" },
               "maxResults": { "type": "number", "description": "最大返回条数，默认10" },
-              "newsType": { "type": "number", "description": "类型: 1=新闻 2=公告 3=研报" },
+              "newsType": {
+                "type": "number",
+                "description": "类型，默认1（新闻）。1=新闻 2=公告 3=研报",
+                "enum": [1, 2, 3],
+                "default": 1
+              },
               "lang": { "type": "string", "description": "语言: zh/en" }
             }
           }
@@ -307,7 +342,10 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
           "params": {
             "type": "object",
             "properties": { "maxResults": { "type": "number", "description": "最大返回条数" } }
@@ -331,8 +369,11 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": {
@@ -396,8 +437,11 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" }
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" }
         },
         "required": ["ticker"]
       },
@@ -431,13 +475,26 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": {
-              "statementType": { "type": "number", "description": "1=年报 2=季报" },
-              "financialType": { "type": "number", "description": "1=报告期 2=报告期(调整后)" },
+              "statementType": {
+                "type": "number",
+                "description": "报告类型，默认1（年报）。1=年报 2=季报",
+                "enum": [1, 2],
+                "default": 1
+              },
+              "financialType": {
+                "type": "number",
+                "description": "财务类型，默认1（报告期）。1=报告期 2=报告期(调整后)",
+                "enum": [1, 2],
+                "default": 1
+              },
               "num": { "type": "number", "description": "返回期数，默认8" }
             }
           }
@@ -466,12 +523,20 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" },
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": {
-              "valuationType": { "type": "number", "description": "1=PE_TTM 2=PB 3=PS" }
+              "valuationType": {
+                "type": "number",
+                "description": "估值类型，默认1（PE_TTM）。1=PE_TTM 2=PB 3=PS",
+                "enum": [1, 2, 3],
+                "default": 1
+              }
             }
           }
         },
@@ -499,8 +564,11 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" }
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" }
         },
         "required": ["ticker"]
       },
@@ -523,8 +591,11 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "股票代码" },
-          "market": { "type": "string" }
+          "ticker": {
+            "type": "string",
+            "description": "股票代码（裸代码，如 NVDA、00700、600519，不要带 US. 或 HK. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" }
         },
         "required": ["ticker"]
       },
@@ -555,12 +626,20 @@
       "paramsSchema": {
         "type": "object",
         "properties": {
-          "ticker": { "type": "string", "description": "标的股票代码" },
-          "market": { "type": "string" },
+          "ticker": {
+            "type": "string",
+            "description": "标的股票代码（裸代码，如 NVDA、AAPL，不要带 US. 前缀）"
+          },
+          "market": { "type": "string", "description": "市场: US(默认) HK CN" },
           "params": {
             "type": "object",
             "properties": {
-              "type": { "type": "number", "description": "1=全部 2=看涨 3=看跌" }
+              "type": {
+                "type": "number",
+                "description": "期权类型，默认0（全部）。0=全部 1=看涨(Call) 2=看跌(Put)",
+                "enum": [0, 1, 2],
+                "default": 0
+              }
             }
           }
         },
@@ -589,7 +668,9 @@
             "properties": {
               "plateSetType": {
                 "type": "number",
-                "description": "1=全部 2=行业 3=地域 4=概念 5=交易所"
+                "description": "板块类型，默认3（概念）。1=全部 2=行业 3=地域 4=概念 5=交易所",
+                "enum": [1, 2, 3, 4, 5],
+                "default": 3
               }
             }
           }

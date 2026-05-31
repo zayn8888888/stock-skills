@@ -251,11 +251,24 @@ export function createToolExecutor(
     // ── Data tools: get_{capability} ──
     if (toolName.startsWith("get_")) {
       const capability = toolName.slice(4).replace(/_/g, ".");
-      const { ticker, market, params } = input as {
+      let { ticker, market, params } = input as {
         ticker?: string;
         market?: string;
         params?: Record<string, unknown>;
       };
+
+      // Normalize ticker: strip market prefixes like "US.FUTU" → "FUTU"
+      // If a prefix is found and market wasn't set, extract it.
+      if (ticker) {
+        const prefixMatch = ticker.match(/^(US|HK|CN|SH|SZ|SG|JP)\.(.+)$/i);
+        if (prefixMatch) {
+          const prefix = prefixMatch[1].toUpperCase();
+          ticker = prefixMatch[2];
+          if (!market) {
+            market = prefix === "SH" || prefix === "SZ" ? "CN" : prefix;
+          }
+        }
+      }
 
       const { raw, adapter } = await router.execute({
         operation: capability,

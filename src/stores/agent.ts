@@ -287,16 +287,42 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         metadata?: Record<string, unknown> | null;
       }> = await res.json();
 
-      const agentMessages: AgentMessage[] = msgs.map((m) => ({
-        id: m.message_id,
-        role: m.role as AgentMessage["role"],
-        content: m.content,
-        timestamp: new Date(m.created_at).getTime(),
-        runId: m.metadata?.runId as string | undefined,
-      }));
+      // Also fetch tool events so we can attach them to assistant messages
+      let toolCallsByRun: Record<string, ToolCallEntry[]> = {};
+      try {
+        const toolRes = await fetch(`/api/sessions/${sessionId}/tool-events`);
+        if (toolRes.ok) toolCallsByRun = await toolRes.json();
+      } catch {
+        // ignore
+      }
+
+      // Build a map of existing tool calls from current store state (by runId)
+      // so we don't lose tool calls that arrived via SSE but aren't in the DB yet
+      const current = get();
+      const storeToolCallsByRun = new Map<string, ToolCallEntry[]>();
+      for (const msg of current.messages) {
+        if (msg.runId && msg.toolCalls?.length) {
+          storeToolCallsByRun.set(msg.runId, msg.toolCalls);
+        }
+      }
+
+      const agentMessages: AgentMessage[] = msgs.map((m) => {
+        const runId = m.metadata?.runId as string | undefined;
+        // Prefer DB tool calls, fall back to store-cached ones
+        const dbTools = runId ? toolCallsByRun[runId] : undefined;
+        const storeTools = runId ? storeToolCallsByRun.get(runId) : undefined;
+        const toolCalls = dbTools?.length ? dbTools : storeTools;
+        return {
+          id: m.message_id,
+          role: m.role as AgentMessage["role"],
+          content: m.content,
+          timestamp: new Date(m.created_at).getTime(),
+          runId,
+          toolCalls: toolCalls?.length ? toolCalls : undefined,
+        };
+      });
 
       // Only update if this is still the current session
-      const current = get();
       if (current.sessionId !== sessionId) return;
 
       cacheSession(sessionId, agentMessages);

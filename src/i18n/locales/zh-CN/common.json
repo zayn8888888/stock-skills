@@ -65,5 +65,22 @@
     "darkMode": "深色模式",
     "enabled": "已启用",
     "never": "从未"
+  },
+  "composer": {
+    "moreActions": "更多操作",
+    "stop": "停止",
+    "send": "发送",
+    "remove": "移除",
+    "upload": "上传",
+    "attach": "附加上下文",
+    "setGoal": "设置目标",
+    "uploading": "上传中...",
+    "comingSoon": "即将推出"
+  },
+  "sidebar": {
+    "expandSidebar": "展开侧边栏",
+    "collapseSidebar": "收起侧边栏",
+    "deleteSession": "删除会话",
+    "newChat": "新建对话"
   }
 }

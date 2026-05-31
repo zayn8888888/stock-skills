@@ -45,6 +45,11 @@ const CHIP_LABELS: Record<string, Record<string, string>> = {
   zh: { ticker: "标的", goal: "目标", attachment: "附件", workflow: "工作流", owner: "所有者" },
 };
 
+const REMOVE_LABELS: Record<string, string> = {
+  en: "Remove",
+  zh: "移除",
+};
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -81,7 +86,7 @@ export function ContextChips({ context, onDismiss, className }: ContextChipsProp
                 type="button"
                 onClick={() => onDismiss(key)}
                 className="ml-0.5 text-muted-foreground/60 hover:text-destructive transition-colors"
-                aria-label={`Remove ${label}`}
+                aria-label={`${REMOVE_LABELS[language] ?? "Remove"} ${label}`}
               >
                 <X className="h-2.5 w-2.5" />
               </button>

@@ -140,6 +140,7 @@ export function ThinkingTimeline({ toolCalls, className }: ThinkingTimelineProps
 
   const runningCount = toolCalls.filter((tc) => tc.status === "running").length;
   const completedCount = toolCalls.filter((tc) => tc.status === "completed").length;
+  const errorCount = toolCalls.filter((tc) => tc.status === "error").length;
   const summary =
     toolCalls.length === 1
       ? formatToolName(toolCalls[0].name)
@@ -176,6 +177,12 @@ export function ThinkingTimeline({ toolCalls, className }: ThinkingTimelineProps
               <span className="flex items-center gap-1 text-gain">
                 <Check className="h-2.5 w-2.5" />
                 {completedCount}
+              </span>
+            )}
+            {errorCount > 0 && (
+              <span className="flex items-center gap-1 text-loss">
+                <X className="h-2.5 w-2.5" />
+                {errorCount}
               </span>
             )}
           </span>

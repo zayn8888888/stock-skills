@@ -31,6 +31,14 @@ const LABELS = {
   },
 } as const;
 
+// ── Workflow key → skill name mapping ─────────────────────────────
+const WORKFLOW_SKILL_MAP: Record<string, string> = {
+  analyze: "stock-analyzer",
+  debate: "trading-debate",
+  scan: "market-scanner",
+  review: "portfolio-review",
+};
+
 function inferTicker(content: string): string | undefined {
   return content.match(/\b[A-Z]{1,6}\b/)?.[0];
 }
@@ -38,12 +46,18 @@ function inferTicker(content: string): string | undefined {
 function buildMessageContext(content: string, ctx?: ComposerContext) {
   const ticker = ctx?.ticker ?? inferTicker(content);
   const workflowType = ctx?.workflow;
+  const workflowKey = ctx?.workflowKey;
 
-  if (!ticker && !workflowType) return undefined;
+  // Determine skill from workflow key or ticker
+  const skillName = workflowKey
+    ? (WORKFLOW_SKILL_MAP[workflowKey] ?? "stock-analyzer")
+    : ticker
+      ? "stock-analyzer"
+      : "stock-analyzer"; // default skill for general questions
 
   return {
     ticker,
-    skill_name: ticker ? "stock-analyzer" : undefined,
+    skill_name: skillName,
     workflow_type: workflowType,
   };
 }
@@ -281,9 +295,30 @@ export default function Home() {
   useEffect(() => {
     if (!requestPending || !sessionId) return;
 
+    const MAX_POLLS = 20; // 20 * 3s = 60s timeout
+
     // Wait 5s for SSE events; if no assistant message appears, start polling
     const timer = setTimeout(() => {
+      let pollCount = 0;
       pollRef.current = setInterval(async () => {
+        pollCount++;
+        if (pollCount >= MAX_POLLS) {
+          // Timeout: clear pending state
+          if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          storeFnsRef.current.addMessage({
+            id: crypto.randomUUID(),
+            role: "system",
+            content:
+              language === "zh" ? "请求超时，请重试。" : "Request timed out. Please try again.",
+            timestamp: Date.now(),
+          });
+          storeFnsRef.current.clearStreaming();
+          storeFnsRef.current.setRequestPending(false);
+          return;
+        }
         try {
           const res = await fetch(`/api/sessions/${sessionId}/messages`);
           if (!res.ok) return;
@@ -319,7 +354,7 @@ export default function Home() {
         pollRef.current = null;
       }
     };
-  }, [requestPending, sessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [requestPending, sessionId, language]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------------------------------------------------------------------------
   // Send message
@@ -398,6 +433,15 @@ export default function Home() {
             content: `${labels.fallbackError}: ${res.status}`,
             timestamp: Date.now(),
           });
+          setRequestPending(false);
+          return undefined;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        // If no run was created, clear pending immediately
+        if (data && !data.linked_run_id) {
+          setRequestPending(false);
         }
       })
       .catch((err) => {
@@ -407,6 +451,7 @@ export default function Home() {
           content: `${labels.fallbackError}: ${err instanceof Error ? err.message : String(err)}`,
           timestamp: Date.now(),
         });
+        setRequestPending(false);
       });
   }
 

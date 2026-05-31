@@ -673,15 +673,22 @@ export class FutuClient {
     beginTime?: string,
     endTime?: string,
   ): Promise<any> {
+    // beginTime/endTime are required by the Futu protobuf schema.
+    // Default to a 30-day window if not provided.
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const bt = beginTime ?? fmt(now);
+    const et = endTime ?? fmt(new Date(now.getTime() + 30 * 86400_000));
+
     const c2s: Record<string, unknown> = {
       owner: { market, code },
       type,
+      beginTime: bt,
+      endTime: et,
     };
-    if (beginTime) c2s.beginTime = beginTime;
-    if (endTime) c2s.endTime = endTime;
     const rsp: any = await this.request(ProtoID.Qot_GetOptionChain, c2s);
     if (rsp.retType !== 0) throw new Error(`Qot_GetOptionChain failed: ${rsp.retMsg}`);
-    return convertLongs(rsp.s2c ?? {});
+    return (rsp.s2c?.optionChain ?? []).map((item: any) => convertLongs(item));
   }
 
   /**

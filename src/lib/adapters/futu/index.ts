@@ -349,9 +349,9 @@ export class FutuAdapter implements DataSourceAdapter {
       }
 
       case "options.chain": {
-        const type = (request.params?.type as number) ?? 1;
-        const result = await this.client.getOptionChain(market, ticker, type);
-        data = { ticker, ...result };
+        const type = (request.params?.type as number) ?? 0; // 0=全部
+        const optionChain = await this.client.getOptionChain(market, ticker, type);
+        data = { ticker, optionChain };
         break;
       }
 

@@ -14,6 +14,7 @@ export interface ComposerContext {
   goal?: string;
   attachment?: string;
   workflow?: string;
+  workflowKey?: string;
 }
 
 export interface ComposerProps {
@@ -48,6 +49,27 @@ const WORKFLOW_PRESETS = [
   { key: "review", labelKey: "review" },
 ] as const;
 
+// ---------------------------------------------------------------------------
+// Inline chip label mapping
+// ---------------------------------------------------------------------------
+
+const INLINE_CHIP_LABELS: Record<string, Record<string, string>> = {
+  en: {
+    ticker: "Ticker",
+    goal: "Goal",
+    attachment: "Attachment",
+    workflow: "Workflow",
+    workflowKey: "Workflow",
+  },
+  zh: {
+    ticker: "标的",
+    goal: "目标",
+    attachment: "附件",
+    workflow: "工作流",
+    workflowKey: "工作流",
+  },
+};
+
 const LABELS = {
   en: {
     placeholder: "Ask a research question...",
@@ -58,6 +80,11 @@ const LABELS = {
     debate: "Debate",
     scan: "Scan",
     review: "Review",
+    moreActions: "More actions",
+    stop: "Stop",
+    send: "Send",
+    remove: "Remove",
+    comingSoon: "Coming soon",
   },
   zh: {
     placeholder: "输入研究问题...",
@@ -68,6 +95,11 @@ const LABELS = {
     debate: "辩论",
     scan: "扫描",
     review: "复盘",
+    moreActions: "更多操作",
+    stop: "停止",
+    send: "发送",
+    remove: "移除",
+    comingSoon: "即将推出",
   },
 } as const;
 
@@ -91,6 +123,7 @@ export function Composer({
   const [plusOpen, setPlusOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-resize textarea
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -128,6 +161,7 @@ export function Composer({
       onSend(`/workflow ${workflowKey}`, {
         ...context,
         workflow: label,
+        workflowKey,
       });
     },
     [onSend, context, labels],
@@ -139,19 +173,50 @@ export function Composer({
     setTimeout(() => setPlusOpen(false), 150);
   }, []);
 
-  const handlePlusItemClick = useCallback((_key: string) => {
+  const handlePlusItemClick = useCallback((key: string) => {
     setPlusOpen(false);
-    // Focus textarea after action
-    textareaRef.current?.focus();
-    // For now, these are placeholders - the actual implementation
-    // would open file pickers, context panels, etc.
+    if (key === "upload") {
+      fileInputRef.current?.click();
+    } else {
+      // Attach context / Set goal — not yet implemented
+      textareaRef.current?.focus();
+    }
+  }, []);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/uploads", { method: "POST", body: formData });
+      if (res.ok) {
+        const data = await res.json();
+        setValue((prev) =>
+          prev
+            ? `${prev}\n[Uploaded: ${data.original_filename}]`
+            : `[Uploaded: ${data.original_filename}]`,
+        );
+        textareaRef.current?.focus();
+      }
+    } catch {
+      // silently fail
+    }
   }, []);
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       {/* Context chips */}
       {context && onClearContext && (
-        <ContextChipsInline context={context} onClear={onClearContext} />
+        <ContextChipsInline
+          context={context}
+          onClear={onClearContext}
+          removeLabel={labels.remove}
+          language={language}
+        />
       )}
 
       {/* Input area */}
@@ -174,7 +239,7 @@ export function Composer({
                 ? "bg-accent text-accent-foreground"
                 : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
-            aria-label="More actions"
+            aria-label={labels.moreActions}
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -199,6 +264,9 @@ export function Composer({
           )}
         </div>
 
+        {/* Hidden file input */}
+        <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
+
         {/* Textarea */}
         <textarea
           ref={textareaRef}
@@ -218,12 +286,12 @@ export function Composer({
         />
 
         {/* Send / Stop button */}
-        {streaming ? (
+        {streaming || disabled ? (
           <button
             type="button"
             onClick={onStop}
             className="flex h-8 w-8 items-center justify-center rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-            aria-label="Stop"
+            aria-label={labels.stop}
           >
             <Square className="h-3.5 w-3.5" />
           </button>
@@ -238,7 +306,7 @@ export function Composer({
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "bg-muted text-muted-foreground cursor-not-allowed",
             )}
-            aria-label="Send"
+            aria-label={labels.send}
           >
             {disabled ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -279,15 +347,19 @@ export function Composer({
 interface ContextChipsInlineProps {
   context: ComposerContext;
   onClear: (key: keyof ComposerContext) => void;
+  removeLabel?: string;
+  language?: string;
 }
 
-function ContextChipsInline({ context, onClear }: ContextChipsInlineProps) {
+function ContextChipsInline({ context, onClear, removeLabel, language }: ContextChipsInlineProps) {
   const entries = Object.entries(context).filter(([, v]) => v !== undefined && v !== "") as [
     keyof ComposerContext,
     string,
   ][];
 
   if (entries.length === 0) return null;
+
+  const chipLabels = INLINE_CHIP_LABELS[language ?? "en"] ?? INLINE_CHIP_LABELS.en;
 
   return (
     <div className="flex flex-wrap gap-1.5">
@@ -296,12 +368,12 @@ function ContextChipsInline({ context, onClear }: ContextChipsInlineProps) {
           key={key}
           className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs text-primary"
         >
-          {key}: {value}
+          {chipLabels[key] ?? key}: {value}
           <button
             type="button"
             onClick={() => onClear(key)}
             className="ml-0.5 hover:text-destructive transition-colors"
-            aria-label={`Remove ${key}`}
+            aria-label={`${removeLabel ?? "Remove"} ${chipLabels[key] ?? key}`}
           >
             &times;
           </button>

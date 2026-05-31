@@ -146,6 +146,8 @@ export function useSSE(): UseSSEReturn {
     cleanup();
     setStatus("disconnected");
     backoffRef.current = INITIAL_BACKOFF;
+    // Clear all pending connection waiters to prevent memory leak
+    connectedResolversRef.current.length = 0;
   }, [cleanup, setStatus]);
 
   const connect = useCallback(

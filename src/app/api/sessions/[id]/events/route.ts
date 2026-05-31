@@ -24,7 +24,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Subscribe to events
   const unsubscribe = eventBus.subscribe(sessionId, (event) => {
-    console.log(`[SSE] Forwarding event ${event.type} to client`);
     writer.write(encoder.encode(eventBus.toSSE(event))).catch(() => {});
   });
 
@@ -37,6 +36,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     send("heartbeat", "{}");
   }, 30_000);
 
+  // Max connection lifetime: 10 minutes. Prevents zombie SSE connections
+  // from accumulating when clients don't properly disconnect.
+  const maxLifetime = setTimeout(
+    () => {
+      send("error", JSON.stringify({ message: "Connection lifetime exceeded" }));
+      clearInterval(heartbeat);
+      unsubscribe();
+      writer.close().catch(() => {});
+    },
+    10 * 60 * 1000,
+  );
+
   // Replay missed events if Last-Event-ID provided
   if (parsedLastEventId !== null && Number.isFinite(parsedLastEventId)) {
     const missed = eventBus.replay(sessionId, parsedLastEventId);
@@ -48,6 +59,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Clean up on disconnect
   req.signal.addEventListener("abort", () => {
     clearInterval(heartbeat);
+    clearTimeout(maxLifetime);
     unsubscribe();
     writer.close().catch(() => {});
   });

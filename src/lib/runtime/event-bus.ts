@@ -1,7 +1,8 @@
 /**
  * Event types that are persisted in the replay buffer.
- * High-frequency streaming events (text_delta, tool_call, tool_result)
- * are intentionally excluded to keep the buffer manageable.
+ * Includes streaming events so reconnecting clients can catch up
+ * on mid-stream content.  Buffer is capped at REPLAY_BUFFER_SIZE
+ * per session so memory stays bounded.
  */
 const STATE_EVENT_TYPES = new Set([
   "run.created",
@@ -12,10 +13,17 @@ const STATE_EVENT_TYPES = new Set([
   "goal.abandoned",
   "goal.superseded",
   "error",
+  // Streaming events — needed for mid-stream reconnect
+  "text_delta",
+  "tool_call",
+  "tool_result",
 ]);
 
 /** Maximum number of events kept per session in the replay buffer. */
 const REPLAY_BUFFER_SIZE = 500;
+
+/** Maximum number of session channels kept in memory. Oldest are evicted first. */
+const MAX_CHANNELS = 50;
 
 export interface BusEvent {
   id: number;
@@ -34,6 +42,8 @@ interface SessionChannel {
   buffer: BusEvent[];
   /** Active subscribers for this session. */
   subscribers: Set<Subscriber>;
+  /** Last activity timestamp for eviction. */
+  lastActivity: number;
 }
 
 /**
@@ -48,9 +58,22 @@ export class EventBus {
   private getOrCreateChannel(sessionId: string): SessionChannel {
     let channel = this.channels.get(sessionId);
     if (!channel) {
-      channel = { nextId: 1, buffer: [], subscribers: new Set() };
+      // Evict oldest channel if at capacity
+      if (this.channels.size >= MAX_CHANNELS) {
+        let oldestKey: string | null = null;
+        let oldestTime = Number.POSITIVE_INFINITY;
+        for (const [key, ch] of this.channels) {
+          if (ch.lastActivity < oldestTime && ch.subscribers.size === 0) {
+            oldestTime = ch.lastActivity;
+            oldestKey = key;
+          }
+        }
+        if (oldestKey) this.channels.delete(oldestKey);
+      }
+      channel = { nextId: 1, buffer: [], subscribers: new Set(), lastActivity: Date.now() };
       this.channels.set(sessionId, channel);
     }
+    channel.lastActivity = Date.now();
     return channel;
   }
 
@@ -62,9 +85,13 @@ export class EventBus {
    */
   emit(sessionId: string, eventType: string, data: unknown): void {
     const channel = this.getOrCreateChannel(sessionId);
-    console.log(
-      `[EventBus] emit ${eventType} session=${sessionId} subs=${channel.subscribers.size}`,
-    );
+    // Only log state events — high-frequency streaming events (text_delta,
+    // tool_call, tool_result) would flood stdout and cause memory pressure.
+    if (STATE_EVENT_TYPES.has(eventType)) {
+      console.log(
+        `[EventBus] emit ${eventType} session=${sessionId} subs=${channel.subscribers.size}`,
+      );
+    }
 
     const event: BusEvent = {
       id: channel.nextId++,
@@ -100,10 +127,13 @@ export class EventBus {
   subscribe(sessionId: string, callback: Subscriber): () => void {
     const channel = this.getOrCreateChannel(sessionId);
     channel.subscribers.add(callback);
-    console.log(`[EventBus] subscribe session=${sessionId} total_subs=${channel.subscribers.size}`);
 
     return () => {
       channel.subscribers.delete(callback);
+      // If no subscribers remain and buffer is empty, remove channel to free memory
+      if (channel.subscribers.size === 0 && channel.buffer.length === 0) {
+        this.channels.delete(sessionId);
+      }
     };
   }
 
@@ -124,6 +154,14 @@ export class EventBus {
    */
   toSSE(event: BusEvent): string {
     return `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
+  }
+
+  /**
+   * Explicitly remove a session channel and clear its buffer.
+   * Called when a session is deleted or a run is fully complete.
+   */
+  removeChannel(sessionId: string): void {
+    this.channels.delete(sessionId);
   }
 }
 

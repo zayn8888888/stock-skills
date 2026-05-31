@@ -133,149 +133,172 @@ export async function POST(req: NextRequest, ctx: RouteCtx) {
         message: "API key not configured",
       });
     } else {
-      const agent = loadAgent(agentName);
-      const goalId: string | undefined = undefined; // will be resolved from active goal if present
-      const ticker = body.context.ticker;
+      try {
+        const agent = loadAgent(agentName);
+        const goalId: string | undefined = undefined; // will be resolved from active goal if present
+        const ticker = body.context.ticker;
 
-      const agentCtx = buildAgentContext(db, sessionId, goalId, ticker);
-      const model = getModelName();
-      const baseUrl = getBaseUrl();
-      const contextWindow = getContextWindow();
-      const maxTokens = getMaxTokens();
+        const agentCtx = buildAgentContext(db, sessionId, goalId, ticker);
+        const model = getModelName();
+        const baseUrl = getBaseUrl();
+        const contextWindow = getContextWindow();
+        const maxTokens = getMaxTokens();
 
-      const piTools = createPiTools(
-        router,
-        artifactWriter,
-        goalManager,
-        runId,
-        sessionId,
-        db,
-        eventBus,
-      );
+        const piTools = createPiTools(
+          router,
+          artifactWriter,
+          goalManager,
+          runId,
+          sessionId,
+          db,
+          eventBus,
+        );
 
-      // Build conversation history from context messages (excluding the
-      // message we just inserted which is already at the end).
-      const history: Array<{ role: "user" | "assistant"; content: string }> = agentCtx.messages
-        .filter((m) => m.id !== messageId)
-        .map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        }));
+        // Build conversation history from context messages (excluding the
+        // message we just inserted which is already at the end).
+        const history: Array<{ role: "user" | "assistant"; content: string }> = agentCtx.messages
+          .filter((m) => m.id !== messageId)
+          .map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }));
 
-      // Enqueue as background task — return 200 immediately
-      taskRunner
-        .enqueue(runId, async (signal) => {
-          let onAbort: (() => void) | undefined;
+        // Enqueue as background task — return 200 immediately
+        taskRunner
+          .enqueue(runId, async (signal) => {
+            let onAbort: (() => void) | undefined;
 
-          try {
-            const loop = new PiAgentRunner(
-              model,
-              baseUrl,
-              agent.prompt,
-              piTools,
-              eventBus,
-              sessionId,
-              runId,
-              undefined,
-              contextWindow,
-              maxTokens,
-            );
-
-            registerLoop(runId, loop);
-
-            // Wire taskRunner signal to the loop's abort controller
-            onAbort = () => loop.cancel();
-            signal.addEventListener("abort", onAbort, { once: true });
-
-            // Update run to running
-            const startedAt = new Date().toISOString();
-            await db.update(runs).set({ status: "running", startedAt }).where(eq(runs.id, runId));
-
-            eventBus.emit(sessionId, "run.updated", {
-              runId,
-              status: "running",
-            });
-
-            // Run the agent loop
-            const result = await loop.run(body.content, history);
-
-            // Save assistant message
-            const assistantMsgId = genId();
-            const finishedAt = new Date().toISOString();
-            await db.insert(messages).values({
-              id: assistantMsgId,
-              sessionId,
-              role: "assistant",
-              content: result.text,
-              createdAt: finishedAt,
-              metadata: JSON.stringify({
+            try {
+              const loop = new PiAgentRunner(
+                model,
+                baseUrl,
+                agent.prompt,
+                piTools,
+                eventBus,
+                sessionId,
                 runId,
-                toolIterations: result.toolIterations,
-                inputTokens: result.inputTokens,
-                outputTokens: result.outputTokens,
-              }),
-            });
+                undefined,
+                contextWindow,
+                maxTokens,
+              );
 
-            // Update run to succeeded
-            await db
-              .update(runs)
-              .set({
+              registerLoop(runId, loop);
+
+              // Wire taskRunner signal to the loop's abort controller
+              onAbort = () => loop.cancel();
+              signal.addEventListener("abort", onAbort, { once: true });
+
+              // Update run to running
+              const startedAt = new Date().toISOString();
+              await db.update(runs).set({ status: "running", startedAt }).where(eq(runs.id, runId));
+
+              eventBus.emit(sessionId, "run.updated", {
+                runId,
+                status: "running",
+              });
+
+              // Run the agent loop
+              const result = await loop.run(body.content, history);
+
+              // Save assistant message
+              const assistantMsgId = genId();
+              const finishedAt = new Date().toISOString();
+              await db.insert(messages).values({
+                id: assistantMsgId,
+                sessionId,
+                role: "assistant",
+                content: result.text,
+                createdAt: finishedAt,
+                metadata: JSON.stringify({
+                  runId,
+                  toolIterations: result.toolIterations,
+                  inputTokens: result.inputTokens,
+                  outputTokens: result.outputTokens,
+                }),
+              });
+
+              // Update run to succeeded
+              await db
+                .update(runs)
+                .set({
+                  status: "success",
+                  finishedAt,
+                  resultSummary: result.text.slice(0, 500),
+                })
+                .where(eq(runs.id, runId));
+
+              eventBus.emit(sessionId, "run.updated", {
+                runId,
                 status: "success",
-                finishedAt,
                 resultSummary: result.text.slice(0, 500),
-              })
-              .where(eq(runs.id, runId));
+              });
+            } catch (err) {
+              const finishedAt = new Date().toISOString();
+              const isCancelled =
+                signal.aborted ||
+                (err instanceof Error && err.message === "AgentLoop was cancelled");
 
-            eventBus.emit(sessionId, "run.updated", {
-              runId,
-              status: "success",
-              resultSummary: result.text.slice(0, 500),
-            });
-          } catch (err) {
-            const finishedAt = new Date().toISOString();
-            const isCancelled =
-              signal.aborted || (err instanceof Error && err.message === "AgentLoop was cancelled");
+              // Save error message
+              const errorMsgId = genId();
+              const errorContent = isCancelled
+                ? "Run was cancelled."
+                : `Run failed: ${err instanceof Error ? err.message : String(err)}`;
 
-            // Save error message
-            const errorMsgId = genId();
-            const errorContent = isCancelled
-              ? "Run was cancelled."
-              : `Run failed: ${err instanceof Error ? err.message : String(err)}`;
+              await db.insert(messages).values({
+                id: errorMsgId,
+                sessionId,
+                role: "assistant",
+                content: errorContent,
+                createdAt: finishedAt,
+                metadata: JSON.stringify({ runId, error: true }),
+              });
 
-            await db.insert(messages).values({
-              id: errorMsgId,
-              sessionId,
-              role: "assistant",
-              content: errorContent,
-              createdAt: finishedAt,
-              metadata: JSON.stringify({ runId, error: true }),
-            });
+              // Update run status
+              await db
+                .update(runs)
+                .set({
+                  status: isCancelled ? "cancelled" : "failed",
+                  finishedAt,
+                  resultSummary: errorContent.slice(0, 500),
+                })
+                .where(eq(runs.id, runId));
 
-            // Update run status
-            await db
-              .update(runs)
-              .set({
+              eventBus.emit(sessionId, isCancelled ? "run.updated" : "error", {
+                runId,
                 status: isCancelled ? "cancelled" : "failed",
-                finishedAt,
-                resultSummary: errorContent.slice(0, 500),
-              })
-              .where(eq(runs.id, runId));
-
-            eventBus.emit(sessionId, isCancelled ? "run.updated" : "error", {
-              runId,
-              status: isCancelled ? "cancelled" : "failed",
-              message: errorContent,
-            });
-          } finally {
-            if (onAbort) {
-              signal.removeEventListener("abort", onAbort);
+                message: errorContent,
+              });
+            } finally {
+              if (onAbort) {
+                signal.removeEventListener("abort", onAbort);
+              }
+              unregisterLoop(runId);
             }
-            unregisterLoop(runId);
-          }
-        })
-        .catch(() => {
-          // swallow — errors are already handled inside the task
+          })
+          .catch(() => {
+            // swallow — errors are already handled inside the task
+          });
+      } catch (agentErr) {
+        const errorContent = `Failed to load agent "${agentName}": ${agentErr instanceof Error ? agentErr.message : String(agentErr)}`;
+        const now3 = new Date().toISOString();
+        await db.insert(messages).values({
+          id: genId(),
+          sessionId,
+          role: "assistant",
+          content: errorContent,
+          createdAt: now3,
+          metadata: JSON.stringify({ runId, error: true }),
         });
+        await db
+          .update(runs)
+          .set({ status: "failed", finishedAt: now3, resultSummary: errorContent.slice(0, 500) })
+          .where(eq(runs.id, runId));
+        eventBus.emit(sessionId, "run.updated", {
+          runId,
+          status: "failed",
+          message: errorContent,
+        });
+      }
     } // end isApiKeyConfigured else
   } else {
     // Still update session updated_at for the new message
