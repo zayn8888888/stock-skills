@@ -108,7 +108,7 @@ export class PiAgentRunner {
       api: "anthropic-messages" as const,
       provider: "anthropic" as const,
       baseUrl,
-      reasoning: false,
+      reasoning: true,
       input: ["text" as const],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: contextWindow ?? 128000,
@@ -167,11 +167,16 @@ export class PiAgentRunner {
     // ── Subscribe to Pi events → EventBus ──
     const unsubscribe = this.agent.subscribe((event: AgentEvent) => {
       switch (event.type) {
-        // Text streaming → EventBus text_delta
+        // Text streaming → EventBus text_delta / thinking_delta
         case "message_update": {
           const { assistantMessageEvent } = event;
           if (assistantMessageEvent.type === "text_delta") {
             this.eventBus.emit(this.sessionId, "text_delta", {
+              runId: this.runId,
+              text: assistantMessageEvent.delta,
+            });
+          } else if (assistantMessageEvent.type === "thinking_delta") {
+            this.eventBus.emit(this.sessionId, "thinking_delta", {
               runId: this.runId,
               text: assistantMessageEvent.delta,
             });

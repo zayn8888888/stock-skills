@@ -15,6 +15,7 @@ const STATE_EVENT_TYPES = new Set([
   "error",
   // Streaming events — needed for mid-stream reconnect
   "text_delta",
+  "thinking_delta",
   "tool_call",
   "tool_result",
 ]);

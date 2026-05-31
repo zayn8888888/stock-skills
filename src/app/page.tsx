@@ -38,12 +38,14 @@ export default function Home() {
     sessionId,
     status,
     streamingText,
+    streamingThinking,
     toolCalls,
     sessionLoading,
     switchSession,
     loadHistory,
     addMessage,
     appendDelta,
+    appendThinkingDelta,
     addToolCall,
     updateToolCall,
     clearStreaming,
@@ -64,6 +66,7 @@ export default function Home() {
   // on every store state change (Zustand selector returns new function refs).
   const storeFnsRef = useRef({
     appendDelta,
+    appendThinkingDelta,
     addToolCall,
     updateToolCall,
     addMessage,
@@ -75,6 +78,7 @@ export default function Home() {
   });
   storeFnsRef.current = {
     appendDelta,
+    appendThinkingDelta,
     addToolCall,
     updateToolCall,
     addMessage,
@@ -102,6 +106,14 @@ export default function Home() {
           storeFnsRef.current.appendDelta(parsed.delta ?? parsed.text ?? data);
         } catch {
           storeFnsRef.current.appendDelta(data);
+        }
+      },
+      thinking_delta: (data: string) => {
+        try {
+          const parsed = JSON.parse(data);
+          storeFnsRef.current.appendThinkingDelta(parsed.text ?? parsed.delta ?? data);
+        } catch {
+          storeFnsRef.current.appendThinkingDelta(data);
         }
       },
       tool_call: (data: string) => {
@@ -502,6 +514,7 @@ export default function Home() {
             <Timeline
               messages={messages}
               streamingText={streamingText}
+              streamingThinking={streamingThinking}
               pendingToolCalls={toolCalls}
             />
           </div>

@@ -93,6 +93,7 @@ export interface AgentState {
   sessionId: string | null;
   status: "idle" | "streaming" | "error";
   streamingText: string;
+  streamingThinking: string;
   toolCalls: ToolCallEntry[];
 
   // SSE status (mirrors useSSE)
@@ -114,6 +115,7 @@ export interface AgentState {
   ) => void;
   addMessage: (message: AgentMessage) => void;
   appendDelta: (delta: string) => void;
+  appendThinkingDelta: (delta: string) => void;
   addToolCall: (toolCall: ToolCallEntry) => void;
   updateToolCall: (id: string, update: Partial<ToolCallEntry>) => void;
   clearStreaming: (force?: boolean) => void;
@@ -130,6 +132,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   sessionId: null,
   status: "idle",
   streamingText: "",
+  streamingThinking: "",
   toolCalls: [],
   sseStatus: "disconnected",
   sseRetryAttempt: 0,
@@ -250,6 +253,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     }
   },
 
+  appendThinkingDelta: (delta: string) => {
+    set((s) => ({
+      streamingThinking: s.streamingThinking + delta,
+      status: "streaming",
+    }));
+  },
+
   addToolCall: (toolCall: ToolCallEntry) => {
     set((s) => ({
       toolCalls: [...s.toolCalls, toolCall],
@@ -312,6 +322,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       set({
         messages: next,
         streamingText: "",
+        streamingThinking: "",
         toolCalls: [],
         status: "idle",
         pendingRunId: null,
@@ -322,6 +333,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       }
       set({
         streamingText: "",
+        streamingThinking: "",
         toolCalls: [],
         status: "idle",
         pendingRunId: null,
