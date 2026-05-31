@@ -270,27 +270,40 @@ export function createToolExecutor(
         }
       }
 
-      const { raw, adapter } = await router.execute({
-        operation: capability,
-        ticker,
-        market,
-        params,
-      });
+      try {
+        const { raw, adapter } = await router.execute({
+          operation: capability,
+          ticker,
+          market,
+          params,
+        });
 
-      const observations = adapter.normalize(raw, {
-        operation: capability,
-        ticker,
-        market,
-        params,
-      });
+        const observations = adapter.normalize(raw, {
+          operation: capability,
+          ticker,
+          market,
+          params,
+        });
 
-      return JSON.stringify({
-        source: raw.source,
-        operation: raw.operation,
-        latency_ms: raw.latency_ms,
-        observations,
-        data: raw.data,
-      });
+        return JSON.stringify({
+          source: raw.source,
+          operation: raw.operation,
+          latency_ms: raw.latency_ms,
+          observations,
+          data: raw.data,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isTimeout = msg.includes("timeout") || msg.includes("Timeout");
+        return JSON.stringify({
+          error: isTimeout
+            ? `数据源请求超时（${capability}），数据源可能暂时繁忙。请使用已有数据继续分析，或告知用户数据缺口。`
+            : `数据源请求失败（${capability}）：${msg}`,
+          operation: capability,
+          ticker,
+          market,
+        });
+      }
     }
 
     return JSON.stringify({ error: `Unknown tool: ${toolName}` });

@@ -117,6 +117,27 @@ export class FutuAdapter implements DataSourceAdapter {
     const market = resolveMarket(request.market);
     const ticker = request.ticker ?? "NVDA";
 
+    try {
+      return await this.executeFetch(request, market, ticker, start);
+    } catch (err) {
+      // Retry once on timeout or connection errors after reconnecting
+      const msg = err instanceof Error ? err.message : String(err);
+      const isRetryable =
+        msg.includes("timeout") || msg.includes("Not connected") || msg.includes("Connection");
+      if (!isRetryable) throw err;
+
+      this.initialized = false;
+      await this.ensureReady();
+      return await this.executeFetch(request, market, ticker, start);
+    }
+  }
+
+  private async executeFetch(
+    request: AdapterRequest,
+    market: number,
+    ticker: string,
+    start: number,
+  ): Promise<RawResponse> {
     let data: unknown;
 
     switch (request.operation) {

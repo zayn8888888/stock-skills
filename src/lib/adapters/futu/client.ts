@@ -231,10 +231,14 @@ export class FutuClient {
   private buffer = Buffer.alloc(0);
   private connectPromise: Promise<void> | null = null;
   private onDisconnect: (() => void) | null = null;
+  private connectTimeoutMs: number;
+  private requestTimeoutMs: number;
 
   constructor(host = "127.0.0.1", port = 11111) {
     this.host = host;
     this.port = port;
+    this.connectTimeoutMs = Number(process.env.FUTU_CONNECT_TIMEOUT ?? 10_000);
+    this.requestTimeoutMs = Number(process.env.FUTU_REQUEST_TIMEOUT ?? 30_000);
   }
 
   setOnDisconnect(cb: () => void): void {
@@ -258,7 +262,7 @@ export class FutuClient {
     return new Promise((resolve, reject) => {
       const sock = connect({ host: this.host, port: this.port });
       sock.setKeepAlive(true, 30_000);
-      sock.setTimeout(5_000);
+      sock.setTimeout(this.connectTimeoutMs);
 
       sock.on("timeout", () => {
         sock.destroy();
@@ -351,7 +355,7 @@ export class FutuClient {
           this.pending.delete(serialNo);
           reject(new Error(`Request timeout: protoId=${protoId}`));
         }
-      }, 10_000);
+      }, this.requestTimeoutMs);
 
       this.pending.set(serialNo, {
         resolve: (r) => {
