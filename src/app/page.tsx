@@ -264,6 +264,7 @@ export default function Home() {
 
   // ---------------------------------------------------------------------------
   // Polling fallback — if SSE events never arrive, poll for final result
+  // Only fires when SSE is broken; timeout aligned with TaskRunner (10 min).
   // ---------------------------------------------------------------------------
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -271,9 +272,9 @@ export default function Home() {
   useEffect(() => {
     if (!requestPending || !sessionId) return;
 
-    const MAX_POLLS = 20; // 20 * 3s = 60s timeout
+    const MAX_POLLS = 60; // 60 * 10s = 10 min (aligned with TaskRunner timeout)
 
-    // Wait 5s for SSE events; if no assistant message appears, start polling
+    // Wait 10s for SSE events; if no assistant message appears, start polling
     const timer = setTimeout(() => {
       let pollCount = 0;
       pollRef.current = setInterval(async () => {
@@ -320,8 +321,8 @@ export default function Home() {
         } catch {
           /* retry on next interval */
         }
-      }, 3000);
-    }, 5000);
+      }, 10_000);
+    }, 10_000);
 
     return () => {
       clearTimeout(timer);
