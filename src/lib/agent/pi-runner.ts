@@ -121,6 +121,13 @@ export class PiAgentRunner {
         model,
         tools,
         messages: [],
+        thinkingLevel: (process.env.THINKING_LEVEL ?? "medium") as
+          | "off"
+          | "minimal"
+          | "low"
+          | "medium"
+          | "high"
+          | "xhigh",
       },
       toolExecution: "sequential",
       beforeToolCall: async () => {
