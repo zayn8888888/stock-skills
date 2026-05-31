@@ -1,196 +1,264 @@
 # stock-skills
 
-> 为 [Claude Code](https://claude.com/claude-code) 设计的**股票分析 Skill 套件**。基于富途 OpenAPI 实时行情 + Tavily 新闻搜索，覆盖从"市场扫板"到"个股深挖"的完整链路。
+> 股票 & 加密货币全栈研究平台：**Claude Code Skill 提示词集** + **Next.js Web 研究台**。基于富途 OpenAPI 实时行情、东方财富、Tavily 新闻搜索等多源数据，由 LLM Agent 驱动，覆盖从市场扫描到个股深挖、辩论决策的完整研究工作流。
+
+## 架构概览
+
+项目分两层：
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Layer 2: Web Research Runtime (Next.js 15 App Router)   │
+│  ┌──────────┐  ┌───────────┐  ┌────────────┐            │
+│  │  React UI │  │ SSE 实时流 │  │ SQLite DB  │            │
+│  │  Zustand  │  │ EventBus  │  │ Drizzle ORM│            │
+│  └──────────┘  └───────────┘  └────────────┘            │
+│  ┌──────────────────────────────────────────────┐        │
+│  │  Pi Agent Runner (pi-agent-core)             │        │
+│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐  │        │
+│  │  │ Agent    │  │ Tool     │  │ TaskRunner│  │        │
+│  │  │ Loader   │  │ Executor │  │ 并发控制   │  │        │
+│  │  └──────────┘  └──────────┘  └───────────┘  │        │
+│  └──────────────────────────────────────────────┘        │
+│  ┌──────────────────────────────────────────────┐        │
+│  │  Data Source Adapter Layer (可插拔)            │        │
+│  │  Futu │ EastMoney │ FutuNews │ CoinGecko ... │        │
+│  │  SourceRouter → 自动路由 + 降级               │        │
+│  └──────────────────────────────────────────────┘        │
+├──────────────────────────────────────────────────────────┤
+│  Layer 1: Claude Code Skills (Markdown Prompt 集合)      │
+│  skills/stock/ │ skills/core/ │ skills/crypto/ │ agents/ │
+└──────────────────────────────────────────────────────────┘
+```
+
+## 项目结构
+
+```
+stock-skills/
+├── src/                          # Next.js Web 应用
+│   ├── app/                      # 页面 + API 路由
+│   │   ├── page.tsx              # Research Desk 主页（聊天界面）
+│   │   ├── data-sources/         # 数据源管理页
+│   │   ├── reviews/              # 复盘队列页
+│   │   ├── runs/[runId]/         # Run 详情页（数据/日志/报告）
+│   │   ├── tickers/[ticker]/     # Ticker 详情页
+│   │   └── api/                  # REST API 路由
+│   │       ├── sessions/         # 会话管理 + 消息提交 + SSE 流
+│   │       ├── runs/             # Agent Run 管理
+│   │       ├── data-sources/     # 数据源 CRUD + 健康检查
+│   │       ├── tickers/          # Ticker 相关上下文
+│   │       ├── decisions/        # 交易决策
+│   │       ├── lessons/          # 跨会话教训
+│   │       └── health/           # 健康检查
+│   ├── components/               # React UI 组件
+│   │   ├── layout/               # AppShell, Sidebar, ConnectionBanner
+│   │   ├── research/             # WelcomeScreen, Composer, MessageBubble
+│   │   └── run/                  # Run 详情组件
+│   ├── lib/                      # 核心后端库
+│   │   ├── adapters/             # 数据源适配器（Futu, EastMoney, FutuNews, Fixture）
+│   │   ├── agent/                # Agent 执行层（Pi Runner, Tool 系统, Skill 加载）
+│   │   ├── auth/                 # Token 认证中间件
+│   │   ├── db/                   # Drizzle Schema + 迁移
+│   │   ├── runtime/              # EventBus, RunManager, GoalManager, ArtifactWriter
+│   │   ├── data-source/          # SourceRouter, Seed, Capabilities 定义
+│   │   └── config.ts             # 运行时配置
+│   ├── stores/                   # Zustand 状态管理
+│   ├── hooks/                    # SSE, Theme, Language hooks
+│   └── i18n/                     # 中英双语
+├── skills/                       # Claude Code Skill 提示词
+│   ├── stock/                    # market-scanner, stock-analyzer, stock-fundamentals, stock-valuation
+│   ├── core/                     # event-calendar, hyperliquid-perps, trading-debate
+│   ├── crypto/                   # crypto-scanner, crypto-analyzer
+│   ├── futu/                     # futuapi Python 脚本集 + OpenD 安装指引
+│   └── agents/                   # Web Agent 定义（agent.yaml + prompt.md + output-contract.json）
+├── scripts/                      # 安装 / 更新 / 卸载脚本
+├── tests/                        # Vitest 测试
+├── docs/superpowers/             # 设计文档 + UI 原型
+└── analysis/                     # 运行时生成（SQLite, Artifacts, Token）— 不入库
+```
 
 ## 包含的 Skill
 
 | Skill | 解决什么问题 | 触发举例 |
 |-------|------------|---------|
-| [`market-scanner/`](skills/stock/market-scanner/) | 大A / HK / US 市场热点板块扫描 + 板块内"尚未过度拉升"候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" / "XX 板块里有没有还没涨透的票" |
-| [`stock-analyzer/`](skills/stock/stock-analyzer/) | 单只股票九维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链 / 事件） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
-| [`stock-fundamentals/`](skills/stock/stock-fundamentals/) | 自下而上基本面（商业模式 → 护城河 → 财务 → 估值视角） | "XXX 适不适合长期持有" / "护城河在哪" / "盈利质量怎么样" |
-| [`stock-valuation/`](skills/stock/stock-valuation/) | DCF + 历史 P/E + PEG 定量估值与安全边际区间 | "帮我估一下 XXX 合理价" / "三种方法算算估值区间" |
-| [`event-calendar/`](skills/core/event-calendar/) | 未来 14 天前瞻事件日历（Finnhub 美国经济+美股财报 / Polymarket 押注 / Tavily 中港政策） | "未来一周有什么大事" / "FOMC 降息概率" / "NVDA 什么时候出财报" |
-| [`hyperliquid-perps/`](skills/core/hyperliquid-perps/) | Hyperliquid 链上永续镜像（HIP-3 七大子 dex：美股/SPX/VIX/商品/FX/Pre-IPO 全覆盖），24/7 隐含价 + funding rate + OI + premium | "NVDA 周末链上多少" / "TSLA funding 拥不拥挤" / "SPX 现在永续在哪" / "OPENAI 链上估值" |
-| [`trading-debate/`](skills/core/trading-debate/) | 多 agent 辩论决策（TradingAgents 七阶段 + ai-hedge-fund 7 大师 + Reflection + 组合层 + 跨标的教训 + 跨市场基准） | "NVDA 给我一次多空辩论" / "用 Buffett+Burry 视角看 700" / "复盘我对 X 的决策" / "NVDA/AAPL/TSLA 哪个该加仓" / "我对半导体股有什么模式问题" |
-| [`crypto-scanner/`](skills/crypto/crypto-scanner/) | 加密市场热点赛道扫描（CoinGecko + 热搜 trending + Tavily 叙事 + Hyperliquid 拥挤度），4 阶段筛出候选 | "加密最近什么赛道在涨" / "山寨季开了吗" / "BTC 主导率高吗" / "DeFi/RWA/AI 哪个方向强" |
-| [`crypto-analyzer/`](skills/crypto/crypto-analyzer/) | 单只加密资产七维度分析（行情 / 技术 / 链上 / 叙事 / 同类 / 新闻 / 事件日历） | "分析 SOL" / "HYPE 链上 funding 怎样" / "ETH 值不值得买" |
+| [`market-scanner/`](skills/stock/market-scanner/) | 大A / HK / US 市场热点板块扫描 + 候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" |
+| [`stock-analyzer/`](skills/stock/stock-analyzer/) | 单只股票九维度综合分析（行情/技术/估值/资金/盘口/同行/新闻/期权/事件） | "分析 NVDA" / "腾讯能不能抄底" |
+| [`stock-fundamentals/`](skills/stock/stock-fundamentals/) | 自下而上基本面（商业模式→护城河→财务→估值视角） | "茅台适不适合长期持有" / "护城河在哪" |
+| [`stock-valuation/`](skills/stock/stock-valuation/) | DCF + 历史 P/E + PEG 定量估值与安全边际区间 | "帮我估一下 AAPL 合理价" |
+| [`event-calendar/`](skills/core/event-calendar/) | 未来 14 天前瞻事件日历（Finnhub/Polymarket/Tavily 三源整合） | "未来一周有什么大事" / "FOMC 降息概率" |
+| [`hyperliquid-perps/`](skills/core/hyperliquid-perps/) | Hyperliquid 链上永续镜像（美股/SPX/VIX/商品/FX/Pre-IPO），24/7 | "NVDA 周末链上多少" / "TSLA funding 拥不拥挤" |
+| [`trading-debate/`](skills/core/trading-debate/) | 多 agent 辩论决策（七阶段 + 7 大师 + Reflection + 组合层） | "NVDA 多空辩论" / "Buffett+Burry 视角看 700" |
+| [`crypto-scanner/`](skills/crypto/crypto-scanner/) | 加密市场热点赛道扫描（CoinGecko + Hyperliquid 拥挤度） | "加密最近什么赛道在涨" / "山寨季开了吗" |
+| [`crypto-analyzer/`](skills/crypto/crypto-analyzer/) | 单只加密资产七维度分析（行情/技术/链上/叙事/同类/新闻/事件） | "分析 SOL" / "ETH 值不值得买" |
 
-**链式协作建议**：
-- scanner 扫出候选 → **analyzer** 多维扫一遍
-- 长期价值视角加 **fundamentals**；要算清楚数字再加 **valuation**
-- 想从"分析"转到"决策"（该不该买 / 仓位多少 / 风险点）→ **trading-debate**（自动调用 analyzer + event-calendar，无需手动先跑）
-- **event-calendar** 横向辅助，被 scanner 的「催化」「产业链外推」与 analyzer 的「事件日历」维度自动调用
-- **hyperliquid-perps** 横向辅助：被 analyzer 的「资金」维度引用 funding rate + 拥挤度，被 trading-debate 的 Risk 风险辩论引用作为"拥挤交易硬约束"，被 event-calendar 用于"事件后链上即时反应"
-- **crypto-scanner** 扫出加密候选 → **crypto-analyzer** 七维度深挖 → 可选接 **trading-debate**
+**链式协作**：scanner → analyzer → fundamentals/valuation → trading-debate，event-calendar 和 hyperliquid-perps 横向辅助。
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 框架 | Next.js 15 (App Router) + React 19 + TypeScript 5.8 |
+| 状态管理 | Zustand (前端) + SQLite (后端) |
+| ORM | Drizzle ORM + better-sqlite3 |
+| Agent 引擎 | Pi Agent Core (`@earendil-works/pi-agent-core`) + Anthropic SDK |
+| UI | Tailwind CSS 4 + shadcn/ui (Radix) + Lucide React |
+| 实时通信 | SSE (Server-Sent Events) + EventBus |
+| 工具链 | pnpm + Biome (lint/format) + Vitest (test) |
+| 国际化 | i18next (中文/英文) |
+
+## 外部数据源
+
+| 数据源 | 覆盖 | 认证 |
+|--------|------|------|
+| **Futu OpenAPI** | 港美股实时行情、K 线、资金流、期权链、财报 | 需 OpenD 本地运行 (127.0.0.1:11111) |
+| **东方财富** | A 股概念板块扫描（486 板块） | 无需认证 |
+| **Futu News** | 新闻/舆情 | 无需认证 |
+| **Tavily** | Web 新闻搜索 | API Key |
+| **Finnhub** | 美国经济日历 + 美股财报日历 | API Key (免费) |
+| **Polymarket** | 预测市场赔率 | 无需认证 |
+| **CoinGecko** | 加密行情/赛道/热搜 | Demo Key (免费，可选) |
+| **Hyperliquid** | 链上永续合约数据 | 无需认证 |
 
 ## 安装
+
+### Web 应用
 
 ```bash
 git clone https://github.com/zayn8888888/stock-skills.git ~/stock-skills
 cd ~/stock-skills
+pnpm install
+cp .env.example .env   # 配置 API keys 和模型信息
+pnpm dev               # 开发模式 http://localhost:3000
 ```
 
-然后任选一种安装方式（仓库内自带 `scripts/install.sh`）：
-
-### 方式 1：软链模式（推荐，更新最省事）
+生产构建：
 
 ```bash
+pnpm build
+pnpm start
+```
+
+### Claude Code Skills（CLI 模式）
+
+```bash
+# 软链模式（推荐）
 ./scripts/install.sh --link
-```
 
-把仓库里的 skill 目录软链到 `~/.claude/skills/`。以后只要 `cd ~/stock-skills && git pull`，所有 skill 自动跟着更新，无需重装。
-
-> ⚠️ 软链下「修改 ~/.claude/skills/xxx」= 修改仓库内容；如果你计划本地魔改 skill，建议改用拷贝模式。
-
-### 方式 2：拷贝模式（默认，安全隔离）
-
-```bash
+# 拷贝模式
 ./scripts/install.sh
-```
 
-仓库与 `~/.claude/skills/` 互不影响，本地随便改。更新时跑 `./scripts/update.sh`（自动 `git pull` + `rsync --delete` 同步）。
-
-### 只装其中几个
-
-两种模式都支持指定 skill：
-
-```bash
+# 只装部分 skill
 ./scripts/install.sh --link stock-analyzer market-scanner
-./scripts/install.sh stock-valuation
 ```
 
-可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `hyperliquid-perps` / `trading-debate` / `crypto-scanner` / `crypto-analyzer`。
-
-### 自定义安装目录
-
-设置 `CLAUDE_SKILLS_DIR` 环境变量即可（默认 `~/.claude/skills`）：
+更新：
 
 ```bash
-CLAUDE_SKILLS_DIR=/path/to/skills ./scripts/install.sh --link
-```
-
-## 更新
-
-```bash
-cd ~/stock-skills
 ./scripts/update.sh
 ```
 
-脚本会自动 `git pull`，再按你当初安装的模式同步：
-
-- 软链装的：`git pull` 已生效，脚本只做提示
-- 拷贝装的：`rsync --delete` 把仓库目录覆盖到 `~/.claude/skills/<skill>/`
-- 未安装的 skill：跳过（不会主动新增，需要装请用 `install.sh`）
-
-加 `--no-pull` 可跳过 `git pull` 只做本地同步。
-
 ## 共同依赖
 
-套件内 skill 普遍依赖：
-
-### 富途 OpenAPI（必需）
+### 富途 OpenAPI（Web 模式必需，CLI 模式推荐）
 
 - **富途 OpenD** 运行中，默认 `127.0.0.1:11111`
   - 下载：<https://www.futunn.com/OpenAPI>
-- 能调用富途 OpenAPI 的 Python 脚本集或 Claude skill（社区已有多个 `futuapi` 实现）
-
-SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capital_flow.py` / `get_option_chain.py` 等）对应富途官方 Python SDK [`futu-api`](https://pypi.org/project/futu-api/) 的基础能力。
 
 ### Tavily 搜索（推荐）
 
-- **stock-analyzer**：新闻维度依赖 [Tavily MCP Server](https://docs.tavily.com/)
-- **stock-valuation** 财务估算（EPS、FCF、历史 PE 等）也需 Web 检索；无可用时需在报告中写明数据缺口。
+- **stock-analyzer** 新闻维度 / **event-calendar** 中港政策均依赖 Tavily
+- 没有时降级或跳过
 
-没有 Tavily 时，analyzer 的新闻维度会降级或跳过；valuation 则可能无法完成部分方法。
+### event-calendar 额外依赖（可选）
 
-### stock-fundamentals 额外依赖
-
-- 近 7 天新闻快扫依赖社区 **`futu-stock-digest`** skill（SKILL 内约定；无需 OpenD）。
-
-### event-calendar 额外依赖（可选但推荐）
-
-- **Finnhub API key**：用于美国经济日历与美股财报日历。免费版 60 calls/min，足够一次扫描使用。
-  - 申请：<https://finnhub.io/register>
-  - 配置：`export FINNHUB_API_KEY=xxxxxx`
-    - **首选写入 `~/.zshenv`**（zsh non-interactive shell 也读，对 Claude Code Bash 工具最稳）
-    - 次选 `~/.zshrc` / `~/.bashrc`（仅交互 shell 生效，skill 已做 grep 兜底，但稳定性略低）
-    - ⚠️ 写完后**新开一个 Claude Code 会话**，旧会话的 env 不会自动刷新
-  - 未配置时本 skill 仅启用 Polymarket + Tavily 两源，**不阻塞使用**，但报告会标注"⚠️ Finnhub 未配置"
-- **Polymarket Gamma API**：无需 key，public read-only
-- **Tavily**：与 stock-analyzer 共用
+- **Finnhub API key**：`export FINNHUB_API_KEY=xxxxxx`（首选写入 `~/.zshenv`）
+- **Polymarket Gamma API**：无需 key
 
 ### crypto-scanner / crypto-analyzer 额外依赖
 
-- **CoinGecko Demo API key**（推荐，免费注册）：用于行情 / K线 / 赛道 / 热搜数据。
-  - 申请：<https://www.coingecko.com/en/api/pricing>（Demo 免费，100 calls/min）
-  - 配置：`export COINGECKO_DEMO_KEY=CG-xxxxxx`，**首选写入 `~/.zshenv`**
-  - 未配置时自动降级到公共端点（~3 calls/min，功能受限但可用）
-- **DNS 注意**：部分网络环境本地 DNS 会将 `api.coingecko.com` 解析到错误 IP（Meta CDN）。skill 内所有 curl 命令已内置 `--resolve "api.coingecko.com:443:104.20.41.132"` 绕过，无需手动修改 hosts。
+- **CoinGecko Demo API key**：`export COINGECKO_DEMO_KEY=CG-xxxxxx`（首选写入 `~/.zshenv`）
+- 未配置时自动降级到公共端点
 
-### hyperliquid-perps 额外依赖
+### hyperliquid-perps
 
-- **零依赖**：Hyperliquid `POST /info` 公开端点，无需注册、无需 API key
-- 仅需 `curl` + `jq`（macOS 自带或 `brew install jq`）
-- 网络可达 `api.hyperliquid.xyz`
-- 单 IP 限流约 1200 次/分钟，本 skill 单次调用 ~10 次，远低于阈值
+- **零依赖**：Hyperliquid 公开端点，仅需 `curl` + `jq`
 
 ## 使用
 
-安装后直接对 Claude 说自然语言即可：
+### Web 模式
+
+启动后打开 `http://localhost:3000`，在 Research Desk 界面输入自然语言：
+
+- 选择工作流：Analyze / Debate / Scan / Review
+- 输入如 "分析 NVDA"、"帮我找下一个热点"、"加密最近什么赛道在涨"
+- Agent 自动调用数据工具，实时流式输出报告
+
+### Claude Code CLI 模式
+
+安装 skill 后直接对 Claude 说自然语言即可：
 
 ```
 # 触发 market-scanner
 港股最近哪个板块在涨
-帮我找找美股还没涨透的热点
 
 # 触发 stock-analyzer
 分析一下 US.NVDA
 五粮液能不能抄底
-TSLA 机构在赌什么方向
 
-# 触发 stock-fundamentals（长期价值视角）
+# 触发 stock-fundamentals
 茅台护城河在哪
 
-# 触发 stock-valuation（定量估值）
+# 触发 stock-valuation
 帮我用 DCF / P/E / PEG 估一下 US.AAPL 合理区间
 
-# 触发 event-calendar（前瞻事件日历）
+# 触发 event-calendar
 未来 14 天有什么大事
-FOMC 降息概率多少
 NVDA 什么时候出财报
 
-# 触发 trading-debate（多 agent 辩论决策）
-NVDA 给我一次多空辩论决策            # 七阶段：自动调 analyzer + event-calendar → Bull/Bear → RM → Trader → Risk 三方 → PM
-用 Buffett + Burry 视角看 700        # v0.2 大师团模式（启用指定大师）
-复盘我对 NVDA 的决策                 # v0.3 跨会话反思
-NVDA / AAPL / TSLA 哪个该加仓        # v0.4 组合层：相关性矩阵 + 行业封顶 + 换手控制
-NVDA + 700 + 茅台 该怎么排            # v0.5 跨市场：市值加权基准 + 时段对齐 + 汇率敞口
-我对半导体股的判断有什么模式问题       # v0.5 跨标的教训聚合：4 维度切片找模式
+# 触发 trading-debate
+NVDA 给我一次多空辩论决策
+用 Buffett + Burry 视角看 700
+NVDA / AAPL / TSLA 哪个该加仓
+
+# 触发 crypto-scanner / crypto-analyzer
+加密最近什么赛道在涨
+分析 SOL
 ```
 
 ## 文档
 
-- [`stock-analyzer/SKILL.md`](skills/stock/stock-analyzer/SKILL.md) — 个股八维度分析流程
+### 设计文档
+
+- [`docs/superpowers/specs/2026-05-30-research-runtime-v2-design.md`](docs/superpowers/specs/2026-05-30-research-runtime-v2-design.md) — Web Research Runtime v2 设计规格
+- [`docs/superpowers/specs/data-source-v2.md`](docs/superpowers/specs/data-source-v2.md) — 数据源适配层设计
+
+### Skill 文档
+
+- [`stock-analyzer/SKILL.md`](skills/stock/stock-analyzer/SKILL.md) — 个股九维度分析流程
 - [`stock-analyzer/references/`](skills/stock/stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
-- [`stock-fundamentals/SKILL.md`](skills/stock/stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架（基本面研究流程）
+- [`stock-fundamentals/SKILL.md`](skills/stock/stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架
 - [`market-scanner/SKILL.md`](skills/stock/market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
-- [`market-scanner/references/`](skills/stock/market-scanner/references/) — 扫描报告模板
 - [`stock-valuation/SKILL.md`](skills/stock/stock-valuation/SKILL.md) — DCF / P/E / PEG 估值与安全边际模板
-- [`event-calendar/SKILL.md`](skills/core/event-calendar/SKILL.md) — 前瞻事件日历（Finnhub + Polymarket + Tavily 三源整合）
-- [`event-calendar/references/`](skills/core/event-calendar/references/) — 三源端点详解 / 中港政策 Tavily 关键词模板 / 输出格式
-- [`trading-debate/SKILL.md`](skills/core/trading-debate/SKILL.md) — 多 agent 辩论决策七阶段（v0.4：单标的 + 大师 + Reflection + 组合层）
-- [`trading-debate/references/framework-reference.md`](skills/core/trading-debate/references/framework-reference.md) — TradingAgents + ai-hedge-fund 架构对照
-- [`trading-debate/references/role-prompts.md`](skills/core/trading-debate/references/role-prompts.md) — 8 个角色完整 prompt 模板
-- [`trading-debate/references/master-styles.md`](skills/core/trading-debate/references/master-styles.md) — 7 个大师风格 agent（Buffett/Munger/Lynch/Burry/Druckenmiller/Damodaran/Ackman）
-- [`trading-debate/references/reflection.md`](skills/core/trading-debate/references/reflection.md) — v0.3 跨会话反思机制（基于 Claude Code memory）
-- [`trading-debate/references/portfolio-layer.md`](skills/core/trading-debate/references/portfolio-layer.md) — v0.4 多标的组合层 PM
-- [`trading-debate/references/cross-ticker-lessons.md`](skills/core/trading-debate/references/cross-ticker-lessons.md) — v0.5 跨标的教训聚合（4 维度切片找模式级错误）
-- [`trading-debate/references/multi-market.md`](skills/core/trading-debate/references/multi-market.md) — v0.5 跨市场基准选择（市值加权 + 时段对齐 + 汇率敞口 + 双 alpha 口径）
+- [`event-calendar/SKILL.md`](skills/core/event-calendar/SKILL.md) — 前瞻事件日历三源整合
+- [`trading-debate/SKILL.md`](skills/core/trading-debate/SKILL.md) — 多 agent 辩论决策七阶段
+- [`crypto-scanner/SKILL.md`](skills/crypto/crypto-scanner/SKILL.md) — 加密市场热点赛道扫描
+- [`crypto-analyzer/SKILL.md`](skills/crypto/crypto-analyzer/SKILL.md) — 单只加密资产七维度分析
+
+## NPM Scripts
+
+| 命令 | 说明 |
+|------|------|
+| `pnpm dev` | 启动开发服务器 (Turbopack) |
+| `pnpm build` | 生产构建 |
+| `pnpm start` | 启动生产服务器 |
+| `pnpm test` | 运行 Vitest 测试 |
+| `pnpm lint` | Biome lint + format 检查 |
+| `pnpm db:generate` | 生成 Drizzle 迁移 |
+| `pnpm db:migrate` | 执行数据库迁移 |
 
 ## ⚠️ 免责声明
 
-**本项目只是一个 LLM prompt 集合，不是投资建议、不是投资顾问、不是金融产品。**
+**本项目只是一个 LLM prompt 集合 + 研究工具，不是投资建议、不是投资顾问、不是金融产品。**
 
 - 所有分析由大语言模型生成，**可能包含错误、幻觉或过时数据**
 - 任何基于本项目输出的投资决策由使用者自行承担全部风险
@@ -212,6 +280,7 @@ NVDA + 700 + 茅台 该怎么排            # v0.5 跨市场：市值加权基�
 - 维度判断逻辑的完善
 - 新市场适配（台股等）
 - 输出模板改进
-- 非富途数据源适配
+- 新数据源适配器
+- Web UI 改进
 
 提交前请确认没有引入任何个人账户 ID、API key 或专有数据。
