@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Stock Skills - Research Desk",
   description: "Stock research and analysis platform",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
