@@ -214,7 +214,14 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 补全原始链接列表，供溯源防 hallucination；关键词用**中文公司名**；零返回走 fallback 链。
 
 **7d 软新闻（Tavily，必做）**
-并行至少 2 条：`<公司名> 调查 做空 short report`（days=60）+ `<公司名> analyst rating downgrade upgrade`。
+并行至少 4 条（监管 2 条为强制，不可与其他条目合并或省略）：
+
+- `<公司名> OR <TICKER> 调查 做空 short report`（days=60）
+- `<公司名> OR <TICKER> analyst rating downgrade upgrade`（days=60）
+- `<公司名> OR <TICKER> SEC OR CSRC OR SFC OR FINRA enforcement penalty fine`（days=365）【监管强制】
+- `<公司名> OR <TICKER> regulatory compliance violation settlement probe`（days=365）【监管强制】
+
+监管搜索未命中时，**禁止写"未发现监管处罚"**，必须写：`⚠️ 已执行监管专项搜索，未找到相关记录（不代表不存在）`。
 
 **7e 社区情绪（`futu-comment-sentiment` skill，可选）**
 注意已知 keyword bug；调用后须做对照测试，命中 bug 切 Tavily 雪球替代。
@@ -227,12 +234,10 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 
 **两阶段强制流程**：
 
-**阶段一**：先调 `futu-derivatives-anomaly` skill（快通道）。
+**阶段一**：调 `futu-derivatives-anomaly` skill（快通道），拿异动事件作补充。
 
-**阶段二**：以下任一情形**必须立即走 Step 1-3 完整扫描**（取到期日 → 取期权链 → 批量订阅拉 OI/IV/Greeks），不得降级到 Tavily：
-- 快通道返回任何错误码（含 -12301 DATA_UNAVAILABLE）
-- 快通道返回"无异常"但用户追问机构布局/对冲流
-- 出现单一 strike 极端堆积疑虑
+**阶段二（必做，不可跳过）**：无论快通道成功与否，均须走 Step 1-3 完整扫描（取到期日 → 取期权链 → 批量订阅拉 OI/IV/Greeks），不得降级到 Tavily。
+- 快通道的异动事件 ≠ 当前持仓结构；报告正文必须以 Step 1-3 的 OI/IV/PCR 为主，异动数据只在"异常成交"小节引用。
 
 扫描范围由数据决定（港股 ±20%，美股 ±15% 起步）；每批 ≤12 合约；必须用 `get_stock_quote.py` 不是 `get_snapshot.py`。禁止用"订阅限制"/"数据截断"等话术替代未真正执行的 Step 1-3 调用。
 

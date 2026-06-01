@@ -10,11 +10,12 @@
 
 > ⚠️ **`futu-derivatives-anomaly` 权限说明**：该 skill 底层调用 `get_derivative_unusual`，属于富途 **AI行情** 增值接口，需单独订阅。普通账户返回错误码 **-12301（DATA_UNAVAILABLE）**，不代表账户没有期权权限。
 
-**何时仍需走 Step 1-3**：
-- 用户问机构布局/对冲流（需看具体 strike OI 分布）
-- 出现单一 strike 极端堆积疑虑
-- 快通道返回"无异常"但用户坚持
-- **⚡ 快通道返回任何错误码（包括 -12301）** → 不降级到 Tavily，直接走 Step 1-3（`get_option_chain` + `get_option_volatility` + `get_option_exercise_probability` 用的是基础期权行情权限，与 AI行情 接口独立）
+> ⚠️ 快通道返回的是"异动检测"结果（过去 N 天发生过什么异常交易），**不含当前 OI 分布/IV/PCR/Max Pain**。
+> 报告正文必须以 Step 1-3 数据为准；快通道结果只在"异常成交"小节引用。
+
+**Step 1-3（必做，不可跳过）**：无论快通道成功与否，均须走完整扫描。
+- 快通道**成功** → 继续走 Step 1-3；异动数据作"异常成交"补充
+- 快通道**返回任何错误码（含 -12301 DATA_UNAVAILABLE）** → 直接走 Step 1-3（`get_option_chain` 等用的是基础期权行情权限，与 AI行情 接口独立，不降级到 Tavily）
 
 ## Step 1：取期权到期日
 
@@ -46,6 +47,40 @@ python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_o
 **扫描范围**：默认 ±10%/15% 不够，机构保护位/sell-put 锚定常在深度 OTM。原则：**由数据决定，不由默认值决定**。
 - 先拉整条链 strike 分布，判断要扫多宽
 - 港股建议至少 ±20%，美股 ±15% 起步；strike 稀疏时再放宽一档
+
+**财报/重大异动后 strike 数膨胀时的采样策略**（单到期日 strike 数 > 50 时启用，全扫太慢且批次数失控）：
+
+1. 先用 Step 2 命令拉整条链代码列表（不订阅），读出所有 strike
+2. 在现价 ±15% 范围内每隔 $20（港股每隔 HK$5）各取一个 Call + Put 对（约 8-10 对）
+3. **再加** OI 最高的 3 个 Call + OI 最高的 3 个 Put（即使不在采样点上）
+4. 去重后合约总数控制在 **≤ 18**，分两批（每批 ≤ 12）完成 Step 3 订阅
+5. 用以下 Python 片段一次性解析 JSON、计算核心指标：
+
+```python
+import json, sys
+
+data = json.load(sys.stdin)  # get_stock_quote.py --json 的 data 数组
+
+# get_stock_quote 无 option_type 字段，从 name 末尾字符推导（'C'=CALL / 'P'=PUT）
+calls = [q for q in data if str(q.get('name', '')).endswith('C')]
+puts  = [q for q in data if str(q.get('name', '')).endswith('P')]
+
+pc_oi = sum(p['open_interest'] for p in puts) / max(sum(c['open_interest'] for c in calls), 1)
+max_call_strike = max(calls, key=lambda x: x['open_interest'])
+max_put_strike  = max(puts,  key=lambda x: x['open_interest'])
+
+# Put delta 为负数，需用 abs；OTM 定义为 |delta| < 0.35
+otm_put_ivs  = [p['implied_volatility'] for p in puts  if isinstance(p['delta'], float) and abs(p['delta']) < 0.35]
+otm_call_ivs = [c['implied_volatility'] for c in calls if isinstance(c['delta'], float) and abs(c['delta']) < 0.35]
+iv_skew = (max(otm_put_ivs) - max(otm_call_ivs)) if otm_put_ivs and otm_call_ivs else float('nan')
+
+print(f"P/C OI 比: {pc_oi:.2f}")
+print(f"Max Call OI: strike={max_call_strike['strike_price']}  OI={max_call_strike['open_interest']}")
+print(f"Max Put  OI: strike={max_put_strike['strike_price']}   OI={max_put_strike['open_interest']}")
+print(f"IV Skew (OTM Put IV - OTM Call IV): {iv_skew:.1f}%")
+```
+
+> 此策略用于控制批次数，不替代完整扫描的深度判断。若采样后发现某区间 OI 突然密集，需补扫该区间。
 
 ## Step 3：批量订阅 + 拉取完整数据
 
