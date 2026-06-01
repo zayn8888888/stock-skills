@@ -2,10 +2,10 @@
 
 ## 脚本路径
 
-所有命令统一走 `futuapi` 脚本集，安装路径 `~/.claude/skills/futuapi/scripts/`，由 `install-futu-opend` skill 配套安装 OpenD + SDK。
+所有命令统一走 `futuapi` 脚本集，安装路径 `${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/futuapi/scripts/`，由 `install-futu-opend` skill 配套安装 OpenD + SDK。
 
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 ```
 
 ## 脚本 → 底层 SDK 方法对照（调试参考）

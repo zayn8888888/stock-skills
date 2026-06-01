@@ -40,7 +40,7 @@ Read references/china-adr-pitfalls.md    # 中概股 ADR 专项陷阱（PDD/BABA
 #### 1a. 富途行情（当前价格 + PE）
 
 ```bash
-python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 ```
 
 #### 1b. 财务数据（分层，优先 Futu → 兜底 Tavily）
@@ -48,9 +48,9 @@ python3 ~/.claude/skills/futuapi/scripts/quote/get_snapshot.py <CODE> --json
 **层 1：Futu 结构化**（美股/港股，需 OpenD）
 ```bash
 # 财务报表（A 股返回 report_list=[]，降层 2）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_financials_statements.py <CODE> --num 12 --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_financials_statements.py <CODE> --num 12 --json
 # 估值（全市场含 A 股）
-python3 ~/.claude/skills/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
+python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_valuation_detail.py <CODE> --json
 ```
 JSON 字段提取要点：
 - 财务 → `report_list[].field_id`：`8048`(稀释EPS) / `8037`(净利润)；每条含 `yoy / qoq`

@@ -192,3 +192,15 @@ done
 
 echo
 echo "完成: 卸载 $removed 个。重启 Claude Code 或新开会话即可生效。"
+
+# --scope project 时清理 .claude/settings.json 中的 CLAUDE_SKILLS_DIR
+if [ "${SCOPE:-}" = "project" ]; then
+  SETTINGS_FILE="$PWD/.claude/settings.json"
+  if [ -f "$SETTINGS_FILE" ] && command -v jq >/dev/null 2>&1; then
+    if jq -e '.env.CLAUDE_SKILLS_DIR' "$SETTINGS_FILE" >/dev/null 2>&1; then
+      jq 'del(.env.CLAUDE_SKILLS_DIR) | if .env == {} then del(.env) else . end' \
+        "$SETTINGS_FILE" > "$SETTINGS_FILE.tmp" && mv "$SETTINGS_FILE.tmp" "$SETTINGS_FILE"
+      echo "已从 $SETTINGS_FILE 移除 env.CLAUDE_SKILLS_DIR"
+    fi
+  fi
+fi
