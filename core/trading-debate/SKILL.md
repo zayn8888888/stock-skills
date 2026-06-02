@@ -174,15 +174,25 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 ```
 skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
 
-  step 1：Skill(skill="stock-analyzer")  → 等待返回完整九维度分析报告后继续
-  step 2：Skill(skill="event-calendar")  → 等待返回结构化事件列表后继续
-  step 3：Skill(skill="stock-fundamentals")   [若清单含，等待返回后继续]
-  step 4：Skill(skill="stock-valuation")      [若清单含，等待返回后继续]
+  step 1：Skill(skill="stock-analyzer")  → 等待主对话中输出完整九维度报告后继续
+  step 2：Skill(skill="event-calendar")  → 等待主对话中输出结构化事件日历表后继续
+  step 3：Skill(skill="stock-fundamentals")   [若清单含，等待主对话中输出四步分析报告后继续]
+  step 4：Skill(skill="stock-valuation")      [若清单含，等待主对话中输出三维估值报告后继续]
 
-  ※ 各 skill 必须严格串行——前一个返回后再调下一个
-  ※ 每个 Skill() 注入对应 SKILL.md 后，主 agent 在主 context 内执行其完整工作流（含内部 Bash 并行）
+  ※ 各 skill 必须严格串行——前一个的完整报告已出现在主对话中，再调下一个
+  ※ 每个 Skill() 注入对应 SKILL.md 后，主 agent 必须遵循该 skill 的"输出即止"规则，
+     完成完整工作流（含数据采集 + 报告撰写），把完整报告呈现在主对话中
+  ※ 禁止用"共享报告"摘要替代子 skill 的完整报告——子 skill 报告是共享报告的数据源，
+     不是共享报告的子集
 
-补充数据批次（skill 串行完成后，单条消息内并行）：
+⚠️ 阶段 0 输出门禁（硬阻，阶段 0 完成前必须逐条通过）：
+  □ 主对话中可见 stock-analyzer 的完整九维度报告（含综合研判）？
+  □ 主对话中可见 event-calendar 的结构化事件日历表？
+  □ 若清单含 stock-fundamentals，主对话中可见其四步分析完整报告？
+  □ 若清单含 stock-valuation，主对话中可见其三维估值完整报告？
+  → 以上四问缺一不可，缺任何一个 → 阶段 0 未完成，禁止进入阶段 1
+
+补充数据批次（仅用于填写共享报告，不是子 skill 报告的替代品）：
   ‖ Bash: finnhub earnings + economic calendar curl（event-calendar 未覆盖的补充）
   ‖ Bash: polymarket curl
   ‖ tavily_search × 3-4 个查询（针对辩论焦点的 follow-up）
@@ -223,17 +233,30 @@ skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
 
 #### 共享报告格式（输出给后续所有角色）
 
+> ⚠️ **共享报告是摘要引用层，不是原始数据汇总层。**
+> 每个字段必须引用已在主对话中完整输出的子 skill 报告结论。
+> 禁止在子 skill 完整报告未呈现时就独立填写对应字段——如果某子 skill 报告还没出现，
+> 该字段应标 `"报告未输出—阶段 0 门禁未通过"` 而非自行汇总原始 API 数据。
+> 若 stock-fundamentals / stock-valuation 已输出完整报告，对应字段必须引用该报告结论，
+> 而非从 stock-analyzer 维度 3 重新归纳（"有了主菜不吃，重新煮一锅" = 偷懒）。
+
 ```
 {
   "data_timestamp": "<YYYY-MM-DD HH:MM>",
-  "data_source": "stock-analyzer (fresh) | stock-analyzer (reused from <timestamp>) | partial",
-  "market_report":        "<stock-analyzer 维度 1+2 摘要>",
-  "fundamentals_report":  "<stock-analyzer 维度 3 + (可选) stock-fundamentals>",
-  "capital_report":       "<stock-analyzer 维度 4+5；含 hyperliquid-perps 链上 funding/OI/premium（美股/美元资产标的；港股除 BABA 外应标'流动性不足'；A 股应标'链上无镜像'）>",
-  "peers_report":         "<stock-analyzer 维度 6>",
-  "news_report":          "<stock-analyzer 维度 7>",
-  "derivatives_report":   "<stock-analyzer 维度 8 (美股/港股) | 'N/A: 本市场无期权' (A 股)>",
-  "events_report":        "<event-calendar 输出>",
+  "data_source": {
+    "stock-analyzer":      "fresh | reused from <timestamp> | skipped",
+    "event-calendar":      "fresh | reused from <timestamp> | skipped",
+    "stock-fundamentals":  "fresh | reused from <timestamp> | skipped (reason: <大师不依赖 / 用户选B>)",
+    "stock-valuation":     "fresh | reused from <timestamp> | skipped (reason: <大师不依赖 / 用户选B>)"
+  },
+  "market_report":        "<引用上方 stock-analyzer 完整报告 维度 1+2 结论要点；非原始 API 数据重新汇总>",
+  "fundamentals_report":  "<引用上方 stock-analyzer 完整报告 维度 3 结论；若 stock-fundamentals 已输出完整四步报告，则改为引用该报告的核心结论，并注明'完整报告见上方 stock-fundamentals 报告'>",
+  "capital_report":       "<引用上方 stock-analyzer 完整报告 维度 4+5；含 hyperliquid-perps 链上 funding/OI/premium（美股/美元资产标的；港股除 BABA 外应标'流动性不足'；A 股应标'链上无镜像'）>",
+  "peers_report":         "<引用上方 stock-analyzer 完整报告 维度 6 结论要点>",
+  "news_report":          "<引用上方 stock-analyzer 完整报告 维度 7 结论要点>",
+  "derivatives_report":   "<引用上方 stock-analyzer 完整报告 维度 8 结论要点 (美股/港股) | 'N/A: 本市场无期权' (A 股)>",
+  "valuation_report":     "<若 stock-valuation 已输出完整三维估值报告，引用其估值区间结论，并注明'完整报告见上方 stock-valuation 报告'；否则标 'skipped'>",
+  "events_report":        "<引用上方 event-calendar 完整事件日历表；非从头检索新闻替代>",
   "data_gaps":            "<列出所有'数据不可用'的项及原因 — 必须包含：(1) 跳过的维度；(2) 启用大师团但未调的条件依赖 skill；(3) 已知 bug 跳过的工具。不允许把 missing skill 只写在 data_source 里藏起来>"
 }
 ```
@@ -504,6 +527,8 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - ❌ **用 Tavily 单源新闻替代 stock-analyzer 维度 7**（覆盖度差太多）
 - ❌ **缺失的 skill / 跳过的大师只写在 data_source 不写 data_gaps**（藏起来 = 偷懒）
 - ❌ **每条消息只发 1 个工具调用让本可并行的请求被串行化**（10 个独立 Bash 串行 = 10 倍等待，必须批量；自检：阶段 0 主对话出现 5+ 条连续只调 1 个工具的消息 = 违规）
+- ❌ **子 skill 完整报告未呈现就填写共享报告对应字段**（共享报告是摘要引用层；子 skill 的 API 数据你拿到了不等于子 skill 报告已完成——必须等该 skill 的完整报告呈现在主对话中，才能引用它填写共享报告字段）
+- ❌ **stock-fundamentals / stock-valuation 已输出完整报告，但共享报告 fundamentals_report / valuation_report 仍从 stock-analyzer 维度 3 / 原始财务数据重新归纳**（子 skill 完整报告就是数据源，直接引用其结论，禁止"有了主菜重新煮一锅"）
 
 ### 辩论与决策层（阶段 2-6）
 
