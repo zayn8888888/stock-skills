@@ -12,7 +12,8 @@
     "test": "vitest run",
     "lint": "biome check .",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/lib/db/migrate.ts"
+    "db:migrate": "tsx src/lib/db/migrate.ts",
+    "analysis:backup": "tsx scripts/backup-analysis.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
