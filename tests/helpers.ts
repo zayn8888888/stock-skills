@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { seed } from "@/lib/data-source/seed";
+import { seedRunnerProviders } from "@/lib/db/migrate";
 import * as schema from "@/lib/db/schema";
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -26,6 +27,9 @@ export function createTestDB() {
 
   // Seed from JSON manifests
   seed(db);
+
+  // Seed vNext runner providers
+  seedRunnerProviders(db);
 
   return db;
 }
