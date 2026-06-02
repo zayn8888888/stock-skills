@@ -500,14 +500,13 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 **完整规范见 `references/reflection.md`**（已在执行前必读块加载）。两个动作：
 
 **8a. 阶段 0 之前**（决策开始前）：
-- **必须显式调用 `Glob` / `Read` 工具**检索当前会话的 Claude Code memory 目录（`~/.claude/projects/<会话编码目录>/memory/`），匹配 `trading-debate-decision-{ticker}-*.md` 文件
+- **必须显式调用 `Glob` / `Read` 工具**检索决策存档（**路径、旧版兼容、去重**见 `references/reflection.md` §持久化布局），匹配 `trading-debate-decision-{ticker}-*.md`
 - ❌ 禁止凭印象说"我记得有 / 没有"——必须真读文件
 - 命中且决策 ≥ 3 个月前但未反思 → 提示用户"是否先做反思再开新决策"
 - 命中已反思的 → 把"教训"作为上下文注入阶段 6 PM prompt
 
 **8b. 阶段 6 PM 完成后**（决策落地后）：
-- **必须显式调用 `Write` 工具**写 memory 文件 `trading-debate-decision-{ticker}-{YYYYMMDD}.md`（type: project）
-- **必须显式调用 `Edit` 工具**在 MEMORY.md 索引追加一行
+- **必须显式调用 `Write` / `Edit` 工具**按 `references/reflection.md` §场景 A 写入决策文件并更新 `INDEX.md`
 - ❌ 禁止"承诺写但不真写"——主对话必须出现 Write / Edit 工具调用记录
 - 标注"待 3 个月后反思"
 
@@ -536,7 +535,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 **完整规范见 `references/cross-ticker-lessons.md`**（已在执行前必读块加载）。在阶段 8a（历史召回）时自动检查：
 
-- **必须显式调用 `Glob` 工具**列出所有 `trading-debate-decision-*.md` 文件，**Read** 已反思的决策——禁止凭印象说"我记得有 N 条"
+- **必须显式调用 `Glob` 工具**列出所有 `trading-debate-decision-*.md`（检索范围见 `reflection.md`），**Read** 已反思的决策——禁止凭印象说"我记得有 N 条"
 - 该 ticker 所属行业 / 主题已有 ≥ 3 条已反思决策 → 自动跑教训聚合
 - 4 维度切片（行业 / 评级方向 / 信心度 / 大师团一致性）找出**模式级错误**
 - 胜率公式必须一致（建议用：`alpha > 0` 算命中），4 个维度共用同一个公式
@@ -575,7 +574,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - [ ] Trader 输出含 entry_price / stop_loss / position_sizing 三项
 - [ ] Risk 三方都发言，每个角色都直接回应了至少一位对方
 - [ ] PM 最终评级 + executive_summary + investment_thesis 都有
-- [ ] **启用 v0.3 反思**：阶段 8a 真的 Glob/Read 了 memory，阶段 8b 真的 Write 了决策存档
+- [ ] **启用 v0.3 反思**：阶段 8a/8b 按 `reflection.md` 真 Glob/Read/Write 了决策存档
 - [ ] **启用 v0.4 组合层**：每个候选标的的 stock-analyzer 调用都有记录，相关性矩阵基于真实 K 线
 - [ ] **启用 v0.5 教训聚合**：真的 Read 了 ≥ 3 条已反思决策，4 维度切片胜率公式一致
 - [ ] 所有数据点标了来源 skill + 时点

@@ -1,26 +1,34 @@
-# v0.3 跨会话 Reflection 机制
+# 决策存档与反思（阶段 8）
 
-照搬 TradingAgents `reflection.py` 的事后反思设计，落地在 Claude Code 的 **memory 系统**上——通过 `auto memory` 把历史决策 + 实际收益的反思持久化，下次相似分析时自动注入。
+跨仓库共用：`~/.stock-skills/trading-debate/`。召回必须 Glob/Read，禁止凭印象。
 
-## 设计动机
+## 路径与兼容
 
-TradingAgents 用 LangGraph state 持久化反思，本 skill 没那个基础设施。但 Claude Code 有：
-- **memory 系统**：`~/.claude/projects/<会话编码目录>/memory/` 下的 markdown 文件，每次会话自动加载
-- **MEMORY.md 索引**：进入会话时自动读，相关 memory 触发详情
+| 路径 | 用途 |
+|------|------|
+| `~/.stock-skills/trading-debate/decisions/` | 决策快照（**只在这里 Write**） |
+| `.../decisions/INDEX.md` | 索引：存档追加行，反思后就地改行 |
+| `~/.stock-skills/trading-debate/lessons/` | 单 ticker / 跨标的教训汇总 |
 
-把反思塞进 memory，等于实现了"跨会话学习"。
+首次写入：`mkdir -p ~/.stock-skills/trading-debate/decisions`（及需要的 `lessons/`）。
 
-## 触发场景
+**召回（8a / L1）**——两处 Glob，basename 去重，**全局优先**：
 
-### 场景 A：决策完成后立即埋点（事前 + 事后存档）
+1. `~/.stock-skills/trading-debate/decisions/trading-debate-decision-*.md`
+2. `~/.claude/projects/*/memory/trading-debate-decision-*.md`（旧版只读）
 
-阶段 6 PM 输出最终决策后，**立即写入 memory**：
+**懒迁移**：决策仅在 legacy 时，反思后 Write 到全局同 basename，legacy 文件顶行加 `> 已迁移至 ~/.stock-skills/trading-debate/decisions/`。
+
+Claude Code 的 `MEMORY.md` 可**可选**追加指向全局文件的绝对路径；**不能**替代上述 Glob。
+
+## 存档（阶段 8b，PM 完成后立即）
+
+`Write`：`~/.stock-skills/trading-debate/decisions/trading-debate-decision-{ticker}-{YYYYMMDD}.md`
 
 ```markdown
 ---
 name: trading-debate-decision-{ticker}-{YYYYMMDD}
 description: trading-debate 对 {ticker} 的决策记录 — {rating}, entry {entry_price}, target {price_target}
-type: project
 ---
 
 # {ticker} {YYYY-MM-DD} 决策
@@ -48,24 +56,16 @@ type: project
 - 实际收益：⏳ 待回填
 ```
 
-**Why 用 project 类型而不是 feedback**：
-- feedback 是用户偏好（永久参考）
-- project 是项目状态（会过期，3 个月后被反思替换）
+`Edit`/`Write` `INDEX.md` 追加一行，例如：
 
-### 场景 B：相似分析时自动召回
+`- [trading-debate-decision-NVDA-20260514](trading-debate-decision-NVDA-20260514.md) — Overweight @$215, 待反思`
 
-下次跑 trading-debate 时，**阶段 0 之前增加一步 memory 检索**：
+## 召回（阶段 8a，阶段 0 之前）
 
-```
-1. 读 MEMORY.md 索引，匹配 "trading-debate-decision-{ticker}-*"
-2. 找到所有该 ticker 的历史决策（最近 5 条）
-3. 对每条决策，检查是否到了反思窗口（决策 ≥ 3 个月前）
-   - 是：触发场景 C 反思流程
-   - 否：跳过（决策还在观察期）
-4. 把已完成反思的"教训"作为上下文注入阶段 6 PM
-```
-
-**注入方式**（PM prompt 增补段）：
+1. Glob 全局 + legacy（见上）
+2. 该 ticker 最近 5 条
+3. 决策 ≥ 3 个月且未反思 → 问用户是否先反思
+4. 已反思 → 注入阶段 6 PM：
 
 ```
 【历史决策反思教训】（自动召回）：
@@ -79,42 +79,18 @@ type: project
 如果情境已改变，明确说明哪些差异导致这次结论应该不同。
 ```
 
-### 场景 C：3 个月窗口反思（用户触发或自动触发）
+## 反思（用户说「复盘 X」或 8a 发现超期未反思）
 
-**用户触发**：用户主动说"复盘一下我 3 个月前对 NVDA 的决策"或"trading-debate 反思 NVDA"。
+1. `Read` 决策文件（全局优先；仅 legacy 则读后 Write 全局）
+2. 富途 K 线拉决策日→今日行情，`raw_return = (current - entry) / entry`，**禁止编造**
+3. Alpha（同区间 K 线，禁止编造）：
+   - 宽基超额：美股 `US.SPY`、港股 `HK.HSI`、A 股 `SH.000300` → `alpha_vs_market = raw_return - 基准收益`
+   - 行业超额：如 `US.SOXX` / `US.XLY` / `HK.HSTECH`；无则标 N/A
+   - CAPM（决策日后 60 日或至今，取短）：`Beta = cov(股,基准)/var(基准)`，`capm_alpha = raw_return - (2.5% + Beta×(基准收益-2.5%))`
+4. 用下方 Prompt 写 2–4 句纯文本（无 markdown）
+5. 更新决策文件「状态」+ `INDEX.md` 该行；legacy 则懒迁移
 
-**自动触发**：场景 B 检索时发现决策已超 3 个月且未完成反思，提示用户"是否现在反思"。
-
-反思流程（5 步）：
-
-```
-1. 读取历史 memory: trading-debate-decision-{ticker}-{YYYYMMDD}
-2. 拉当前行情 + 决策时点行情，计算 raw_return = (current_price - entry_price) / entry_price
-3. 三层 alpha 计算（用已有 K 线数据，禁止编造）：
-
-   层 1 — 绝对收益：raw_return（步骤 2 已算）
-
-   层 2 — 宽基超额：
-     拉同期基准 K 线（美股 US.SPY，港股 HK.HSI，A 股 SH.000300）
-     alpha_vs_market = raw_return - 同期基准收益
-
-   层 3 — 行业超额：
-     拉同期行业基准 K 线（美股半导体用 US.SOXX，消费用 US.XLY，港股科技用 HK.HSTECH；
-     无对应行业基准时跳过，标注「行业基准不适用」）
-     alpha_vs_sector = raw_return - 同期行业基准收益
-
-   层 4（进阶）— Beta 调整 alpha：
-     用已拉的日收益序列计算（取决策日往后 60 日或到今天，取较短者）：
-     Beta = cov(股票日收益, 宽基基准日收益) / var(宽基基准日收益)
-     CAPM 期望收益 = 2.5%(rf) + Beta × (宽基基准区间收益 - 2.5%)
-     capm_alpha = raw_return - CAPM 期望收益
-     示例：Beta=1.8，SPY+15%，CAPM 期望=2.5%+1.8×12.5%=25%，实际+18% → capm_alpha=-7%
-
-4. 用 reflection prompt 生成 2-4 句反思（照搬 TradingAgents 风格）
-5. 更新 memory，标记"已反思"
-```
-
-## Reflection Prompt（照搬 TradingAgents 简化中文版）
+## 反思 Prompt
 
 ```
 你是交易分析师，在结果已知的前提下复盘自己的过往决策。
@@ -125,8 +101,6 @@ type: project
 2. 投资论点中哪部分被验证、哪部分失败？
 3. 一条具体可应用于下次相似分析的教训。
 
-要具体且简洁。你的输出会被存进决策日志，被未来的分析师重读，每个字都要有价值。
-
 实际原始回报（绝对）：{raw_return:+.1%}
 vs 宽基基准（{benchmark_name}）超额：{alpha_vs_market:+.1%}
 vs 行业基准（{sector_benchmark}）超额：{alpha_vs_sector:+.1%}（不适用时填 N/A）
@@ -136,60 +110,27 @@ Beta 调整 alpha（CAPM）：{capm_alpha:+.1%}（Beta={beta:.2f}）
 {final_decision}
 ```
 
-## Memory 文件管理规则
+## 清理（可选）
 
-### 命名约定
+- 已反思且 >12 个月：可汇总到 `lessons/trading-debate-lessons-{ticker}.md` 后删 decisions 快照
+- >6 个月未反思：提示用户补反思
 
-```
-trading-debate-decision-{ticker}-{YYYYMMDD}.md   # 单次决策快照
-trading-debate-lessons-{ticker}.md                # 该 ticker 的反思教训汇总（v0.3.1 引入）
-```
+## 自检清单
 
-### MEMORY.md 索引行
+**8b 存档后**
 
-每次写决策时**追加**一行到 `MEMORY.md`（不替换）：
+- [ ] 已 `Write` `~/.stock-skills/trading-debate/decisions/trading-debate-decision-{ticker}-{YYYYMMDD}.md`
+- [ ] 已更新 `decisions/INDEX.md`（追加一行，非只口头承诺）
+- [ ] 未向 `~/.claude/projects/.../memory/` 新建决策文件
 
-```markdown
-- [trading-debate-decision-NVDA-20260514](trading-debate-decision-NVDA-20260514.md) — Overweight @$215, 待 8/14 反思
-```
+**8a 召回后**
 
-反思完成后**就地修改**索引行：
+- [ ] 已 Glob 全局 + legacy 两处，并按 basename 去重
+- [ ] 命中记录已 `Read`，未凭印象说「有 / 没有历史决策」
+- [ ] 已反思的教训已写入阶段 6 PM 上下文（或明确无历史）
 
-```markdown
-- [trading-debate-decision-NVDA-20260514](trading-debate-decision-NVDA-20260514.md) — Overweight @$215, 反思完成: alpha +8.3%, 教训"低估 Culper 报告影响"
-```
+**反思完成后**
 
-### 过期清理
-
-- 决策超过 12 个月且已反思：可移到 `lessons-{ticker}.md` 汇总后删除原决策快照
-- 决策超过 6 个月但未反思（用户从未回看）：自动提示用户"是否补反思"
-
-## 自检清单（v0.3 实现时）
-
-- [ ] PM 阶段 6 完成后是否真的写了 memory 文件？（不是承诺写，是真的调 Write 工具）
-- [ ] MEMORY.md 索引是否真的追加了行？（验证文件大小变化）
-- [ ] 阶段 0 之前是否真的搜了 memory？（不是凭印象说"我记得有"）
-- [ ] 反思 prompt 是否生成了 2-4 句、无 markdown？
-- [ ] alpha_return 计算是否真的拉了基准回报，没有编？
-
-## 实现检查点
-
-`v0.3.0`（最小可用）：
-- 决策存档 ✅
-- 自动召回 ✅
-- 用户触发反思 ✅
-
-`v0.3.1`（增强）：
-- 自动触发反思（决策超 3 月且未反思时主动提示）
-- lessons-{ticker}.md 汇总文件
-- 反思教训跨 ticker 模式识别（"我对所有半导体股都低估了周期性")
-
-## 与 TradingAgents 原版的差异
-
-| 维度 | TradingAgents | 本 skill v0.3 |
-|------|---------------|---------------|
-| 持久化层 | LangGraph checkpoint (DB) | Claude Code memory (markdown) |
-| 召回时机 | LangGraph state 注入 | 阶段 0 前手动检索 + PM prompt 注入 |
-| 反思触发 | 交易完成立即触发 | 3 月窗口（手动或自动） |
-| 跨标的学习 | 不支持 | v0.3.1 lessons 汇总支持 |
-| 反思 prompt | 照搬，仅翻译中文 | 同左 |
+- [ ] `raw_return` / alpha 来自富途 K 线，非编造
+- [ ] 反思正文 2–4 句、无 markdown，已写回决策文件与 `INDEX.md`
+- [ ] legacy-only 记录已懒迁移到全局（若适用）

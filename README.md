@@ -61,7 +61,9 @@ git clone git@github.com:zayn8888888/stock-skills.git ~/stock-skills
 /plugin disable stock-skills          # 全套 17 skill 一起下线
 /plugin enable stock-skills           # 全套恢复
 /plugin uninstall stock-skills        # 卸载
-cd ~/stock-skills && git pull         # 更新（重启 Claude Code 后生效）
+cd ~/stock-skills && git pull                  # 1. 拉最新代码
+claude plugin uninstall stock-skills@stock-skills  # 2. 清除旧 cache
+claude plugin install stock-skills@stock-skills   # 3. 重新安装
 ```
 
 > 私有 repo 不能让陌生人通过 `/plugin marketplace add owner/repo` 直接拉，必须先 `git clone`，再 `/plugin marketplace add <本地路径>`。

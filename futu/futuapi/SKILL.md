@@ -809,7 +809,7 @@ python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_c
 ```bash
 python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_corporate_actions_buybacks.py [--next-key NEXT_KEY] [--num NUM] [--json] code
 ```
-**接口限制（市场）**：支持港股、A股正股及基金；港股和A股各返回独立数据表，字段结构不同
+**接口限制（市场）**：仅支持港股、A股正股及基金；**不支持美股**（传入 `US.XXX` 报错：`只支持港股、A股正股和基金，其他市场或股票类型不支持`）；港股和A股各返回独立数据表，字段结构不同
 
 **参数说明**：
 - code: 股票代码，如 HK.00700

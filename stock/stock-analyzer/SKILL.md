@@ -199,7 +199,7 @@ python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_r
 ```
 
 **Tier 2（有触发线索才做）**：触发线索来自维度 2 的异动强制扫描结论：
-- 维度 2 发现 K 线异动 + 无拆股/股息解释 → 查 `get_corporate_actions_buybacks.py`（是否有回购支撑）
+- 维度 2 发现 K 线异动 + 无拆股/股息解释 → 查 `get_corporate_actions_buybacks.py`（是否有回购支撑，**仅港股/A股**，美股跳过）
 - Tavily / news-search 报道高管减持 → 查 `get_insider_trade_list.py`
 - Tavily / news-search 报道持股变动 → 查 `get_shareholders_holding_changes.py`
 

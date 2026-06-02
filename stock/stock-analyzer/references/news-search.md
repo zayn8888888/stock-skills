@@ -17,7 +17,7 @@
 ### 7a：结构化公告
 
 6 个脚本并行拉取，覆盖公告类事件的事实基础：
-- `get_corporate_actions_buybacks.py`：回购计划/完成情况
+- `get_corporate_actions_buybacks.py`：回购计划/完成情况（**仅港股/A股**，美股跳过）
 - `get_corporate_actions_dividends.py`：真实股息历史（替代 Tavily 估算）
 - `get_corporate_actions_stock_splits.py`：拆合股（异动排查第一道）
 - `get_research_rating_summary.py`：机构评级 + 目标价（港美股）

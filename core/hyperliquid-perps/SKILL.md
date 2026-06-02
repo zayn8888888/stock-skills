@@ -214,7 +214,7 @@ curl -s -X POST https://api.hyperliquid.xyz/info \
 报告"事件锚点"段必须从下面三个来源**至少**填一条：
 
 1. **event-calendar skill 的输出**——若上下文已有，直接引用财报/FOMC/CPI 日期
-2. **memory（`MEMORY.md` 索引）**——查 `trading-debate-decision-*` 等条目，看是否有该标的近期决策
+2. **trading-debate 决策存档**——Glob/Read `trading-debate-decision-{ticker}-*`（路径见 `core/trading-debate/references/reflection.md` §持久化布局）
 3. **stock-analyzer 维度 9 的事件日历输出**——若调用方在分析流程中
 
 如三个来源都没有，写"无近期已知事件锚点"即可，不要省略整段。
