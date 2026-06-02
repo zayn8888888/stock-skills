@@ -48,7 +48,12 @@ git clone git@github.com:zayn8888888/stock-skills.git ~/stock-skills
 # 2. 在 Claude Code 内执行（注意 marketplace 路径用你 clone 的位置）
 /plugin marketplace add ~/stock-skills
 /plugin install stock-skills@stock-skills
+
+# 3. 初始化脚本路径（一次性，重启后生效）
+/stock-skills:setup
 ```
+
+> `setup` 会自动探测 plugin 安装路径并写入 `CLAUDE_SKILLS_DIR` 到 `~/.claude/settings.json`，futuapi 相关 skill（stock-analyzer / market-scanner 等）的行情脚本才能正常运行。**重启 Claude Code 后生效。**
 
 之后管理：
 

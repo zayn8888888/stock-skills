@@ -16,6 +16,9 @@
     "polymarket",
     "finnhub"
   ],
+  "commands": [
+    "./commands/setup.md"
+  ],
   "skills": [
     "./core",
     "./stock",
