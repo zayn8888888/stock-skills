@@ -163,11 +163,44 @@ Bear 上一轮论点：{current_response}
   "reasoning": "<2-4 句，锚定分析师报告 + research plan>",
   "entry_price": <float, 报价币种>,
   "stop_loss": <float>,
-  "position_sizing": "<例：5% of portfolio>"
+  "position_sizing": "<数字% of portfolio，必须附下方两步计算过程>",
+  "fundamental_exit_triggers": [
+    "<基本面止损条件 1，例：核心业务毛利率连续 2 季下滑 >3pp>",
+    "<基本面止损条件 2，例：FCF/净利润 < 0.6 连续 2 季>",
+    "<基本面止损条件 3，例：CEO/CFO 非计划离职>"
+  ]
 }
 
 末尾必须有一行：FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**
 ```
+
+**`position_sizing` 必须附两步计算过程**（不允许只写一个百分比数字）：
+
+```
+步骤 1 — 绝对上限（单笔风险约束）：
+  max_position = 单笔最大亏损容忍额 / 止损距离百分比
+  （公式逻辑：position × stop_distance = 单笔最大亏损额；组合总回撤 = Σ各笔亏损）
+  单笔最大亏损容忍额 = 组合目标最大回撤 ÷ 预期同时持仓数
+  默认：15% ÷ 10 只 = 1.5% → max_position = 1.5% / 8% = 18.75%（再与集中度上限取小）
+  集中单标的场景（N=1）：1.5% → 15% → max_position = 15% / 8% = 1.875% ≈ 2%
+  止损距离 = |entry_price - stop_loss| / entry_price
+
+步骤 2 — 波动率调整（多标的组合时适用）：
+  ATR_pct = 近 14 日 ATR / 现价（已有 K 线可计算）
+  adjusted = base_weight × (1 / ATR_pct) / avg(1 / ATR_pct of all positions)
+  高波动股自动降权，低波动股自动升权
+
+最终仓位 = min(步骤 1 上限, 步骤 2 调整值)
+单标的场景：直接用步骤 1 结果，不做步骤 2
+```
+
+**评级-行动偏离强制说明**：当 Trader action 与 RM recommendation 方向不一致时（如 RM Underweight 但 Trader 仍提议 Buy），**不强制重跑，但 reasoning 字段必须显式回答三问**：
+
+1. **为什么偏离评级**：具体的短期催化是什么？与评级所指的中长期判断是否时间维度不同？
+2. **如果评级方向正确，止损能否保护**：若中长期偏空的判断实现（如财报 miss、业绩继续下滑），止损是否能在跳空情况下仍然有效？
+3. **赔率是否合理**：用具体数字说明——最大收益 vs 最大亏损的比例。
+
+> 背景：Underweight 是相对判断（持仓低于基准），不等于"绝对不能买"。但偏离评级买入必须有明确逻辑，不能用"仓位小"一句话带过。PDD 案例的问题是第 2 问没回答（止损无法防财报跳空），而非偏离评级本身错了。
 
 ---
 
@@ -228,6 +261,27 @@ Neutral 上一轮：{current_neutral_response}
 对话式输出。
 ```
 
+#### 财报二元事件硬规则：IV-implied 止损有效性验证
+
+当 `events_report` 中存在**距今 ≤ 5 个交易日**的财报事件时，Conservative **必须**完成此验证：
+
+```
+IV-implied 预期波动幅度 = 现价 × ATM IV × √(最近到期日天数 / 365)
+（数据来源：derivatives_report 中的 ATM IV；若无期权数据，改用近 30 日历史波动率 HV 替代，并标注"使用 HV 近似"）
+
+对比 Trader 的 stop_loss 距离：
+  stop_loss 距离 = |entry_price - stop_loss| / entry_price
+
+若 IV-implied 幅度 > stop_loss 距离：
+  → 必须输出：
+    "⚠️ 止损可能失效：市场定价的预期波动（IV-implied = X%）超过止损保护距离（Y%）。
+     财报跳空可能直接越过止损，建议：(1) 财报前不入场，或 (2) 改用最大亏损有限的期权多头代替股票多头。"
+```
+
+**Aggressive 必须正面回应**：不能仅凭估值低或大单信号驳斥，必须给出**为何期权 IV 高估了下行风险**的具体数据（如"近 4 季度财报后实际波动均小于 IV-implied"）。
+
+> 用 IV 而非"预估 EPS miss 幅度"的原因：期权市场已对财报不确定性定价，IV-implied move 是可计算的真实数据；要求 Conservative 预测"EPS 差 X% 时跌 Y%"会导致幻觉。PDD 案例：IV 60%、7 天到期，IV-implied = $93.60 × 60% × √(7/365) ≈ $7.75，而 stop_loss 距离仅 $3.10（3.3%）——若当时跑这个计算，Conservative 会发现止损根本不够用。
+
 ### Neutral Analyst
 
 ```
@@ -253,6 +307,23 @@ Conservative 上一轮：{current_conservative_response}
 3. 综合建议的仓位区间（基于两边各对一半的情境，含 funding 等级评估）
 ```
 
+### 链上 funding 拥挤度共享等级表（三方通用）
+
+`capital_report` 含 hyperliquid-perps 链上 funding 时，三方按下表读取并表态，禁止"不引用就跳过"：
+
+| 24h avg funding APR（绝对值） | 等级 | 三方义务 |
+|---|---|---|
+| `> 100%` | **🔴 拥挤红线** | Conservative **必须**把"链上拥挤反向 squeeze"列头号下行风险并量化；Aggressive **必须**正面给"为什么仍激进"的反驳（不能回避） |
+| `50% ~ 100%` | 🟡 拥挤预警 | Aggressive 与 Conservative 都要引用；Aggressive 注明"偏热但未到红线"，Conservative 作缩仓论据之一 |
+| `≤ 50%` | 🟢 中性 | 不构成额外约束，Neutral 综合段提一句"链上 funding 中性" |
+
+**港股 / A 股豁免**：capital_report 链上数据写"流动性不足"或"链上无镜像"时本表整体跳过，三方都不得用链上数据辅证。
+
+**禁止行为**：
+- ❌ Aggressive 在红线下仍推满仓而不显式回应 funding 拥挤（必须有反驳论据）
+- ❌ Conservative 在 funding 中性时硬把"链上拥挤"当头号风险（找不到要承认）
+- ❌ 三方任何一方说"链上数据不重要"——可反驳数据强度，但不能整体否认
+
 ---
 
 ## 阶段 6：Portfolio Manager
@@ -276,6 +347,16 @@ Conservative 上一轮：{current_conservative_response}
 
 注意：你的评级可以与 Trader 的 action 不一致——Risk 辩论可能让你收敛仓位（例如 Trader Buy → 你 Overweight），这是正常的。但必须在 investment_thesis 里说明为何收敛。
 ```
+
+**参数漂移记录硬规则**：PM 若覆盖 Trader 的 `entry_price` / `stop_loss` / `position_sizing` 任一字段，**必须**在 `investment_thesis` 里显式写一行 `参数漂移：Trader 原 stop_loss=X USD → PM 改为 Y USD，依据：<Risk 哪一方哪条论据>`。否则用户复盘时无法判断决策路径。
+
+**拥挤交易降档硬规则**：若 Risk 阶段触达"🔴 拥挤红线"（24h avg funding APR 绝对值 > 100%）且 Aggressive 未给出量化反驳（如"max APR 是单小时极值，已快速回落"），PM **必须**：
+
+1. **降一档评级**：Buy → Overweight；Overweight → Hold；Hold → Underweight；Underweight 维持
+2. **缩减仓位**：position_sizing 至少砍半
+3. **在 `investment_thesis` 显式写一行**：`拥挤降档：funding APR 24h avg = X%（> 100% 红线），Aggressive 未给出量化反驳，依据 Conservative 论点 Y，评级 Buy→Overweight，仓位 N%→N/2%`
+
+仅当 Aggressive 提供**数据驱动的反驳**（不是定性"未必拥挤"）时，PM 才可豁免降档，但仍需写"funding 红线达成但已豁免，依据 Aggressive 反驳：<具体数据>"。
 
 ---
 

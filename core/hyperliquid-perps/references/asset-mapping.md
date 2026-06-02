@@ -142,8 +142,11 @@
 ### stock-analyzer 调用本 skill 时
 
 ```bash
+HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh"
+[ -f "$HL" ] || HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/hyperliquid-perps/scripts/lookup.sh"
+
 # 第一步：lookup 拿主镜像
-RES=$("${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/hyperliquid-perps/scripts/lookup.sh $TICKER --json)
+RES=$("$HL" $TICKER --json)
 
 # 第二步：先看流动性
 OI=$(echo "$RES" | jq '.oiNotionalUsd')

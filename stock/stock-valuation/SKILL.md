@@ -37,6 +37,8 @@ Read references/china-adr-pitfalls.md    # 中概股 ADR 专项陷阱（PDD/BABA
 
 ## Step 1：并行拉取数据
 
+> **⚠️ 禁止对 futuapi 脚本输出做 `| python3 -c` 管道解析**——`--json` 模式输出两行（`True\n{JSON}`），`json.load(stdin)` 会报 `Extra data`；直接读脚本全量输出，从 `data[0]` 取字段。
+
 #### 1a. 富途行情（当前价格 + PE）
 
 ```bash
@@ -139,3 +141,7 @@ JSON 字段提取要点：
 ## 中概股 / 中国 ADR
 
 处理 PDD / BABA / BIDU 等标的时有专项陷阱（单位跳变 / 汇率时效 / VIE 折价）——见 [references/china-adr-pitfalls.md](references/china-adr-pitfalls.md)。
+
+## futuapi 脚本调用注意
+
+**禁止用 `| python3 -c` 管道解析脚本输出**：`--json` 模式输出两行（`True\n{JSON}`），`json.load(stdin)` 会报 `Extra data`。直接读脚本全量输出，从 `data[0]` 取字段即可。

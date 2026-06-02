@@ -40,6 +40,17 @@ Read references/report-template.md    # 完整报告模板
 Read references/pitfalls.md           # 常见陷阱详细说明
 ```
 
+## 执行批次规则
+
+- **批次 A（Bash/Python/curl/东财 HTTP）**：所有 API 行情数据同类并行，单条消息内批量发出
+- **批次 C（Tavily MCP）**：所有 `tavily_search` 查询独立成批
+
+批次 A 完成后，按需顺序调用子 skill：
+- `event-calendar`：主对话直接 `Skill(skill="event-calendar")` 内联串行执行（查询主热点标的未来 14 天事件）
+- `hyperliquid-perps`（仅美股维度）：`Skill(skill="hyperliquid-perps")` 内联串行执行（查询美股标的链上 funding/OI）
+
+每批全部返回后先检查结果，再启动下一批。
+
 ## 扫描范围
 
 港股（HK）+ 美股（US）+ A股（CN）。用户可显式指定单一市场，默认并行扫三个市场并分开出报告。新加坡 / 日本暂不支持。
@@ -185,6 +196,10 @@ L1.5 结束 → 统计「持续主线 + 次级主线↗」≥ 2 个板块：
 ### [L5] 产业链外推（仅当 L4 有主热点 + 大盘非 🔴 时展开）
 
 五类标准传导路径（上游设备/材料、下游应用/整机、同主题细分滞后、资金外溢、估值差套利）+ A 股额外 3 类（政策扩散、AH 跨市传导、连板情绪扩散）。每条路径必须有具体代码 + 反驳点 + L1 数据回测（4 档状态：🔥 已在动 / 🟡 跟随启动 / 🟢 还没动 / 🔴 反向走弱）。详细逻辑与输出格式见 [references/l5-extrapolation.md](references/l5-extrapolation.md)。
+
+## ⚠️ 输出即止规则
+
+所有扫描数据在 context 后，**立即**以报告模板对应标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
 
 ## 输出格式
 

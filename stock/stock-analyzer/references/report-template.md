@@ -50,7 +50,7 @@
 
 **链上镜像（Hyperliquid，仅美股 / 美元资产；港股除 BABA 外跳过；A 股跳过）**
 
-> 数据来源：`"${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh" <TICKER> --json`
+> 数据来源：`HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh"; [ -f "$HL" ] || HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/hyperliquid-perps/scripts/lookup.sh"; "$HL" <TICKER> --json`
 
 - 主镜像：`<coin>`（`<dex>` dex，OI **<X>M USD**，24h vol **<X>M USD**）
 - 流动性等级：<✅ 可信 / ⚠️ 仅参考 / ⛔ 跳过>

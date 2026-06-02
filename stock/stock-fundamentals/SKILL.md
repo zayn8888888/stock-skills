@@ -58,6 +58,8 @@ python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_k
 
 ### 行情数据（futuapi）
 
+> **⚠️ 禁止对 futuapi 脚本输出做 `| python3 -c` 管道解析**——`--json` 模式输出两行（`True\n{JSON}`），`json.load(stdin)` 会报 `Extra data`；直接读脚本全量输出，从 `data[0]` 取字段。
+
 ```bash
 python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py <NORMALIZED_CODE> --json
 python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_stock_info.py <NORMALIZED_CODE> --json
@@ -104,7 +106,7 @@ JSON 字段提取要点：
 
 ### 近期新闻动态（futu-stock-digest）
 
-在四步分析**开始前**，先调用 `futu-stock-digest` skill 扫描近 7 天新闻（无需 OpenD），识别以下红旗信号：
+在四步分析**开始前**，先调 `Skill(skill="futu-stock-digest")` 顺序执行（扫描近 7 天新闻），识别以下红旗信号：
 
 | 信号类型 | 影响维度 |
 |---------|---------|
@@ -129,8 +131,9 @@ JSON 字段提取要点：
 
 1. **识别代码**：中文名/英文简称 → 富途完整代码（Step 0 格式标准化 + 快照验证）
 2. **异动与监管排查**（Step 0.5，与步骤 3 并行）：K 线异动检测 + 3 条 Tavily 监管专项搜索
-3. **并行拉取数据**：Futu 行情 + 财务三大表（或 Tavily 5 条）**同时发出**
-4. **新闻快扫**：调用 `futu-stock-digest`，识别红旗信号（与步骤 2 结论汇合）
+3. **批次 A 并行拉取数据**：Futu 行情 + 财务三大表（或 Tavily 5 条）**同时发出**（Bash 脚本 + Tavily 可同批）
+4. **新闻快扫**（步骤 3 完成后顺序执行）：`Skill(skill="futu-stock-digest")` 顺序调用（分析 <CODE> 近 7 天新闻，返回方向判断和红旗信号列表），识别红旗信号（与步骤 2 结论汇合）
+   - Skill 返回结构化内容 → ✅ 继续；失败 → Tavily 7 天新闻搜索降级
 5. **检查数据质量**：PE 异常？FCF 有一次性项目？新闻红旗与静态分析矛盾？
 6. **填充四步框架**：按 Step 1→4 顺序，每步结论有数据支撑，与步骤 2/4 红旗交叉对照；Step 1 完成商业模式识别后，按类型展开单位经济学（见下方）
 7. **输出报告**：按下方模板，证伪视角，"近期重要事件"不可省略，"数据覆盖范围"必须填写
@@ -146,6 +149,10 @@ JSON 字段提取要点：
 | **零售 / 餐饮** | 同店销售增速 (SSS)；坪效同比 vs 租金涨幅 | SSS 连续 2 年负增长；坪效增速 < 租金涨幅 = 单位盈利在收缩 |
 | **SaaS 销售效率** | Magic Number = 季度新增 ARR / 上季度 S&M 费用 | Magic Number < 0.5 = 销售效率低，烧钱扩张不可持续 |
 | **其他 / 数据未公开** | — | 跳过，标注原因 |
+
+## ⚠️ 输出即止规则
+
+四步分析数据及新闻快扫全部在 context 后，**立即**以 `## 📋 <公司名>` 或报告模板对应标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
 
 ## 输出格式
 
@@ -212,3 +219,7 @@ JSON 字段提取要点：
 | PE 失真 | 亏损股、周期底部、大额减值 | 改用 EV/EBITDA 或 P/FCF |
 | 高分红侵蚀内生价值 | 分红率 > FCF | 问"分红是否可持续" |
 | 收入增长靠并购 | 有机增长 vs 收购增长 | 查 organic revenue growth |
+
+## futuapi 脚本调用注意
+
+**禁止用 `| python3 -c` 管道解析脚本输出**：`--json` 模式输出两行（`True\n{JSON}`），`json.load(stdin)` 会报 `Extra data`。直接读脚本全量输出，从 `data[0]` 取字段即可。

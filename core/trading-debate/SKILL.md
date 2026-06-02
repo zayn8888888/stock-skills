@@ -7,12 +7,7 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 ## 设计源流
 
-本 skill **架构忠实于以下两个开源项目**，仅复刻其编排范式，不引入其代码或外部数据源：
-
-- **TauricResearch/TradingAgents**（LangGraph + 多角色辩论）：流程主干（七阶段）、5 档评级、Risk 三方辩论
-- **virattt/ai-hedge-fund**（投资大师 signal 集合）：可选大师风格 agent（巴菲特 / 林奇 / Burry / Druckenmiller / Munger 等）
-
-详细架构说明见 `references/framework-reference.md`（已在执行前必读块加载）。
+架构忠实复刻 **TauricResearch/TradingAgents**（七阶段编排 / 5 档评级 / Risk 三方辩论）+ **virattt/ai-hedge-fund**（可选大师风格 agent），仅复刻编排范式，不引入其代码或数据源。完整对照见 `references/framework-reference.md`（已加载）。
 
 ## 执行前必读（收到任务后第一步，不与任何阶段并行）
 
@@ -127,9 +122,9 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 启用大师：[列出大师名]
 时间视角：[长线 / 中短线]
 
-必调 skill（按下方顺序逐个 Skill() 加载，缺一不可）：
+必调 skill（按下方顺序逐个用 `Skill()` 执行，缺一不可）：
 1. stock-analyzer       — 基础九维度（任何选项都必调）
-                         ※ 调用它会自动触发以下子 skill，不要单独 Skill() 加载：
+                         ※ 执行它会自动触发以下子 skill，不要单独执行：
                            - futu-news-search / futu-comment-sentiment（维度 7 新闻）
                            - futu-capital-anomaly / hyperliquid-perps（维度 4 资金/链上 funding）
                            - futu-derivatives-anomaly（维度 8 期权 Step 0 快通道）
@@ -142,7 +137,7 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 
 ❌ **严禁**：跳过此步骤直接进数据采集
 ❌ **严禁**：清单输出后口头说"实际上 X skill 数据已包含在 Y 里，可以省略"——这是 SKILL 已知偷懒套路
-✅ **正确做法**：清单一旦输出，阶段 0 批次 1 必须**逐个**Skill() 加载所有列出的 skill，**不允许少**
+✅ **正确做法**：清单一旦输出，阶段 0 必须**逐个**用 `Skill()` 执行所有列出的 skill，**不允许少**
 
 ### 阶段 0：分析师层 — 数据采集（**强制硬约束**）
 
@@ -154,7 +149,7 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 
 **并行原则**：
 
-1. **skill 加载只能串行**（Skill 工具本身限制），但 skill 加载完成后的实际工具调用必须并行
+1. **skill 执行用主对话直接 `Skill()`，串行逐个调用**：`Skill(skill="X")` 把目标 SKILL.md 注入当前 context，由主 agent 在主 context 内逐步执行其工作流（含脚本调用），结果直接进主 context。各 skill **必须串行**——同时发多个 Skill() 会导致多套指令混入 context；同一 skill 内部的 Bash 工具调用仍可并行
 2. **同一类工具的多次调用必须用单条消息批量发**：
    - ✅ 正确：一条消息里同时发 4 个 Bash 调用（拉 snapshot / kline / capital-flow / capital-distribution）
    - ❌ 错误：一条消息发 1 个 Bash → 等结果 → 下一条消息再发 1 个
@@ -167,9 +162,9 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 
 #### 阶段 0 入口：**门槛检查（hard gate）**
 
-在跑批次 1 加载 skill 之前，agent 必须能回答："阶段 0a 步骤 4 锁定的必调 skill 清单是什么？"
+在跑批次 1 执行 skill 之前，agent 必须能回答："阶段 0a 步骤 4 锁定的必调 skill 清单是什么？"
 
-- ✅ 能引用清单 → 批次 1 必须**逐个**Skill() 加载清单里**全部** skill，一个不漏
+- ✅ 能引用清单 → 必须**逐个**用 `Skill()` 执行清单里**全部** skill，一个不漏
 - ❌ 引用不到清单 → 阶段 0a 没做完，**回到阶段 0a 重做**，禁止跳
 
 #### 推荐的并行批次结构
@@ -177,40 +172,38 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 > ⚠️ 下面"批次 1"是**模板格式**，实际加载哪些 skill 由阶段 0a 步骤 4 锁定的清单决定。**不要照抄默认套餐**——示例只为展示批次结构，不是 skill 列表。
 
 ```
-批次 1（按阶段 0a 锁定清单顺序加载所有 skill，注册到上下文）：
-  Skill(<清单第 1 个>) → Skill(<清单第 2 个>) → ... → Skill(<清单第 N 个>)
-  ※ 这一批必然串行，但只是 skill 注册，不实际拉数据
+skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
 
-批次 2（单条消息内 N 路并行拉数据）：
-  ‖ Bash: get_snapshot.py
-  ‖ Bash: get_kline.py 60d
-  ‖ Bash: get_stock_info.py
-  ‖ Bash: get_capital_flow.py
-  ‖ Bash: get_capital_distribution.py
-  ‖ Bash: get_owner_plate.py
-  ‖ Bash: handle_derivatives_anomaly.py
-  ‖ Bash: finnhub earnings + economic calendar curl
+  step 1：Skill(skill="stock-analyzer")  → 等待返回完整九维度分析报告后继续
+  step 2：Skill(skill="event-calendar")  → 等待返回结构化事件列表后继续
+  step 3：Skill(skill="stock-fundamentals")   [若清单含，等待返回后继续]
+  step 4：Skill(skill="stock-valuation")      [若清单含，等待返回后继续]
+
+  ※ 各 skill 必须严格串行——前一个返回后再调下一个
+  ※ 每个 Skill() 注入对应 SKILL.md 后，主 agent 在主 context 内执行其完整工作流（含内部 Bash 并行）
+
+补充数据批次（skill 串行完成后，单条消息内并行）：
+  ‖ Bash: finnhub earnings + economic calendar curl（event-calendar 未覆盖的补充）
   ‖ Bash: polymarket curl
-  ‖ curl: futu-news-search 中文 + 英文 (2 路)
-  ‖ tavily_search × 3-4 个查询
+  ‖ tavily_search × 3-4 个查询（针对辩论焦点的 follow-up）
 
-批次 3（依赖批次 2 输出的二次查询）：
-  ‖ Bash: get_plate_stock.py（用批次 2 拿到的板块 code）
-  ‖ tavily_search（用批次 2 发现的关键事件作 follow-up）
+依赖型二次查询（依赖补充数据输出）：
+  ‖ Bash: get_plate_stock.py（用补充批次拿到的板块 code）
+  ‖ tavily_search（用补充批次发现的关键事件作 follow-up）
 ```
 
 #### 必须做的事
 
-1. **必须显式调用 `stock-analyzer` skill** — 用 `Skill` 工具触发，**不允许**：
+1. **必须显式执行 `stock-analyzer` skill** — 用 `Skill(skill="stock-analyzer")` 顺序执行，**不允许**：
    - ❌ 凭训练数据/常识/印象拍脑袋写论据
    - ❌ 只调几个 futu 子 skill（capital-anomaly / technical-anomaly 等）就当数据已采集——它们只覆盖 stock-analyzer 九维度的子集
    - ❌ 直接用上文已有的旧分析报告而不验证时点（行情快照 > 4 小时旧必须重跑）
    - ❌ 用 `mcp__plugin_tavily-web-search` 单源新闻替代 stock-analyzer
-2. **必须显式调用 `event-calendar` skill** — 拿未来 30 天该标的相关事件（财报/政策/宏观）。**不允许**用"最近新闻"代替前瞻事件。
+2. **必须显式调用 `event-calendar` skill** — 用 `Skill(skill="event-calendar")` 顺序执行，拿未来 30 天该标的相关事件（财报/政策/宏观）。**不允许**用"最近新闻"代替前瞻事件。
 3. **若启用阶段 1 大师团**，按"条件依赖"表查每个大师对应的强制 skill，**逐个显式调用**：
-   - Buffett / Munger / Ackman → 调 `stock-fundamentals`
-   - Lynch → 调 `stock-fundamentals` + `stock-valuation`
-   - Burry / Damodaran → 调 `stock-valuation`
+   - Buffett / Munger / Ackman → `Skill(skill="stock-fundamentals")`
+   - Lynch → `Skill(skill="stock-fundamentals")` + `Skill(skill="stock-valuation")`
+   - Burry / Damodaran → `Skill(skill="stock-valuation")`
    - 不允许"启用 Buffett 视角但不调 stock-fundamentals"（大师会编 ROE / 护城河）
 4. **数据时点必须记录** — 在共享报告头部写明 `data_timestamp: YYYY-MM-DD HH:MM`，所有后续角色引用数据必须挂这个时点。
 
@@ -247,40 +240,20 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 
 #### 自检（阶段 0 完成前必须能回答）
 
-- [ ] **阶段 0a 步骤 4 锁定的必调 skill 清单的每一个，都已 Skill() 调用过？**（清单 2-4 个 = 实际调用 2-4 个，少一个就是偷懒）
-- [ ] `stock-analyzer` skill 是否真的被 Skill 工具调用过？（不是只读了它的 SKILL.md）
-- [ ] `event-calendar` skill 是否真的被 Skill 工具调用过？
+- [ ] **阶段 0a 步骤 4 锁定的必调 skill 清单的每一个，都已用 `Skill()` 执行过？**（清单 2-4 个 = 实际执行 2-4 个，少一个就是偷懒）
+- [ ] `stock-analyzer` skill 是否真的被 `Skill()` 调用并返回了实际九维度报告？
+- [ ] `event-calendar` skill 是否真的被 `Skill()` 调用并返回了实际事件列表？
 - [ ] `stock-analyzer` 维度 4 是否真的拉到了 `hyperliquid-perps` 的 lookup 输出？（美股/美元资产；港股仅 BABA；A 股豁免——若没拉到要在 data_gaps 写明原因，不能藏）
 - [ ] **若启用大师团**：按"条件依赖"表查到的每个 skill 是否真的调用过？（启用 Buffett 但没调 stock-fundamentals = 偷懒）
 - [ ] 共享报告里 `data_timestamp` 是否填了？
 - [ ] 如果是续接复用，`data_source` 字段是否标了"reused from"？
 - [ ] `data_gaps` 是否列出了所有缺失维度？（不允许藏起来）
 - [ ] 若启用大师团，是否核对了每个大师的"条件性必须 skill"是否真有数据传入其 prompt？（数据传入失败时该大师必须改为"跳过"，不允许含糊给 neutral）
-- [ ] **stock-analyzer 内部子 skill 是否全部已调用？** 检查：`futu-technical-anomaly`（维度 2）/ `futu-capital-anomaly`（维度 4）/ `futu-stock-digest`（维度 7b）/ `futu-news-search`（维度 7c）— 若 `data_gaps` 里出现"子 skill 未逐个触发"字样，立即停下回到 stock-analyzer 对应维度补调，不允许带着 data_gaps 继续辩论
+- [ ] **stock-analyzer 内部子 skill 是否全部已调用？** 检查：`futu-technical-anomaly`（维度 2）/ `futu-capital-anomaly`（维度 4）/ `futu-stock-digest`（维度 7b）/ `futu-news-search`（维度 7c）— 若缺失，补调方式：`Skill(skill="<缺失skill名称>")`，填入对应维度，不允许带着 data_gaps 继续辩论
 - [ ] `news_report` 字段是否包含来自 `futu-stock-digest` 的方向判断（bullish/bearish/neutral），而非仅 Tavily 搜索结果？
 
 **任何一条没做到，停下来补齐，禁止进入阶段 1**。
 
-#### 已知偷懒套路与禁用措辞（**新增 — 当出现以下信号时停下补调**）
-
-LLM 在 trading-debate 流程中最常见的偷懒套路：
-
-| 偷懒措辞（出现即偷懒） | 正确做法 |
-|---|---|
-| "数据足够，直接进入分析与辩论" | 检查阶段 0a 清单 vs 实际调用记录，差一个补一个 |
-| "X 视角降级为'基于已有数据的有限版'" | 该大师必须 `skipped (missing <skill>)`，不允许有限版 |
-| "用 stock-analyzer 维度 3 当 fundamentals 用" | 跳过该大师，不允许代理 |
-| "stock-fundamentals/stock-valuation 未独立 Skill 触发" | **立即** Skill() 调用补齐，不是写在 caveat 里就算了 |
-| "已有公开 consensus / Tavily 搜索结果可以替代" | 跳过该大师，不允许代理 |
-| "数据采集时间紧 / token 预算" | 用户选了 A 全调 = 已接受成本，agent 无权代为缩减 |
-| "futu-stock-digest / futu-news-search / futu-capital-anomaly / futu-technical-anomaly：stock-analyzer 子 skill 未逐个触发" | 立即停下，对 stock-analyzer 补调缺失的子 skill（`Skill()` 调用），不允许把"未触发"写进 `data_gaps` 继续辩论 |
-
-**触发条件**：
-- agent 在阶段 0 任何输出里包含"降级"、"有限版"、"代理"、"省略"、"足够直接进入"等词 → 停下，回看阶段 0a 清单，补调遗漏 skill
-- 共享报告 `data_gaps` 字段出现"X skill 未调用，但用 Y 数据近似" → 立即停下补调
-- 大师评分输出但其条件依赖 skill 没在调用记录里 → 该大师改 skipped
-
-**这一节是阶段 0 偷懒的最后防线**。Skill 已经在阶段 0a 锁清单 + 入口门槛检查 + 自检清单三道防线之后，加这一节是因为 LLM 仍可能用措辞绕过——出现禁用措辞 = 自动失败。
 
 ### 阶段 1（可选）：大师风格 agent 团（致敬 ai-hedge-fund）
 
@@ -366,37 +339,9 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
 }
 ```
 
-**`position_sizing` 必须附两步计算过程**（不允许只写一个百分比数字）：
-
-```
-步骤 1 — 绝对上限（单笔风险约束）：
-  max_position = 单笔最大亏损容忍额 / 止损距离百分比
-  （公式逻辑：position × stop_distance = 单笔最大亏损额；组合总回撤 = Σ各笔亏损）
-  单笔最大亏损容忍额 = 组合目标最大回撤 ÷ 预期同时持仓数
-  默认：15% ÷ 10 只 = 1.5% → max_position = 1.5% / 8% = 18.75%（再与集中度上限取小）
-  集中单标的场景（N=1）：1.5% → 15% → max_position = 15% / 8% = 1.875% ≈ 2%
-  止损距离 = |entry_price - stop_loss| / entry_price
-
-步骤 2 — 波动率调整（多标的组合时适用）：
-  ATR_pct = 近 14 日 ATR / 现价（已有 K 线可计算）
-  adjusted = base_weight × (1 / ATR_pct) / avg(1 / ATR_pct of all positions)
-  高波动股自动降权，低波动股自动升权
-
-最终仓位 = min(步骤 1 上限, 步骤 2 调整值)
-单标的场景：直接用步骤 1 结果，不做步骤 2
-```
+**`position_sizing` 必须附两步计算过程**（绝对上限 + 波动率调整），**评级-行动偏离**（RM 与 Trader 方向不一致）时 reasoning 必须回答三问（为什么偏离 / 止损能否防跳空 / 赔率）——完整公式与三问见 `references/role-prompts.md` 阶段 4 Trader 段（已加载）。
 
 末尾必须有 `FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL**` 一行（与 TradingAgents 兼容）。
-
-**评级-行动偏离强制说明（新增）**：
-
-当 Trader action 与 RM recommendation 方向不一致时（如 RM Underweight 但 Trader 仍提议 Buy），**不强制重跑，但 reasoning 字段必须显式回答以下三问**：
-
-1. **为什么偏离评级**：具体的短期催化是什么？与评级所指的中长期判断是否时间维度不同？
-2. **如果评级方向正确，止损能否保护**：若中长期偏空的判断实现（如财报miss、业绩继续下滑），止损是否能在跳空情况下仍然有效？
-3. **赔率是否合理**：用具体数字说明——最大收益 vs 最大亏损的比例。
-
-> 背景：Underweight 是相对判断（持仓低于基准），不等于"绝对不能买"。投行内部"Underweight + 近期超配特定催化"是常见操作。但偏离评级买入必须有明确逻辑，不能用"仓位小"一句话带过。PDD 案例的问题是第2问没有回答（止损无法防财报跳空），而不是偏离评级本身错了。
 
 ### 阶段 5：Risk 三方辩论（risk_mgmt debators）
 
@@ -414,45 +359,10 @@ LLM 在 trading-debate 流程中最常见的偷懒套路：
 
 **轮次终止条件**：`count >= 3 × risk_rounds`
 
-#### 财报二元事件硬规则（新增）
+#### 两条硬规则触发条件（完整规则见 `references/role-prompts.md` 阶段 5 段，已加载）
 
-当 `events_report` 中存在**距今 ≤ 5 个交易日**的财报事件时，Risk 阶段强制触发以下流程：
-
-**Conservative Analyst 必须完成 IV-implied 止损有效性验证**：
-
-```
-IV-implied 预期波动幅度 = 现价 × ATM IV × √(最近到期日天数 / 365)
-（数据来源：derivatives_report 中的 ATM IV；若无期权数据，改用近 30 日历史波动率 HV 替代，并标注"使用 HV 近似"）
-
-对比 Trader 的 stop_loss 距离：
-  stop_loss 距离 = |entry_price - stop_loss| / entry_price
-
-若 IV-implied 幅度 > stop_loss 距离：
-  → 必须输出：
-    "⚠️ 止损可能失效：市场定价的预期波动（IV-implied = X%）超过止损保护距离（Y%）。
-     财报跳空可能直接越过止损，建议：(1) 财报前不入场，或 (2) 改用最大亏损有限的期权多头代替股票多头。"
-```
-
-**Aggressive 必须正面回应**：不能仅凭估值低或大单信号驳斥，必须给出**为何期权 IV 高估了下行风险**的具体数据（如"近4季度财报后实际波动均小于 IV-implied"）。
-
-> 用 IV 而非"预估 EPS miss 幅度"的原因：期权市场已经对财报不确定性定价，IV-implied move 是可计算的真实数据。要求 Conservative 预测"EPS 差 X% 时跌 Y%"会导致 LLM 幻觉。PDD 案例：IV 60%，7天到期，IV-implied = $93.60 × 60% × √(7/365) ≈ $7.75，而 stop_loss 距离仅 $3.10（3.3%）—— 如果当时跑这个计算，Conservative 会发现止损根本不够用。
-
-#### 链上 funding 拥挤度硬规则（**新增 — 美股 / 美元资产必读**）
-
-阶段 0 共享报告 `capital_report` 中含 hyperliquid-perps 链上 funding 数据时，Risk 三方**必须**依下表读取并表态——禁止"不引用就跳过"：
-
-| 24h avg funding APR（绝对值） | 等级 | 三方义务 |
-|---|---|---|
-| `> 100%` | **🔴 拥挤红线** | Conservative **必须**把"链上拥挤交易反向 squeeze 风险"列为头号下行风险并量化（"funding APR avg X%，> 100% 红线，与 Trader 入场方向同向 = 警惕反向轧空"）；Aggressive **必须**正面回应——给出"为什么仍激进"的具体反驳（不能回避） |
-| `50% ~ 100%` | 🟡 拥挤预警 | Aggressive 与 Conservative 都要引用此数字。Aggressive 可继续推动激进仓位但要注明"funding 偏热但未到红线"；Conservative 必须将其作为缩仓论据之一 |
-| `≤ 50%` | 🟢 中性 | 不构成额外约束，但 Neutral 应在综合段提一句"链上 funding 中性，未给出额外信号" |
-
-**港股 / A 股豁免**：若 capital_report 中链上数据写"流动性不足"或"链上无镜像"，本规则**整体跳过**，三方都不得用链上数据辅证。
-
-**禁止行为**：
-- ❌ Aggressive 在 funding 红线下仍推 Buy 满仓而**不显式回应** funding 拥挤（必须有反驳论据，例如"看 max APR 是单小时极值非稳定状态"或"24h 已开始回落"）
-- ❌ Conservative 在 funding 中性时仍硬把"链上拥挤"当头号风险（找不到的论据要承认找不到）
-- ❌ 三方任何一方说"链上数据不重要"——可以反驳数据强度，但不能整体否认
+1. **财报二元事件**：`events_report` 中存在**距今 ≤ 5 个交易日**的财报事件时，Conservative **必须**完成 IV-implied 止损有效性验证（IV-implied 幅度 vs stop_loss 距离；无期权数据用 HV 近似），Aggressive 必须正面回应。
+2. **链上 funding 拥挤度**（美股 / 美元资产）：`capital_report` 含 hyperliquid-perps funding 时，三方**必须**依等级表（🔴>100% / 🟡 50-100% / 🟢≤50%）读取并表态，禁止"不引用就跳过"；港股 / A 股（"流动性不足 / 无镜像"）整体豁免。
 
 ### 阶段 6：Portfolio Manager — 最终决策
 
@@ -469,18 +379,10 @@ IV-implied 预期波动幅度 = 现价 × ATM IV × √(最近到期日天数 / 
 
 PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 收敛仓位（例如 Trader Buy → PM Overweight），这是正常的。
 
-**参数漂移记录硬规则**：PM 若覆盖 Trader 的 `entry_price` / `stop_loss` / `position_sizing` 任一字段，**必须**在 `investment_thesis` 里显式写一行 `参数漂移：Trader 原 stop_loss=X USD → PM 改为 Y USD，依据：<Risk 哪一方哪条论据>`。否则用户复盘时无法判断决策路径，且容易把 Trader 的原始数字误当作最终数字。
+**两条 PM 硬规则触发条件（完整规则见 `references/role-prompts.md` 阶段 6 段，已加载）**：
 
-**拥挤交易降档硬规则（新增）**：
-
-若 Risk 阶段触达"🔴 拥挤红线"（24h avg funding APR 绝对值 > 100%）且 Aggressive 未能给出量化反驳（如"max APR 是单小时极值，已快速回落"），PM **必须**：
-
-1. **降一档评级**：Buy → Overweight；Overweight → Hold；Hold → Underweight；Underweight 维持
-2. **缩减仓位**：position_sizing 至少砍半
-3. **在 `investment_thesis` 显式写一行**：`拥挤降档：funding APR 24h avg = X%（> 100% 红线），Aggressive 未给出量化反驳，依据 Conservative 论点 Y，评级 Buy→Overweight，仓位 N%→N/2%`
-
-仅当 Aggressive 提供**数据驱动的反驳**（不是定性"未必拥挤"）时，PM 才可豁免降档，但仍需在 `investment_thesis` 里写"funding 红线达成但已豁免，依据 Aggressive 反驳：<具体数据>"。
-
+1. **参数漂移**：PM 覆盖 Trader 的 `entry_price` / `stop_loss` / `position_sizing` 任一字段时，必须在 `investment_thesis` 写一行 `参数漂移：原 X → 改为 Y，依据 <Risk 哪一方论据>`。
+2. **拥挤降档**：Risk 触达"🔴 拥挤红线"（24h avg funding APR 绝对值 > 100%）且 Aggressive 未给量化反驳时，PM **必须**降一档评级 + 仓位砍半 + 在 `investment_thesis` 写明降档依据；仅当 Aggressive 给出数据驱动反驳时可豁免（仍需写明豁免依据）。
 
 ### 阶段 7：复盘锚点（可选但推荐）
 
@@ -565,7 +467,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 ## 输出契约（写报告前自检）
 
 - [ ] **阶段 0a 自检**：是否用 AskUserQuestion 让用户确认大师组合 + 必调 skill 清单？（默认套餐自动启用 = 违规）
-- [ ] **阶段 0 自检全部通过**（stock-analyzer + event-calendar 真的调用过、data_timestamp 已填、data_gaps 已列）
+- [ ] **阶段 0 自检全部通过**（stock-analyzer + event-calendar 已用 Skill() 执行过、data_timestamp 已填、data_gaps 已列）
 - [ ] **启用大师团时**：每个大师对应的条件依赖 skill 真的调用过；缺数据的大师真的"跳过"（不允许含糊给 neutral）
 - [ ] **data_gaps 完整性**：所有跳过的大师 / 缺失的 skill / 已知 bug 跳过的工具是否都列在 data_gaps（不允许只藏在 data_source 里）
 - [ ] 阶段 0-6 全部跑完，无静默略过（阶段 1 / 7 可选但要明确说"未启用"）
@@ -579,6 +481,10 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - [ ] **启用 v0.5 教训聚合**：真的 Read 了 ≥ 3 条已反思决策，4 维度切片胜率公式一致
 - [ ] 所有数据点标了来源 skill + 时点
 - [ ] 末尾有 DISCLAIMER
+
+## ⚠️ 输出即止规则
+
+输出契约自检全部通过后，**立即**以 PM 最终决策报告模板对应标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
 
 ## 不允许的偷懒模式
 
@@ -620,15 +526,6 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - 量化策略回测 / 多因子模型 → 不在本 skill 能力范围
 - A 股盘中逐笔策略 → 数据源限制，不支持
 - 跨股票组合优化 → 见阶段 P1-P4（v0.4 已支持，明确触发）
-
-## 版本路线图
-
-- **v0.1**：单标的，七阶段，TradingAgents 完整主干 + ai-hedge-fund 占位接口
-- **v0.2**：✅ 7 个大师 agent prompt 模板（`references/master-styles.md`）；信号聚合规则注入 Bull/Bear 阶段
-- **v0.3**（当前）：✅ 跨会话 Reflection（`references/reflection.md`）；阶段 8 决策存档 + 历史召回；3 月窗口反思 prompt
-- **v0.4**（当前）：✅ 多标的组合层 PM（`references/portfolio-layer.md`）；阶段 P1-P4；相关性矩阵 + 行业封顶 + 换手控制
-- **v0.5**（当前）：✅ 跨标的反思教训聚合（`references/cross-ticker-lessons.md`）—— 阶段 L1，4 维度切片找模式级错误；✅ 跨市场基准选择（`references/multi-market.md`）—— 阶段 M1，市值加权基准 + 交易时段对齐 + 汇率敞口 + 双 alpha 口径
-- **v0.6**（路线图）：实盘交易接入（与 futuapi 下单 skill 联动，PM 决策一键转 paper trade 单）；策略回测层（用历史决策日期 backtrace 验证 PM 实际胜率）
 
 ---
 

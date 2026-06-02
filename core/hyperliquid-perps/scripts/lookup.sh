@@ -23,7 +23,9 @@ MODE='all'
 [ "${2:-}" = '--json' ] && MODE='json'
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-RAW=$("$DIR/snapshot.sh" --filter "$TICKER")
+# snapshot.sh 第一行总是 CSV 表头，用 tail -n +2 丢掉——否则无镜像时 RAW 会等于表头行（非空），
+# 导致下方判空失效、fallback 把表头当数据行，json 模式对 "markPx" 调 tonumber 报错
+RAW=$("$DIR/snapshot.sh" --filter "$TICKER" | tail -n +2)
 
 if [ -z "$RAW" ]; then
   echo "❌ Hyperliquid 上未找到 $TICKER 的镜像合约" >&2

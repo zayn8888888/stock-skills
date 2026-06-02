@@ -98,7 +98,9 @@ print(f"RSI14={rsi14} | MA7={ma7:.4f} vs MA30={ma30:.4f}（{cross}）| 7日区�
 ### 维度 3：链上信号（Hyperliquid）
 
 ```bash
-"${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh" <TICKER> --json 2>/dev/null
+HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh"
+[ -f "$HL" ] || HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/hyperliquid-perps/scripts/lookup.sh"
+[ -f "$HL" ] && "$HL" <TICKER> --json 2>/dev/null || echo "该币无 Hyperliquid 链上镜像 / hyperliquid-perps 未安装"
 ```
 
 - 无镜像（多数小币）：标注"该币无 Hyperliquid 链上镜像"后跳过
@@ -141,10 +143,15 @@ curl "$BASE/coins/markets?vs_currency=usd&category={category_id}&order=market_ca
 
 ### 维度 7：前瞻事件日历
 
-1. 调用 `event-calendar skill`（region=US, from=今天, to=今天+30）→ 取 FOMC/CPI/非农
-2. Tavily（days=90）：`{coin_name} upgrade unlock airdrop event schedule 2026`
+主对话直接 `Skill(skill="event-calendar")` 顺序调用（region=US，from=今天，to=今天+30，返回 FOMC/CPI/非农结构化事件列表）。Skill 返回后执行：
+
+Tavily（days=90）：`{coin_name} upgrade unlock airdrop event schedule 2026`
 
 关注：代币解锁日期 / 协议重大升级 / ETF 申请进展 / 监管事件
+
+## ⚠️ 输出即止规则
+
+七个维度数据全部在 context 后，**立即**以 `## 📊 <标的>` 或报告模板标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
 
 ## 输出规范
 

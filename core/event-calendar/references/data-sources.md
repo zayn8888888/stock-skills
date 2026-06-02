@@ -41,7 +41,7 @@ GET https://finnhub.io/api/v1/calendar/economic?from=YYYY-MM-DD&to=YYYY-MM-DD&to
 | `country` | 过滤 `US` / `EU` / `CN` / `HK` / `JP` 等。注意：CN 数据稀疏，不要单靠 Finnhub |
 | `event` | 事件名英文原文，输出时直接使用，不要硬翻译，避免歧义 |
 | `impact` | `high` / `medium` / `low`，本 skill 只用 high + medium |
-| `time` | UTC 时间，输出时按调用方需要转 HKT |
+| `time` | UTC 时间，输出时按调用方需要转 HKT。**⚠️ 字段名是 `time` 不是 `date`**，两者混用会 KeyError |
 | `actual / estimate / prev` | actual = 已发布的实际值；estimate = 市场共识；prev = 上期值 |
 | `unit` | %, K, M, B 等，输出时一定要带，不然数字无意义 |
 
@@ -142,10 +142,19 @@ GET https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=100&
 ]
 ```
 
-> ⚠️ `outcomes` 和 `outcomePrices` 是 **JSON 字符串**而非数组，jq 处理时要 `fromjson`：
+> ⚠️ `outcomes` 和 `outcomePrices` 是 **JSON 字符串**而非数组：
 >
 > ```bash
+> # jq
 > jq '.[] | {q: .question, prices: (.outcomePrices | fromjson)}'
+> ```
+>
+> ```python
+> # Python — 必须先 json.loads，且元素是字符串需转 float 再比较
+> import json
+> prices = json.loads(m.get('outcomePrices', '[]'))   # → ['0.73', '0.27']
+> if prices and max(float(p) for p in prices) > 0.95:  # 字符串 → float 再比较
+>     continue
 > ```
 
 ### B2. 单个市场详情

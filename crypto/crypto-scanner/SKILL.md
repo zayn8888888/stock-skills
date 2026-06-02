@@ -41,7 +41,7 @@ curl "$BASE/global" $HEADER
 curl "$BASE/coins/bitcoin/market_chart?vs_currency=usd&days=30" $HEADER
 ```
 
-同时调用 `event-calendar skill`（region=US, from=今天, to=今天+14）→ 提取 FOMC/CPI/非农。
+curl 批次完成后，主对话直接 `Skill(skill="event-calendar")` 顺序执行（region=US，from=今天，to=今天+14，返回 FOMC/CPI/非农结构化事件列表）。Skill 返回实际数据 → 继续阶段 1；失败 → 跳过宏观锚定，在报告中标注。
 
 **BTC 主导率判断规则**：
 
@@ -118,7 +118,9 @@ curl "$BASE/coins/markets?vs_currency=usd&category={CATEGORY_ID}&order=volume_de
 
 Hyperliquid 查询（有 perps 镜像的币）：
 ```bash
-"${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh" <TICKER> --json 2>/dev/null
+HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/hyperliquid-perps/scripts/lookup.sh"
+[ -f "$HL" ] || HL="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/hyperliquid-perps/scripts/lookup.sh"
+[ -f "$HL" ] && "$HL" <TICKER> --json 2>/dev/null || echo "无链上镜像 / hyperliquid-perps 未安装"
 ```
 
 ## 阶段 3：跨市场背离信号
@@ -131,6 +133,10 @@ BTC 数据来自阶段 0 的 market_chart，Nasdaq 趋势从 Tavily 搜索获取
 | Nasdaq ↓ BTC ↑ | 脱钩信号（稳定币/黄金叙事驱动）|
 | BTC ↑ 山寨不动 | BTC 独享，山寨资金观望 |
 | BTC ↑ 山寨普涨 | 山寨季启动，赛道轮动激活 |
+
+## ⚠️ 输出即止规则
+
+四个阶段数据全部在 context 后，**立即**以报告模板对应标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
 
 ## 输出结构
 
