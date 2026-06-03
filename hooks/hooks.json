@@ -1,0 +1,15 @@
+{
+  "description": "Auto-configure CLAUDE_SKILLS_DIR on session start",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"export CLAUDE_SKILLS_DIR=\\\"${CLAUDE_PLUGIN_ROOT}futu\\\"\" >> \"$CLAUDE_ENV_FILE\""
+          }
+        ]
+      }
+    ]
+  }
+}
