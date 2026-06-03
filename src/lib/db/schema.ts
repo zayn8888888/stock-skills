@@ -49,7 +49,12 @@ export const runtimeEvents = sqliteTable("runtime_events", {
   persist: integer("persist").notNull(),
   payloadJson: text("payload_json"),
   createdAt: text("created_at").notNull(),
-});
+},
+(t) => [
+  uniqueIndex("idx_rt_events_session_seq").on(t.sessionId, t.sessionSeq),
+  uniqueIndex("idx_rt_events_run_seq").on(t.runId, t.runSeq),
+],
+);
 
 export const toolCalls = sqliteTable("tool_calls", {
   id: text("id").primaryKey(),

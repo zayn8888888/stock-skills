@@ -13,6 +13,7 @@ import { nanoid } from "nanoid";
 import type { RuntimeCommand } from "./commands";
 import type { RuntimeStore } from "./store";
 import type { RuntimeEventLog } from "./event-log";
+import type { ResearchRuntime } from "./research-runtime";
 import { createRuntimeEvent } from "./events";
 import { assertRunTransition, type RunStatus } from "./state-machine";
 
@@ -31,6 +32,7 @@ export class RuntimeCommandService {
   constructor(
     private store: RuntimeStore,
     private eventLog: RuntimeEventLog,
+    private researchRuntime: ResearchRuntime,
   ) {}
 
   /**
@@ -99,6 +101,10 @@ export class RuntimeCommandService {
         return this.handleRunStart(cmd);
       case "run.cancel":
         return this.handleRunCancel(cmd);
+      case "goal.add":
+        return this.handleGoalAdd(cmd);
+      case "artifact.submit":
+        return this.handleArtifactSubmit(cmd);
       default:
         return {
           commandId: cmd.commandId,
@@ -200,6 +206,11 @@ export class RuntimeCommandService {
           payload: { runId, skillName: run.skillName, ticker: run.ticker },
         }),
       );
+
+      // Fire-and-forget: execute the run asynchronously
+      this.researchRuntime.executeRun(runId, sessionId).catch((err) => {
+        console.error(`[CommandService] executeRun failed for ${runId}:`, err);
+      });
     }
 
     return {
@@ -269,6 +280,11 @@ export class RuntimeCommandService {
         payload: { runId, status: "running" },
       }),
     );
+
+    // Fire-and-forget: execute the run asynchronously
+    this.researchRuntime.executeRun(runId, run.sessionId).catch((err) => {
+      console.error(`[CommandService] executeRun failed for ${runId}:`, err);
+    });
 
     return {
       commandId: cmd.commandId,
@@ -341,6 +357,105 @@ export class RuntimeCommandService {
         payload: { runId, previousStatus: currentStatus, targetStatus },
       }),
     );
+
+    // Signal the runtime to abort the run
+    this.researchRuntime.cancelRun(runId);
+
+    return {
+      commandId: cmd.commandId,
+      accepted: true,
+      sessionId,
+      runId,
+    };
+  }
+
+  private async handleGoalAdd(cmd: RuntimeCommand): Promise<CommandResult> {
+    const sessionId = cmd.sessionId;
+    if (!sessionId) {
+      return {
+        commandId: cmd.commandId,
+        accepted: false,
+        error: "sessionId is required for goal.add",
+        errorCode: "validation.invalid_request",
+      };
+    }
+
+    if (!cmd.goal) {
+      return {
+        commandId: cmd.commandId,
+        accepted: false,
+        error: "goal text is required for goal.add",
+        errorCode: "validation.invalid_request",
+      };
+    }
+
+    const goal = await this.store.goals.create({
+      sessionId,
+      goal: cmd.goal,
+    });
+
+    await this.eventLog.append(
+      createRuntimeEvent({
+        sessionId,
+        type: "system.info",
+        category: "goal",
+        scope: "goal",
+        producer: "server",
+        payload: { goalId: goal.id, goal: goal.goal, status: goal.status },
+      }),
+    );
+
+    return {
+      commandId: cmd.commandId,
+      accepted: true,
+      sessionId,
+    };
+  }
+
+  private async handleArtifactSubmit(cmd: RuntimeCommand): Promise<CommandResult> {
+    const sessionId = cmd.sessionId;
+    const runId = cmd.runId;
+
+    if (!runId) {
+      return {
+        commandId: cmd.commandId,
+        accepted: false,
+        error: "runId is required for artifact.submit",
+        errorCode: "validation.invalid_request",
+      };
+    }
+
+    if (!cmd.content) {
+      return {
+        commandId: cmd.commandId,
+        accepted: false,
+        error: "content is required for artifact.submit",
+        errorCode: "validation.invalid_request",
+      };
+    }
+
+    const artifact = await this.store.artifacts.create({
+      runId,
+      sessionId: sessionId ?? null,
+      kind: cmd.context?.skillName ?? "report",
+      name: cmd.artifactId ?? `artifact-${nanoid()}`,
+      content: cmd.content,
+    });
+
+    if (sessionId) {
+      await this.eventLog.append(
+        createRuntimeEvent({
+          sessionId,
+          runId,
+          artifactId: artifact.id,
+          type: "artifact.created",
+          category: "artifact",
+          scope: "artifact",
+          producer: "server",
+          payload: { artifactId: artifact.id, kind: artifact.kind, name: artifact.name },
+        }),
+      );
+    }
 
     return {
       commandId: cmd.commandId,

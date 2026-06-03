@@ -15,11 +15,20 @@ import type { RuntimeStore } from "./store";
 import type { RuntimeEventLog } from "./event-log";
 import { createRuntimeEvent, type RuntimeEvent } from "./events";
 import { assertRunTransition, type RunStatus } from "./state-machine";
+import { selectRunner, getRunner } from "@/lib/runners/registry";
+import type { RunnerAdapter, RunnerKind, RuntimeLogger } from "@/lib/runners/base";
+import { RuntimeEventSinkAdapter } from "./event-sink-adapter";
 
 export interface ResearchRuntimeConfig {
   /** Run timeout in ms (default: 5 minutes) */
   runTimeoutMs?: number;
 }
+
+const DEFAULT_LOGGER: RuntimeLogger = {
+  info: (msg: string, ...args: unknown[]) => console.log(msg, ...args),
+  warn: (msg: string, ...args: unknown[]) => console.warn(msg, ...args),
+  error: (msg: string, ...args: unknown[]) => console.error(msg, ...args),
+};
 
 export class ResearchRuntime {
   private controllers = new Map<string, AbortController>();
@@ -33,8 +42,7 @@ export class ResearchRuntime {
   /**
    * Execute a run. Called by CommandService after a run is created and started.
    *
-   * For now, uses a stub runner that emits a minimal event sequence.
-   * Real runner integration happens in Task 7.
+   * Selects a real runner from the registry, falls back to stub if none available.
    */
   async executeRun(runId: string, sessionId: string): Promise<void> {
     const controller = new AbortController();
@@ -66,28 +74,108 @@ export class ResearchRuntime {
         );
       }
 
-      // Stub runner: emit a text response then complete
-      await this.stubRunnerExecute(sessionId, runId, controller.signal);
+      // Load message history for the runner
+      const messages = await this.store.messages.findBySession(sessionId, { limit: 50 });
+      const history = messages
+        .filter((m) => m.id !== run.messageId)
+        .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
 
-      // Mark as succeeded
-      await this.store.runs.updateStatus(runId, "succeeded", {
-        finishedAt: new Date().toISOString(),
-      });
-      await this.eventLog.append(
-        createRuntimeEvent({
-          sessionId,
+      // Find the user input from the triggering message
+      const triggerMessage = run.messageId
+        ? await this.store.messages.findById(run.messageId)
+        : null;
+      const userInput = triggerMessage?.content ?? "";
+
+      // Select runner
+      const runner = this.selectRunnerForRun(run);
+
+      // Create event sink
+      const sink = new RuntimeEventSinkAdapter(this.eventLog, sessionId, runId);
+
+      // Execute via real runner
+      const result = await runner.run(
+        {
           runId,
-          type: "run.completed",
-          category: "lifecycle",
-          scope: "run",
-          producer: "runner",
-          payload: { runId, status: "succeeded" },
-        }),
+          sessionId,
+          skillName: run.skillName ?? "default",
+          userInput,
+          history,
+          ticker: run.ticker ?? undefined,
+          market: run.market ?? undefined,
+          workflowType: run.workflowType ?? undefined,
+        },
+        {
+          signal: controller.signal,
+          events: sink,
+          logger: DEFAULT_LOGGER,
+        },
       );
+
+      // Record runner_runs metadata
+      const now = new Date().toISOString();
+      await this.store.runners.create({
+        id: nanoid(),
+        runId,
+        runnerId: runner.id,
+        externalRunId: result.traceId ?? null,
+        metadataJson: JSON.stringify({ status: result.status, text: result.text?.slice(0, 500) }),
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      // Mark run based on runner result
+      if (result.status === "succeeded") {
+        await this.store.runs.updateStatus(runId, "succeeded", {
+          finishedAt: new Date().toISOString(),
+        });
+        await this.eventLog.append(
+          createRuntimeEvent({
+            sessionId,
+            runId,
+            type: "run.completed",
+            category: "lifecycle",
+            scope: "run",
+            producer: "runner",
+            payload: { runId, status: "succeeded" },
+          }),
+        );
+      } else if (result.status === "cancelled") {
+        await this.store.runs.updateStatus(runId, "cancelled", {
+          finishedAt: new Date().toISOString(),
+        });
+        await this.eventLog.append(
+          createRuntimeEvent({
+            sessionId,
+            runId,
+            type: "run.cancelled",
+            category: "lifecycle",
+            scope: "run",
+            producer: "runner",
+            payload: { runId, status: "cancelled" },
+          }),
+        );
+      } else {
+        await this.store.runs.updateStatus(runId, "failed", {
+          finishedAt: new Date().toISOString(),
+          errorCode: "runner.failed",
+          errorMessage: result.error,
+        });
+        await this.eventLog.append(
+          createRuntimeEvent({
+            sessionId,
+            runId,
+            type: "run.failed",
+            category: "error",
+            scope: "run",
+            producer: "runner",
+            payload: { code: "runner.failed", message: result.error ?? "Unknown error", retriable: false },
+          }),
+        );
+      }
     } catch (err) {
       const isCancelled = controller.signal.aborted;
       const status: RunStatus = isCancelled ? "cancelled" : "failed";
-      const errorCode = isCancelled ? "runner.cancelled" : "runner.timeout";
+      const errorCode = isCancelled ? "runner.cancelled" : "runner.error";
 
       await this.store.runs.updateStatus(runId, status, {
         finishedAt: new Date().toISOString(),
@@ -122,76 +210,23 @@ export class ResearchRuntime {
   }
 
   /**
-   * Stub runner that emits a minimal event sequence.
-   * This will be replaced by real RunnerAdapter in Task 7.
+   * Select the best runner for a given run based on its metadata.
+   * Falls back to the stub runner if the selected runner is not available.
    */
-  private async stubRunnerExecute(
-    sessionId: string,
-    runId: string,
-    signal: AbortSignal,
-  ): Promise<void> {
-    if (signal.aborted) throw new Error("Run cancelled");
+  private selectRunnerForRun(run: { skillName?: string | null; workflowType?: string | null; runnerId?: string | null }): RunnerAdapter {
+    // If a specific runner is pinned to the run, use it
+    if (run.runnerId) {
+      try {
+        return getRunner(run.runnerId as RunnerKind);
+      } catch {
+        console.warn(`[ResearchRuntime] Pinned runner "${run.runnerId}" not found, selecting default`);
+      }
+    }
 
-    // Emit text delta
-    await this.eventLog.append(
-      createRuntimeEvent({
-        sessionId,
-        runId,
-        type: "model.text.delta",
-        category: "model",
-        scope: "run",
-        producer: "runner",
-        persist: 0,
-        payload: { delta: "Run stub: processing started..." },
-      }),
-    );
-
-    if (signal.aborted) throw new Error("Run cancelled");
-
-    // Emit tool call
-    const toolCallId = nanoid();
-    await this.eventLog.append(
-      createRuntimeEvent({
-        sessionId,
-        runId,
-        toolCallId,
-        type: "tool.call.created",
-        category: "tool",
-        scope: "tool",
-        producer: "runner",
-        payload: { toolCallId, name: "stub_tool", args: {} },
-      }),
-    );
-
-    if (signal.aborted) throw new Error("Run cancelled");
-
-    // Emit tool completed
-    await this.eventLog.append(
-      createRuntimeEvent({
-        sessionId,
-        runId,
-        toolCallId,
-        type: "tool.call.completed",
-        category: "tool",
-        scope: "tool",
-        producer: "runner",
-        payload: { toolCallId, name: "stub_tool", status: "succeeded" },
-      }),
-    );
-
-    if (signal.aborted) throw new Error("Run cancelled");
-
-    // Emit final text
-    await this.eventLog.append(
-      createRuntimeEvent({
-        sessionId,
-        runId,
-        type: "model.text.completed",
-        category: "model",
-        scope: "run",
-        producer: "runner",
-        payload: { text: "Run completed successfully (stub)." },
-      }),
-    );
+    // Use the registry's selection logic
+    return selectRunner({
+      workflowType: run.workflowType ?? undefined,
+    });
   }
 }
+

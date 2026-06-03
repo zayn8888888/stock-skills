@@ -13,12 +13,23 @@ import type { RuntimeEvent } from "./events";
 
 export type EventSubscriber = (event: RuntimeEvent) => void;
 
+export interface RuntimeEventLogOptions {
+  /** Called after each event is persisted and buffered. Use to bridge to external buses. */
+  onAppend?: (event: RuntimeEvent) => void;
+}
+
 export class RuntimeEventLog {
   private subscribers = new Map<string, Set<EventSubscriber>>();
   private buffer = new Map<string, RuntimeEvent[]>();
   private maxBufferSize = 500;
+  private onAppend?: (event: RuntimeEvent) => void;
 
-  constructor(private store: RuntimeStore) {}
+  constructor(
+    private store: RuntimeStore,
+    options?: RuntimeEventLogOptions,
+  ) {
+    this.onAppend = options?.onAppend;
+  }
 
   /**
    * Append an event to the log.
@@ -26,51 +37,58 @@ export class RuntimeEventLog {
    * Returns the persisted event with assigned seq numbers.
    */
   async append<T>(event: RuntimeEvent<T>): Promise<RuntimeEvent<T>> {
-    // Assign session-scoped seq
-    const sessionSeq = await this.store.events.nextSessionSeq(event.sessionId);
-    event.sessionSeq = sessionSeq;
-
-    // Assign run-scoped seq if runId is present
-    let runSeq: number | undefined;
-    if (event.runId) {
-      runSeq = await this.store.events.nextRunSeq(event.runId);
-      event.runSeq = runSeq;
-    }
-
-    // Serialize payload for persistence
+    // Serialize payload outside the transaction (pure CPU, no DB)
     const payloadJson = event.payload != null ? JSON.stringify(event.payload) : null;
 
-    // Persist
-    await this.store.events.append({
-      id: event.id,
-      schemaVersion: event.schemaVersion,
-      sessionSeq: event.sessionSeq,
-      runSeq: event.runSeq ?? null,
-      scope: event.scope,
-      type: event.type,
-      category: event.category,
-      sessionId: event.sessionId,
-      runId: event.runId ?? null,
-      messageId: event.messageId ?? null,
-      toolCallId: event.toolCallId ?? null,
-      artifactId: event.artifactId ?? null,
-      parentEventId: event.parentEventId ?? null,
-      correlationId: event.correlationId ?? null,
-      idempotencyKey: event.idempotencyKey ?? null,
-      producer: event.producer,
-      visibility: event.visibility,
-      persist: event.persist,
-      payloadJson,
-      createdAt: event.createdAt,
+    // Atomic: seq assignment + insert in a single transaction.
+    // This prevents duplicate seq values from concurrent appends to the same session.
+    const persisted = await this.store.transaction(async (tx) => {
+      // Assign session-scoped seq
+      const sessionSeq = await tx.events.nextSessionSeq(event.sessionId);
+      event.sessionSeq = sessionSeq;
+
+      // Assign run-scoped seq if runId is present
+      if (event.runId) {
+        event.runSeq = await tx.events.nextRunSeq(event.runId);
+      }
+
+      // Persist
+      await tx.events.append({
+        id: event.id,
+        schemaVersion: event.schemaVersion,
+        sessionSeq: event.sessionSeq,
+        runSeq: event.runSeq ?? null,
+        scope: event.scope,
+        type: event.type,
+        category: event.category,
+        sessionId: event.sessionId,
+        runId: event.runId ?? null,
+        messageId: event.messageId ?? null,
+        toolCallId: event.toolCallId ?? null,
+        artifactId: event.artifactId ?? null,
+        parentEventId: event.parentEventId ?? null,
+        correlationId: event.correlationId ?? null,
+        idempotencyKey: event.idempotencyKey ?? null,
+        producer: event.producer,
+        visibility: event.visibility,
+        persist: event.persist,
+        payloadJson,
+        createdAt: event.createdAt,
+      });
+
+      return event;
     });
 
-    // Buffer for replay
-    this.addToBuffer(event.sessionId, event);
+    // Buffer for replay (in-memory, after transaction commits)
+    this.addToBuffer(persisted.sessionId, persisted);
 
-    // Publish to subscribers
-    this.publish(event.sessionId, event);
+    // Publish to subscribers (in-memory, after transaction commits)
+    this.publish(persisted.sessionId, persisted);
 
-    return event;
+    // Notify external bridge (e.g. EventBus for SSE delivery)
+    this.onAppend?.(persisted);
+
+    return persisted;
   }
 
   /**

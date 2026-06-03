@@ -3,6 +3,7 @@ import { createTestDB } from "../helpers";
 import { createRuntimeStore } from "@/lib/runtime/repositories";
 import { RuntimeEventLog } from "@/lib/runtime/event-log";
 import { RuntimeCommandService } from "@/lib/runtime/command-service";
+import { ResearchRuntime } from "@/lib/runtime/research-runtime";
 import { createCommand } from "@/lib/runtime/commands";
 import type * as schema from "@/lib/db/schema";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
@@ -17,7 +18,8 @@ describe("RuntimeCommandService", () => {
     db = createTestDB();
     store = createRuntimeStore(db as unknown as BetterSQLite3Database<typeof schema>);
     eventLog = new RuntimeEventLog(store);
-    service = new RuntimeCommandService(store, eventLog);
+    const researchRuntime = new ResearchRuntime(store, eventLog);
+    service = new RuntimeCommandService(store, eventLog, researchRuntime);
   });
 
   it("creates a session from session.create command", async () => {
@@ -71,7 +73,7 @@ describe("RuntimeCommandService", () => {
     // Verify run was created
     const run = await store.runs.findById(result.runId!);
     expect(run).toBeDefined();
-    expect(run?.status).toBe("queued");
+    expect(run?.status).toBe("running");
     expect(run?.ticker).toBe("NVDA");
   });
 
@@ -178,29 +180,31 @@ describe("RuntimeCommandService", () => {
     });
     const { sessionId } = await service.handle(createCmd);
 
+    // Create message + run without auto-start, then manually set to running
     const msgCmd = createCommand({
       type: "session.message.append_user",
       sessionId: sessionId!,
       content: "test",
-      startRun: true,
+      startRun: false,
       source: "research_desk",
       actor: "web_ui",
     });
-    const { runId } = await service.handle(msgCmd);
+    await service.handle(msgCmd);
 
-    // Transition to running
-    await store.runs.updateStatus(runId!, "running", {});
+    // Manually create a run in "running" state
+    const run = await store.runs.create({ sessionId: sessionId!, skillName: "test" });
+    await store.runs.update(run.id, { status: "running" });
 
     const cancelCmd = createCommand({
       type: "run.cancel",
       sessionId: sessionId!,
-      runId: runId!,
+      runId: run.id,
       source: "research_desk",
       actor: "web_ui",
     });
 
     const result = await service.handle(cancelCmd);
     expect(result.accepted).toBe(true);
-    expect(result.runId).toBe(runId);
+    expect(result.runId).toBe(run.id);
   });
 });

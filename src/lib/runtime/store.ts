@@ -108,6 +108,7 @@ export interface RunnerRepository {
 }
 
 export interface GoalRepository {
+  create(data: { sessionId: string; goal: string; status?: string }): Promise<GoalRow>;
   findById(id: string): Promise<GoalRow | undefined>;
   findActiveBySession(sessionId: string): Promise<GoalRow | undefined>;
 }
@@ -148,6 +149,7 @@ export type RunnerProviderRow = typeof runnerProviders.$inferSelect;
 export type InsertRunnerProvider = typeof runnerProviders.$inferInsert;
 
 export type GoalRow = typeof researchGoals.$inferSelect;
+export type InsertGoal = typeof researchGoals.$inferInsert;
 
 export type CommandLogRow = typeof commandLog.$inferSelect;
 export type InsertCommandLog = typeof commandLog.$inferInsert;

@@ -34,8 +34,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     writer.write(encoder.encode(data)).catch(() => {});
   };
 
+  // Track the highest sessionSeq we replay, so the live callback can
+  // skip events that were already delivered via replay (prevents duplicates
+  // when an event is emitted between subscribe() and replay()).
+  let lastReplayedSeq = 0;
+
   // Subscribe to typed RuntimeEvents
   const unsubscribe = eventBus.subscribe(sessionId, (event) => {
+    // Skip events that were already delivered via replay buffer
+    if (event.sessionSeq <= lastReplayedSeq) return;
     writeSse(formatSse(event));
   });
 
@@ -65,8 +72,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ? eventBus.replay(sessionId, parsedLastEventId)
       : eventBus.replayActiveRun(sessionId);
 
+  // Record the highest sessionSeq from replay so the live callback can
+  // filter out any duplicate events that slipped in during replay.
   for (const event of missed) {
     writeSse(formatSse(event));
+    if (event.sessionSeq > lastReplayedSeq) {
+      lastReplayedSeq = event.sessionSeq;
+    }
   }
 
   // Clean up on disconnect

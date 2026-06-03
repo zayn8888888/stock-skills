@@ -60,21 +60,38 @@ export function createRuntimeStore(db: DrizzleDb): RuntimeStore {
 
   const store: RuntimeStore = {
     ...repos,
-    async transaction<T>(fn: (tx: RuntimeStoreTx) => Promise<T> | T): Promise<T> {
-      return db.transaction(async (tx) => {
-        const txStore: RuntimeStoreTx = {
-          sessions: new DrizzleSessionRepo(tx as unknown as DrizzleDb),
-          messages: new DrizzleMessageRepo(tx as unknown as DrizzleDb),
-          runs: new DrizzleRunRepo(tx as unknown as DrizzleDb),
-          events: new DrizzleEventRepo(tx as unknown as DrizzleDb),
-          tools: new DrizzleToolCallRepo(tx as unknown as DrizzleDb),
-          artifacts: new DrizzleArtifactRepo(tx as unknown as DrizzleDb),
-          runners: new DrizzleRunnerRepo(tx as unknown as DrizzleDb),
-          goals: new DrizzleGoalRepo(tx as unknown as DrizzleDb),
-          commands: new DrizzleCommandLogRepo(tx as unknown as DrizzleDb),
-        };
-        return fn(txStore);
-      });
+    transaction<T>(fn: (tx: RuntimeStoreTx) => Promise<T> | T): Promise<T> {
+      // better-sqlite3 is synchronous — its native transaction() wrapper
+      // throws "Transaction function cannot return a promise" when the
+      // callback returns a Promise.  We use SAVEPOINT-based transactions
+      // instead, which allow the Drizzle async API to work correctly
+      // because savepoints scope at the connection level.
+      const rawDb = (db as unknown as Record<string, unknown>).$client as { exec(sql: string): void };
+      const sp = `_tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      rawDb.exec(`SAVEPOINT "${sp}"`);
+
+      try {
+        const result = fn(repos as RuntimeStoreTx);
+
+        if (result instanceof Promise) {
+          return result.then(
+            (value) => {
+              rawDb.exec(`RELEASE SAVEPOINT "${sp}"`);
+              return value;
+            },
+            (error) => {
+              rawDb.exec(`ROLLBACK TO SAVEPOINT "${sp}"`);
+              throw error;
+            },
+          );
+        }
+
+        rawDb.exec(`RELEASE SAVEPOINT "${sp}"`);
+        return Promise.resolve(result);
+      } catch (err) {
+        rawDb.exec(`ROLLBACK TO SAVEPOINT "${sp}"`);
+        throw err;
+      }
     },
   };
 
@@ -262,13 +279,13 @@ class DrizzleEventRepo implements RuntimeEventRepository {
   async append(event: InsertRuntimeEvent): Promise<RuntimeEventRow> {
     const row: InsertRuntimeEvent = {
       ...event,
+      id: event.id ?? nanoid(),
       schemaVersion: event.schemaVersion ?? "runtime-event.v1",
       persist: event.persist ?? 1,
       createdAt: event.createdAt ?? new Date().toISOString(),
     };
-    await this.db.insert(schema.runtimeEvents).values(row);
-    const result = await this.findBySession(row.sessionId as string, { limit: 1 });
-    return result[result.length - 1] ?? row;
+    const [result] = await this.db.insert(schema.runtimeEvents).values(row).returning();
+    return result;
   }
 
   async findBySession(
@@ -492,6 +509,21 @@ class DrizzleRunnerRepo implements RunnerRepository {
 
 class DrizzleGoalRepo implements GoalRepository {
   constructor(private db: DrizzleDb) {}
+
+  async create(data: { sessionId: string; goal: string; status?: string }): Promise<GoalRow> {
+    const now = new Date().toISOString();
+    const row = {
+      id: nanoid(),
+      sessionId: data.sessionId,
+      goal: data.goal,
+      status: data.status ?? "active",
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.db.insert(schema.researchGoals).values(row);
+    // biome-ignore lint/style/noNonNullAssertion: we just inserted it
+    return (await this.findById(row.id))!;
+  }
 
   async findById(id: string): Promise<GoalRow | undefined> {
     const rows = await this.db

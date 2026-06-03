@@ -10,6 +10,7 @@ import { getDb } from "@/lib/db";
 import { createRuntimeStore } from "@/lib/runtime/repositories";
 import { RuntimeEventLog } from "@/lib/runtime/event-log";
 import { RuntimeCommandService } from "@/lib/runtime/command-service";
+import { ResearchRuntime } from "@/lib/runtime/research-runtime";
 import { eventBus } from "@/lib/runtime/event-bus";
 import { parseAgUiInput } from "@/lib/ag-ui/command";
 import { projectToAgUi } from "@/lib/ag-ui/projector";
@@ -33,21 +34,15 @@ export async function POST(req: NextRequest) {
   // Parse AG-UI input into RuntimeCommand
   const cmd = parseAgUiInput(body as Parameters<typeof parseAgUiInput>[0]);
 
-  // Wire up store + event log + command service
+  // Wire up store + event log + runtime + command service
   const db = getDb();
   const store = createRuntimeStore(db);
-  const eventLog = new RuntimeEventLog(store);
+  const eventLog = new RuntimeEventLog(store, {
+    onAppend: (event) => eventBus.emit(event.sessionId, event),
+  });
+  const researchRuntime = new ResearchRuntime(store, eventLog);
 
-  // Bridge to EventBus for real-time delivery
-  const originalAppend = eventLog.append.bind(eventLog);
-  // @ts-expect-error: overriding append for EventBus bridge
-  eventLog.append = async function (event: RuntimeEvent) {
-    const result = await originalAppend(event);
-    eventBus.emit(event.sessionId, result as RuntimeEvent);
-    return result;
-  };
-
-  const service = new RuntimeCommandService(store, eventLog);
+  const service = new RuntimeCommandService(store, eventLog, researchRuntime);
 
   // Execute command
   const result = await service.handle(cmd);

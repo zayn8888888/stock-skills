@@ -77,6 +77,7 @@ export class ArtifactService {
       producer: options.producer ?? "agent",
       sha256,
       sizeBytes,
+      sourceEventId: options.sourceEventId ?? null,
     });
 
     // Emit artifact.created event

@@ -32,7 +32,6 @@ export const FORBIDDEN_RUNTIME_PATTERNS: readonly string[] = [
  * After Task 11, most old files have been deleted. This list is now nearly empty.
  */
 export const TEMPORARY_OLD_FILE_ALLOWLIST: readonly string[] = [
-  "src/lib/runtime/run-manager.ts",
   "src/lib/runtime/artifact-writer.ts",
   "src/lib/db/schema.ts",
   "src/lib/agent/loop-registry.ts",

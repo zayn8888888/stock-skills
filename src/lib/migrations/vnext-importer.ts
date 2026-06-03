@@ -41,6 +41,9 @@ export function mapOldRunEventType(eventType: string, subStatus?: string): strin
   if (eventType === "error") return "error.created";
   if (eventType === "run_started") return "run.started";
   if (eventType === "run.created") return "run.created";
+  if (eventType === "text_delta") return "model.text.delta";
+  if (eventType === "thinking_delta") return "model.reasoning.delta";
+  if (eventType === "run.updated") return "run.progressed";
   if (eventType === "progress" || eventType === "log") return "run.progressed";
   return "system.info";
 }

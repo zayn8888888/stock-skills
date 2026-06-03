@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { createRuntimeStore } from "@/lib/runtime/repositories";
 import { RuntimeEventLog } from "@/lib/runtime/event-log";
 import { RuntimeCommandService } from "@/lib/runtime/command-service";
+import { ResearchRuntime } from "@/lib/runtime/research-runtime";
 import { RuntimeCommandSchema } from "@/lib/runtime/commands";
 import { eventBus } from "@/lib/runtime/event-bus";
 import type { NextRequest } from "next/server";
@@ -33,21 +34,15 @@ export async function POST(req: NextRequest) {
 
   const cmd = parsed.data;
 
-  // Wire up store + event log + command service
+  // Wire up store + event log + runtime + command service
   const db = getDb();
   const store = createRuntimeStore(db);
-  const eventLog = new RuntimeEventLog(store);
+  const eventLog = new RuntimeEventLog(store, {
+    onAppend: (event) => eventBus.emit(event.sessionId, event),
+  });
+  const researchRuntime = new ResearchRuntime(store, eventLog);
 
-  // Bridge event log to EventBus for real-time SSE delivery
-  const originalAppend = eventLog.append.bind(eventLog);
-  // @ts-expect-error: overriding append for EventBus bridge
-  eventLog.append = async function (event: Parameters<typeof originalAppend>[0]) {
-    const result = await originalAppend(event);
-    eventBus.emit(event.sessionId, result as Parameters<typeof eventBus.emit>[1]);
-    return result;
-  };
-
-  const service = new RuntimeCommandService(store, eventLog);
+  const service = new RuntimeCommandService(store, eventLog, researchRuntime);
 
   try {
     const result = await service.handle(cmd);
