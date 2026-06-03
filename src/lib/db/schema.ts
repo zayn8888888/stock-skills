@@ -136,7 +136,7 @@ export const messages = sqliteTable(
     sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id),
-    runId: text("run_id").references(() => runs.id),
+    runId: text("run_id"),
     parentMessageId: text("parent_message_id"),
     role: text("role").notNull(),
     messageType: text("message_type").notNull().default("plain"),
@@ -203,7 +203,7 @@ export const runs = sqliteTable(
     sessionId: text("session_id")
       .notNull()
       .references(() => sessions.id),
-    messageId: text("message_id").references(() => messages.id),
+    messageId: text("message_id"),
     parentRunId: text("parent_run_id"),
     goalId: text("goal_id").references(() => researchGoals.id),
     runnerId: text("runner_id"),

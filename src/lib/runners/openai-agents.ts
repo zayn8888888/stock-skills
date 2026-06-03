@@ -60,12 +60,16 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
       // Create runner with streaming
       const runner = new Runner();
 
-      // Build conversation input
-      const agentInput = input.history.map((msg) => ({
-        role: msg.role as "user" | "assistant" | "system",
-        content: msg.content,
-      }));
-      agentInput.push({ role: "user" as const, content: input.userInput });
+      // Build conversation input — use separate arrays per role to satisfy SDK types
+      const agentInput: unknown[] = [];
+      for (const msg of input.history) {
+        agentInput.push({
+          role: msg.role,
+          content: msg.content,
+          type: "message",
+        });
+      }
+      agentInput.push({ role: "user", content: input.userInput, type: "message" });
 
       // Execute with event stream
       let fullText = "";
@@ -73,7 +77,7 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
       if (signal.aborted) return { status: "cancelled" };
 
       // Run the agent
-      const result = await runner.run(agent, agentInput);
+      const result = await runner.run(agent, agentInput as Parameters<typeof runner.run>[1]);
 
       // Extract text from result
       fullText = this.extractText(result);
@@ -89,7 +93,7 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
       return {
         status: "succeeded",
         text: fullText,
-        traceId: result?.traceId ?? undefined,
+        traceId: typeof result === "object" && result !== null && "traceId" in result ? (result as { traceId?: string }).traceId : undefined,
       };
     } catch (err) {
       const isCancelled = signal.aborted;

@@ -2,6 +2,7 @@ import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
 import { sessions } from "@/lib/db/schema";
 import { eventBus } from "@/lib/runtime/event-bus";
+import { createRuntimeEvent } from "@/lib/runtime/events";
 import { desc } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 import { type NextRequest, NextResponse } from "next/server";
@@ -28,7 +29,17 @@ export async function POST(req: NextRequest) {
     status: "active",
   });
 
-  eventBus.emit(sessionId, "session.created", { sessionId, title });
+  eventBus.emit(
+    sessionId,
+    createRuntimeEvent({
+      sessionId,
+      type: "session.created",
+      category: "lifecycle",
+      scope: "session",
+      producer: "server",
+      payload: { sessionId, title },
+    }),
+  );
 
   return NextResponse.json(
     {

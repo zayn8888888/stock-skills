@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { runs } from "@/lib/db/schema";
 import { deriveDurationMs } from "@/lib/runs/duration";
 import { eventBus } from "@/lib/runtime/event-bus";
+import { createRuntimeEvent } from "@/lib/runtime/events";
 import { desc } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { type NextRequest, NextResponse } from "next/server";
@@ -72,11 +73,18 @@ export async function POST(req: NextRequest) {
 
   // Emit run.created event if session_id is provided
   if (session_id) {
-    eventBus.emit(session_id, "run.created", {
-      run_id: runId,
-      skill_name,
-      workflow_type,
-    });
+    eventBus.emit(
+      session_id,
+      createRuntimeEvent({
+        sessionId: session_id,
+        runId: runId,
+        type: "run.created",
+        category: "lifecycle",
+        scope: "run",
+        producer: "server",
+        payload: { runId, skillName: skill_name, workflowType: workflow_type },
+      }),
+    );
   }
 
   return NextResponse.json(
@@ -114,7 +122,7 @@ export async function GET(req: NextRequest) {
       created_at: row.createdAt,
       started_at: row.startedAt,
       finished_at: row.finishedAt,
-      duration_ms: deriveDurationMs(row),
+      duration_ms: deriveDurationMs({ durationMs: row.durationMs, startedAt: row.startedAt, finishedAt: row.finishedAt }),
     };
   });
 

@@ -36,6 +36,23 @@ export function createRun(db: DB, data: CreateRunData): typeof schema.runs.$infe
     resultSummary: null,
     createdAt: now,
     metadata: null,
+    // vNext nullable columns
+    messageId: null,
+    parentRunId: null,
+    runnerId: null,
+    workflowType: null,
+    executionMode: null,
+    ticker: null,
+    market: null,
+    intent: null,
+    modelId: null,
+    requestId: null,
+    owner: null,
+    caller: null,
+    errorCode: null,
+    errorMessage: null,
+    metadataJson: null,
+    queuedAt: null,
   };
 
   db.insert(schema.runs).values(run).run();

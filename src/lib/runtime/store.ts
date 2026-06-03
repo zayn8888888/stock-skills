@@ -41,21 +41,21 @@ export type RuntimeStoreTx = Omit<RuntimeStore, "transaction">;
 // ─── Repository interfaces ───────────────────────────────────────────
 
 export interface SessionRepository {
-  create(data: InsertSession): Promise<SessionRow>;
+  create(data: Partial<InsertSession> & Pick<InsertSession, 'id' | 'status'>): Promise<SessionRow>;
   findById(id: string): Promise<SessionRow | undefined>;
   update(id: string, data: Partial<InsertSession>): Promise<void>;
   setActiveRun(sessionId: string, runId: string | null): Promise<void>;
 }
 
 export interface MessageRepository {
-  create(data: InsertMessage): Promise<MessageRow>;
+  create(data: Partial<InsertMessage> & Pick<InsertMessage, 'sessionId' | 'role' | 'content'>): Promise<MessageRow>;
   findById(id: string): Promise<MessageRow | undefined>;
   findBySession(sessionId: string, opts?: { limit?: number; offset?: number }): Promise<MessageRow[]>;
   findByRun(runId: string): Promise<MessageRow[]>;
 }
 
 export interface RunRepository {
-  create(data: InsertRun): Promise<RunRow>;
+  create(data: Partial<InsertRun> & Pick<InsertRun, 'sessionId' | 'skillName'>): Promise<RunRow>;
   findById(id: string): Promise<RunRow | undefined>;
   findBySession(sessionId: string, opts?: { limit?: number }): Promise<RunRow[]>;
   findActiveBySession(sessionId: string): Promise<RunRow | undefined>;
@@ -94,7 +94,7 @@ export interface ToolCallRepository {
 }
 
 export interface ArtifactRepository {
-  create(data: InsertArtifact): Promise<ArtifactRow>;
+  create(data: Partial<InsertArtifact> & Pick<InsertArtifact, 'runId' | 'kind' | 'name'>): Promise<ArtifactRow>;
   findById(id: string): Promise<ArtifactRow | undefined>;
   findByRun(runId: string): Promise<ArtifactRow[]>;
   findBySession(sessionId: string): Promise<ArtifactRow[]>;

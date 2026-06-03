@@ -42,7 +42,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
     created_at: row.createdAt,
     started_at: row.startedAt,
     finished_at: row.finishedAt,
-    duration_ms: deriveDurationMs(row),
+    duration_ms: deriveDurationMs({ durationMs: row.durationMs, startedAt: row.startedAt, finishedAt: row.finishedAt }),
     result_summary: row.resultSummary,
     artifacts: artifactRows.map((a) => ({
       artifact_id: a.id,

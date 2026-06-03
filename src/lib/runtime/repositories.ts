@@ -5,40 +5,40 @@
  * vNext runtime. All other modules go through the RuntimeStore interface.
  */
 
-import { eq, and, gt, desc, asc, sql } from "drizzle-orm";
-import { nanoid } from "nanoid";
 import * as schema from "@/lib/db/schema";
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
+import { nanoid } from "nanoid";
 import type {
+  ArtifactRepository,
+  ArtifactRow,
+  CommandLogRepository,
+  CommandLogRow,
+  GoalRepository,
+  GoalRow,
+  InsertArtifact,
+  InsertCommandLog,
+  InsertMessage,
+  InsertRun,
+  InsertRunnerProvider,
+  InsertRunnerRun,
+  InsertRuntimeEvent,
+  InsertSession,
+  InsertToolCall,
+  MessageRepository,
+  MessageRow,
+  RunRepository,
+  RunRow,
+  RunnerProviderRow,
+  RunnerRepository,
+  RunnerRunRow,
+  RuntimeEventRepository,
+  RuntimeEventRow,
   RuntimeStore,
   RuntimeStoreTx,
   SessionRepository,
-  MessageRepository,
-  RunRepository,
-  RuntimeEventRepository,
-  ToolCallRepository,
-  ArtifactRepository,
-  RunnerRepository,
-  GoalRepository,
-  CommandLogRepository,
-  InsertSession,
-  InsertMessage,
-  InsertRun,
-  InsertRuntimeEvent,
-  InsertToolCall,
-  InsertArtifact,
-  InsertRunnerRun,
-  InsertRunnerProvider,
-  InsertCommandLog,
   SessionRow,
-  MessageRow,
-  RunRow,
-  RuntimeEventRow,
+  ToolCallRepository,
   ToolCallRow,
-  ArtifactRow,
-  RunnerRunRow,
-  RunnerProviderRow,
-  GoalRow,
-  CommandLogRow,
 } from "./store";
 
 type DrizzleDb = ReturnType<typeof import("drizzle-orm/better-sqlite3").drizzle<typeof schema>>;
@@ -86,13 +86,14 @@ export function createRuntimeStore(db: DrizzleDb): RuntimeStore {
 class DrizzleSessionRepo implements SessionRepository {
   constructor(private db: DrizzleDb) {}
 
-  async create(data: InsertSession): Promise<SessionRow> {
+  async create(
+    data: Partial<InsertSession> & Pick<InsertSession, "id" | "status">,
+  ): Promise<SessionRow> {
+    const now = new Date().toISOString();
     const row: InsertSession = {
-      id: data.id ?? nanoid(),
-      title: data.title ?? null,
-      status: data.status ?? "active",
-      createdAt: data.createdAt ?? new Date().toISOString(),
-      updatedAt: data.updatedAt ?? new Date().toISOString(),
+      title: null,
+      createdAt: now,
+      updatedAt: now,
       ...data,
     };
     await this.db.insert(schema.sessions).values(row);
@@ -101,7 +102,11 @@ class DrizzleSessionRepo implements SessionRepository {
   }
 
   async findById(id: string): Promise<SessionRow | undefined> {
-    const rows = await this.db.select().from(schema.sessions).where(eq(schema.sessions.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.id, id))
+      .limit(1);
     return rows[0];
   }
 
@@ -125,14 +130,17 @@ class DrizzleSessionRepo implements SessionRepository {
 class DrizzleMessageRepo implements MessageRepository {
   constructor(private db: DrizzleDb) {}
 
-  async create(data: InsertMessage): Promise<MessageRow> {
+  async create(
+    data: Partial<InsertMessage> & Pick<InsertMessage, "sessionId" | "role" | "content">,
+  ): Promise<MessageRow> {
+    const now = new Date().toISOString();
     const row: InsertMessage = {
-      id: data.id ?? nanoid(),
-      messageType: data.messageType ?? "plain",
-      messageStatus: data.messageStatus ?? "visible",
-      contentFormat: data.contentFormat ?? "markdown",
-      createdAt: data.createdAt ?? new Date().toISOString(),
-      updatedAt: data.updatedAt ?? new Date().toISOString(),
+      id: nanoid(),
+      messageType: "plain",
+      messageStatus: "visible",
+      contentFormat: "markdown",
+      createdAt: now,
+      updatedAt: now,
       ...data,
     };
     await this.db.insert(schema.messages).values(row);
@@ -141,19 +149,26 @@ class DrizzleMessageRepo implements MessageRepository {
   }
 
   async findById(id: string): Promise<MessageRow | undefined> {
-    const rows = await this.db.select().from(schema.messages).where(eq(schema.messages.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(schema.messages)
+      .where(eq(schema.messages.id, id))
+      .limit(1);
     return rows[0];
   }
 
-  async findBySession(sessionId: string, opts?: { limit?: number; offset?: number }): Promise<MessageRow[]> {
-    let q = this.db
+  async findBySession(
+    sessionId: string,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<MessageRow[]> {
+    const base = this.db
       .select()
       .from(schema.messages)
       .where(eq(schema.messages.sessionId, sessionId))
       .orderBy(asc(schema.messages.createdAt));
-    if (opts?.limit) q = q.limit(opts.limit);
-    if (opts?.offset) q = q.offset(opts.offset);
-    return await q;
+    const limited = opts?.limit ? base.limit(opts.limit) : base;
+    const result = opts?.offset ? limited.offset(opts.offset) : limited;
+    return await result;
   }
 
   async findByRun(runId: string): Promise<MessageRow[]> {
@@ -170,13 +185,15 @@ class DrizzleMessageRepo implements MessageRepository {
 class DrizzleRunRepo implements RunRepository {
   constructor(private db: DrizzleDb) {}
 
-  async create(data: InsertRun): Promise<RunRow> {
+  async create(
+    data: Partial<InsertRun> & Pick<InsertRun, "sessionId" | "skillName">,
+  ): Promise<RunRow> {
     const now = new Date().toISOString();
     const row: InsertRun = {
-      id: data.id ?? nanoid(),
-      status: data.status ?? "queued",
-      createdAt: data.createdAt ?? now,
-      queuedAt: data.queuedAt ?? now,
+      id: nanoid(),
+      status: "queued",
+      createdAt: now,
+      queuedAt: now,
       ...data,
     };
     await this.db.insert(schema.runs).values(row);
@@ -190,13 +207,13 @@ class DrizzleRunRepo implements RunRepository {
   }
 
   async findBySession(sessionId: string, opts?: { limit?: number }): Promise<RunRow[]> {
-    let q = this.db
+    const base = this.db
       .select()
       .from(schema.runs)
       .where(eq(schema.runs.sessionId, sessionId))
       .orderBy(desc(schema.runs.createdAt));
-    if (opts?.limit) q = q.limit(opts.limit);
-    return await q;
+    const result = opts?.limit ? base.limit(opts.limit) : base;
+    return await result;
   }
 
   async findActiveBySession(sessionId: string): Promise<RunRow | undefined> {
@@ -244,44 +261,49 @@ class DrizzleEventRepo implements RuntimeEventRepository {
 
   async append(event: InsertRuntimeEvent): Promise<RuntimeEventRow> {
     const row: InsertRuntimeEvent = {
-      id: event.id ?? nanoid(),
+      ...event,
       schemaVersion: event.schemaVersion ?? "runtime-event.v1",
       persist: event.persist ?? 1,
       createdAt: event.createdAt ?? new Date().toISOString(),
-      ...event,
     };
     await this.db.insert(schema.runtimeEvents).values(row);
-    // biome-ignore lint/style/noNonNullAssertion: we just inserted it
     const result = await this.findBySession(row.sessionId as string, { limit: 1 });
     return result[result.length - 1] ?? row;
   }
 
-  async findBySession(sessionId: string, opts?: { afterSeq?: number; limit?: number }): Promise<RuntimeEventRow[]> {
+  async findBySession(
+    sessionId: string,
+    opts?: { afterSeq?: number; limit?: number },
+  ): Promise<RuntimeEventRow[]> {
     const conditions = [eq(schema.runtimeEvents.sessionId, sessionId)];
     if (opts?.afterSeq != null) {
       conditions.push(gt(schema.runtimeEvents.sessionSeq, opts.afterSeq));
     }
-    let q = this.db
+    const base = this.db
       .select()
       .from(schema.runtimeEvents)
       .where(and(...conditions))
       .orderBy(asc(schema.runtimeEvents.sessionSeq));
-    if (opts?.limit) q = q.limit(opts.limit);
-    return await q;
+    const result = opts?.limit ? base.limit(opts.limit) : base;
+    return await result;
   }
 
-  async findByRun(runId: string, opts?: { afterSeq?: number; limit?: number }): Promise<RuntimeEventRow[]> {
+  async findByRun(
+    runId: string,
+    opts?: { afterSeq?: number; limit?: number },
+  ): Promise<RuntimeEventRow[]> {
     const conditions = [eq(schema.runtimeEvents.runId, runId)];
     if (opts?.afterSeq != null) {
+      // biome-ignore lint/style/noNonNullAssertion: runSeq is always set for event rows
       conditions.push(gt(schema.runtimeEvents.runSeq!, opts.afterSeq));
     }
-    let q = this.db
+    const base = this.db
       .select()
       .from(schema.runtimeEvents)
       .where(and(...conditions))
       .orderBy(asc(schema.runtimeEvents.runSeq));
-    if (opts?.limit) q = q.limit(opts.limit);
-    return await q;
+    const result = opts?.limit ? base.limit(opts.limit) : base;
+    return await result;
   }
 
   async nextSessionSeq(sessionId: string): Promise<number> {
@@ -309,10 +331,10 @@ class DrizzleToolCallRepo implements ToolCallRepository {
   async create(data: InsertToolCall): Promise<ToolCallRow> {
     const now = new Date().toISOString();
     const row: InsertToolCall = {
+      ...data,
       id: data.id ?? nanoid(),
       createdAt: data.createdAt ?? now,
       updatedAt: data.updatedAt ?? now,
-      ...data,
     };
     await this.db.insert(schema.toolCalls).values(row);
     // biome-ignore lint/style/noNonNullAssertion: we just inserted it
@@ -320,7 +342,11 @@ class DrizzleToolCallRepo implements ToolCallRepository {
   }
 
   async findById(id: string): Promise<ToolCallRow | undefined> {
-    const rows = await this.db.select().from(schema.toolCalls).where(eq(schema.toolCalls.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(schema.toolCalls)
+      .where(eq(schema.toolCalls.id, id))
+      .limit(1);
     return rows[0];
   }
 
@@ -365,11 +391,13 @@ class DrizzleToolCallRepo implements ToolCallRepository {
 class DrizzleArtifactRepo implements ArtifactRepository {
   constructor(private db: DrizzleDb) {}
 
-  async create(data: InsertArtifact): Promise<ArtifactRow> {
+  async create(
+    data: Partial<InsertArtifact> & Pick<InsertArtifact, "runId" | "kind" | "name">,
+  ): Promise<ArtifactRow> {
     const row: InsertArtifact = {
+      ...data,
       id: data.id ?? nanoid(),
       createdAt: data.createdAt ?? new Date().toISOString(),
-      ...data,
     };
     await this.db.insert(schema.artifacts).values(row);
     // biome-ignore lint/style/noNonNullAssertion: we just inserted it
@@ -377,7 +405,11 @@ class DrizzleArtifactRepo implements ArtifactRepository {
   }
 
   async findById(id: string): Promise<ArtifactRow | undefined> {
-    const rows = await this.db.select().from(schema.artifacts).where(eq(schema.artifacts.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(schema.artifacts)
+      .where(eq(schema.artifacts.id, id))
+      .limit(1);
     return rows[0];
   }
 
@@ -393,6 +425,7 @@ class DrizzleArtifactRepo implements ArtifactRepository {
     return await this.db
       .select()
       .from(schema.artifacts)
+      // biome-ignore lint/style/noNonNullAssertion: sessionId is always set for session artifacts
       .where(eq(schema.artifacts.sessionId!, sessionId))
       .orderBy(asc(schema.artifacts.createdAt));
   }
@@ -406,10 +439,10 @@ class DrizzleRunnerRepo implements RunnerRepository {
   async create(data: InsertRunnerRun): Promise<RunnerRunRow> {
     const now = new Date().toISOString();
     const row: InsertRunnerRun = {
+      ...data,
       id: data.id ?? nanoid(),
       createdAt: data.createdAt ?? now,
       updatedAt: data.updatedAt ?? now,
-      ...data,
     };
     await this.db.insert(schema.runnerRuns).values(row);
     // biome-ignore lint/style/noNonNullAssertion: we just inserted it
@@ -428,10 +461,10 @@ class DrizzleRunnerRepo implements RunnerRepository {
   async upsertProvider(data: InsertRunnerProvider): Promise<RunnerProviderRow> {
     const now = new Date().toISOString();
     const row: InsertRunnerProvider = {
+      ...data,
       id: data.id ?? nanoid(),
       createdAt: data.createdAt ?? now,
       updatedAt: data.updatedAt ?? now,
-      ...data,
     };
     // Use INSERT OR REPLACE for upsert
     await this.db
@@ -491,9 +524,9 @@ class DrizzleCommandLogRepo implements CommandLogRepository {
 
   async create(data: InsertCommandLog): Promise<CommandLogRow> {
     const row: InsertCommandLog = {
+      ...data,
       id: data.id ?? nanoid(),
       createdAt: data.createdAt ?? new Date().toISOString(),
-      ...data,
     };
     await this.db.insert(schema.commandLog).values(row);
     // biome-ignore lint/style/noNonNullAssertion: we just inserted it
@@ -501,7 +534,11 @@ class DrizzleCommandLogRepo implements CommandLogRepository {
   }
 
   async findById(id: string): Promise<CommandLogRow | undefined> {
-    const rows = await this.db.select().from(schema.commandLog).where(eq(schema.commandLog.id, id)).limit(1);
+    const rows = await this.db
+      .select()
+      .from(schema.commandLog)
+      .where(eq(schema.commandLog.id, id))
+      .limit(1);
     return rows[0];
   }
 
@@ -516,7 +553,13 @@ class DrizzleCommandLogRepo implements CommandLogRepository {
 
   async updateResult(
     id: string,
-    data: { status: string; responseJson?: string; errorCode?: string; errorMessage?: string; finishedAt?: string },
+    data: {
+      status: string;
+      responseJson?: string;
+      errorCode?: string;
+      errorMessage?: string;
+      finishedAt?: string;
+    },
   ): Promise<void> {
     await this.db
       .update(schema.commandLog)

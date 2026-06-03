@@ -110,10 +110,13 @@ export class RuntimeCommandService {
   }
 
   private async handleCreateSession(cmd: RuntimeCommand): Promise<CommandResult> {
+    const now = new Date().toISOString();
     const session = await this.store.sessions.create({
       id: nanoid(),
       title: cmd.content ?? null,
       status: "active",
+      createdAt: now,
+      updatedAt: now,
     });
 
     // Emit session.created event
@@ -253,7 +256,7 @@ export class RuntimeCommandService {
       };
     }
 
-    await this.store.runs.updateStatus(runId, "running", { startedAt: new Date().toISOString() });
+    await this.store.runs.update(runId, { status: "running", startedAt: new Date().toISOString() });
 
     await this.eventLog.append(
       createRuntimeEvent({

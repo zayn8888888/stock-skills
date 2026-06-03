@@ -40,7 +40,8 @@ export async function POST(req: NextRequest) {
 
   // Bridge event log to EventBus for real-time SSE delivery
   const originalAppend = eventLog.append.bind(eventLog);
-  eventLog.append = async function <T>(event: Parameters<typeof originalAppend>[0]) {
+  // @ts-expect-error: overriding append for EventBus bridge
+  eventLog.append = async function (event: Parameters<typeof originalAppend>[0]) {
     const result = await originalAppend(event);
     eventBus.emit(event.sessionId, result as Parameters<typeof eventBus.emit>[1]);
     return result;

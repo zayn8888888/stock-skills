@@ -49,7 +49,8 @@ export class ResearchRuntime {
 
       // Transition to running if still queued
       if (run.status === "queued") {
-        await this.store.runs.updateStatus(runId, "running", {
+        await this.store.runs.update(runId, {
+          status: "running",
           startedAt: new Date().toISOString(),
         });
         await this.eventLog.append(
