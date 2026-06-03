@@ -1,26 +1,22 @@
 /**
- * Event types that are persisted in the replay buffer.
- * Includes streaming events so reconnecting clients can catch up
- * on mid-stream content.  Buffer is capped at REPLAY_BUFFER_SIZE
- * per session so memory stays bounded.
+ * Typed, session-scoped event bus with replay support.
+ *
+ * The vNext EventBus accepts only RuntimeEvent objects (canonical protocol).
+ * Old string-based event names (text_delta, tool_call, etc.) are NOT supported.
+ *
+ * Each session maintains an independent ring buffer of runtime events
+ * (up to REPLAY_BUFFER_SIZE) so SSE clients can catch up after reconnection.
  */
-const STATE_EVENT_TYPES = new Set([
-  "run.created",
-  "run.updated",
-  "artifact.created",
-  "goal.set",
-  "goal.achieved",
-  "goal.abandoned",
-  "goal.superseded",
-  "error",
-  // Streaming events — needed for mid-stream reconnect
-  "text_delta",
-  "thinking_delta",
-  "tool_call",
-  "tool_result",
-]);
 
-const TERMINAL_RUN_STATUSES = new Set(["success", "failed", "cancelled"]);
+import type { RuntimeEvent } from "./events";
+
+// ─── Terminal run event types ─────────────────────────────────────────
+
+const TERMINAL_RUN_TYPES = new Set([
+  "run.completed",
+  "run.failed",
+  "run.cancelled",
+]);
 
 /** Maximum number of events kept per session in the replay buffer. */
 const REPLAY_BUFFER_SIZE = 500;
@@ -28,57 +24,23 @@ const REPLAY_BUFFER_SIZE = 500;
 /** Maximum number of session channels kept in memory. Oldest are evicted first. */
 const MAX_CHANNELS = 50;
 
-export interface BusEvent {
-  id: number;
-  sessionId: string;
-  type: string;
-  data: unknown;
-  timestamp: string;
-}
-
-type Subscriber = (event: BusEvent) => void;
+type Subscriber = (event: RuntimeEvent) => void;
 
 interface SessionChannel {
   /** Monotonically increasing event counter scoped to the session. */
   nextId: number;
-  /** Ring buffer of state events for replay. */
-  buffer: BusEvent[];
+  /** Ring buffer of runtime events for replay. */
+  buffer: RuntimeEvent[];
   /** Active subscribers for this session. */
   subscribers: Set<Subscriber>;
   /** Last activity timestamp for eviction. */
   lastActivity: number;
 }
 
-function eventDataRecord(data: unknown): Record<string, unknown> | null {
-  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : null;
-}
-
-function eventRunId(event: BusEvent): string | null {
-  const data = eventDataRecord(event.data);
-  return typeof data?.runId === "string" ? data.runId : null;
-}
-
-function eventStatus(event: BusEvent): string | null {
-  const data = eventDataRecord(event.data);
-  return typeof data?.status === "string" ? data.status : null;
-}
-
-function isRunStreamEvent(event: BusEvent): boolean {
-  return (
-    event.type === "run.created" ||
-    event.type === "run.updated" ||
-    event.type === "text_delta" ||
-    event.type === "tool_call" ||
-    event.type === "tool_result" ||
-    event.type === "error"
-  );
-}
-
 /**
  * In-memory, session-scoped event bus with replay support.
  *
- * Each session maintains an independent ring buffer of state events
- * (up to 500) so that SSE clients can catch up after reconnection.
+ * Accepts only typed RuntimeEvent objects. Old string event names are rejected.
  */
 export class EventBus {
   private channels = new Map<string, SessionChannel>();
@@ -106,35 +68,24 @@ export class EventBus {
   }
 
   /**
-   * Emit an event into a session channel.
+   * Emit a RuntimeEvent into a session channel.
    *
-   * State events (as defined by STATE_EVENT_TYPES) are buffered for replay.
-   * All events are delivered to active subscribers.
+   * Non-persisted transport events (heartbeat, connected) are still buffered
+   * for SSE replay but not to DB. All events are delivered to active subscribers.
    */
-  emit(sessionId: string, eventType: string, data: unknown): void {
+  emit(sessionId: string, event: RuntimeEvent): void {
     const channel = this.getOrCreateChannel(sessionId);
-    // Only log state events — high-frequency streaming events (text_delta,
-    // tool_call, tool_result) would flood stdout and cause memory pressure.
-    if (STATE_EVENT_TYPES.has(eventType)) {
-      console.log(
-        `[EventBus] emit ${eventType} session=${sessionId} subs=${channel.subscribers.size}`,
-      );
-    }
+    // Assign bus-level id for SSE id field
+    const busEvent = { ...event, _busId: channel.nextId++ };
 
-    const event: BusEvent = {
-      id: channel.nextId++,
-      sessionId,
-      type: eventType,
-      data,
-      timestamp: new Date().toISOString(),
-    };
+    console.log(
+      `[EventBus] emit ${event.type} session=${sessionId} seq=${event.sessionSeq} subs=${channel.subscribers.size}`,
+    );
 
-    // Buffer state events for replay
-    if (STATE_EVENT_TYPES.has(eventType)) {
-      channel.buffer.push(event);
-      if (channel.buffer.length > REPLAY_BUFFER_SIZE) {
-        channel.buffer.shift();
-      }
+    // Buffer for replay
+    channel.buffer.push(event);
+    if (channel.buffer.length > REPLAY_BUFFER_SIZE) {
+      channel.buffer.shift();
     }
 
     // Deliver to live subscribers
@@ -158,7 +109,6 @@ export class EventBus {
 
     return () => {
       channel.subscribers.delete(callback);
-      // If no subscribers remain and buffer is empty, remove channel to free memory
       if (channel.subscribers.size === 0 && channel.buffer.length === 0) {
         this.channels.delete(sessionId);
       }
@@ -166,15 +116,15 @@ export class EventBus {
   }
 
   /**
-   * Replay buffered state events whose id is greater than `lastEventId`.
+   * Replay buffered events whose sessionSeq is greater than `afterSeq`.
    *
    * @returns Array of events in chronological order.
    */
-  replay(sessionId: string, lastEventId: number): BusEvent[] {
+  replay(sessionId: string, afterSeq: number): RuntimeEvent[] {
     const channel = this.channels.get(sessionId);
     if (!channel) return [];
 
-    return channel.buffer.filter((event) => event.id > lastEventId);
+    return channel.buffer.filter((event) => event.sessionSeq > afterSeq);
   }
 
   /**
@@ -185,47 +135,38 @@ export class EventBus {
    * stream, but we must not replay completed streams that already have a
    * persisted assistant message.
    */
-  replayActiveRun(sessionId: string): BusEvent[] {
+  replayActiveRun(sessionId: string): RuntimeEvent[] {
     const channel = this.channels.get(sessionId);
     if (!channel) return [];
 
-    let targetRunId: string | null = null;
-    let fallbackStart = -1;
-
     for (let i = channel.buffer.length - 1; i >= 0; i--) {
       const event = channel.buffer[i];
-      if (!isRunStreamEvent(event)) continue;
 
-      const runId = eventRunId(event);
-      if (!targetRunId && runId) {
-        targetRunId = runId;
-      }
-      if (targetRunId && runId && runId !== targetRunId) continue;
-
-      const status = eventStatus(event);
-      if (status && TERMINAL_RUN_STATUSES.has(status)) {
-        return [];
+      // Check if this run is terminal
+      if (TERMINAL_RUN_TYPES.has(event.type)) {
+        return []; // Last run is terminal — no active run
       }
 
-      fallbackStart = i;
-      if (event.type === "run.created") {
+      if (event.type === "run.created" || event.type === "run.started") {
         return channel.buffer.slice(i);
       }
     }
 
-    return fallbackStart >= 0 ? channel.buffer.slice(fallbackStart) : [];
+    return [];
   }
 
   /**
-   * Format an event as an SSE string suitable for a `text/event-stream` response.
+   * Format a RuntimeEvent as an SSE string suitable for text/event-stream.
+   *
+   * Uses "event: runtime.event" as the SSE event name — all vNext events
+   * use this single event type. Old event names are NOT emitted.
    */
-  toSSE(event: BusEvent): string {
-    return `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`;
+  toSSE(event: RuntimeEvent): string {
+    return `id: ${event.sessionSeq}\nevent: runtime.event\ndata: ${JSON.stringify(event)}\n\n`;
   }
 
   /**
    * Explicitly remove a session channel and clear its buffer.
-   * Called when a session is deleted or a run is fully complete.
    */
   removeChannel(sessionId: string): void {
     this.channels.delete(sessionId);
@@ -233,9 +174,6 @@ export class EventBus {
 }
 
 // ── Global singleton (survives Next.js dev server hot reloads) ──────
-// Next.js dev mode may evaluate modules multiple times across separate
-// bundles (RSC, SSR, API routes), creating duplicate singletons.
-// Storing on globalThis ensures all bundles share the same instance.
 
 const globalForEventBus = globalThis as unknown as {
   __eventBus: EventBus | undefined;

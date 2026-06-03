@@ -1,4 +1,18 @@
+/**
+ * GET /api/sessions/[id]/events — canonical vNext SSE endpoint.
+ *
+ * Emits only "event: runtime.event" with RuntimeEvent JSON payloads.
+ * Old event names (text_delta, tool_call, etc.) are NOT emitted.
+ *
+ * Supports:
+ * - Last-Event-ID replay (by sessionSeq)
+ * - Fresh connection active-run recovery
+ * - Transport heartbeat (30s)
+ * - 10-minute max connection lifetime
+ */
+
 import { eventBus } from "@/lib/runtime/event-bus";
+import { formatSse, formatHeartbeat, formatConnected } from "@/lib/runtime/projectors";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";
@@ -13,34 +27,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const parsedLastEventId = lastEventId !== null ? Number.parseInt(lastEventId, 10) : null;
 
   const encoder = new TextEncoder();
-
-  // Use TransformStream — better supported by Next.js for streaming
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
 
-  const send = (event: string, data: string) => {
-    writer.write(encoder.encode(`event: ${event}\ndata: ${data}\n\n`)).catch(() => {});
+  const writeSse = (data: string) => {
+    writer.write(encoder.encode(data)).catch(() => {});
   };
 
-  // Subscribe to events
+  // Subscribe to typed RuntimeEvents
   const unsubscribe = eventBus.subscribe(sessionId, (event) => {
-    writer.write(encoder.encode(eventBus.toSSE(event))).catch(() => {});
+    writeSse(formatSse(event));
   });
 
-  // Confirm connection after the subscription is active.
-  send("connected", "{}");
-  console.log(`[SSE] Connected, subscribed to session ${sessionId}`);
+  // Confirm connection
+  writeSse(formatConnected(sessionId));
+  console.log(`[SSE] Connected to session ${sessionId}`);
 
   // Heartbeat every 30s
+  let heartbeatSeq = 0;
   const heartbeat = setInterval(() => {
-    send("heartbeat", "{}");
+    writeSse(formatHeartbeat(sessionId, ++heartbeatSeq));
   }, 30_000);
 
-  // Max connection lifetime: 10 minutes. Prevents zombie SSE connections
-  // from accumulating when clients don't properly disconnect.
+  // Max connection lifetime: 10 minutes
   const maxLifetime = setTimeout(
     () => {
-      send("error", JSON.stringify({ message: "Connection lifetime exceeded" }));
       clearInterval(heartbeat);
       unsubscribe();
       writer.close().catch(() => {});
@@ -48,15 +59,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     10 * 60 * 1000,
   );
 
-  // Replay missed events. A fresh client has no Last-Event-ID, but still
-  // needs the active run buffer to restore in-progress output after re-entry.
+  // Replay missed events
   const missed =
     parsedLastEventId !== null && Number.isFinite(parsedLastEventId)
       ? eventBus.replay(sessionId, parsedLastEventId)
       : eventBus.replayActiveRun(sessionId);
 
   for (const event of missed) {
-    writer.write(encoder.encode(eventBus.toSSE(event))).catch(() => {});
+    writeSse(formatSse(event));
   }
 
   // Clean up on disconnect

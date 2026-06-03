@@ -36,7 +36,6 @@ export const TEMPORARY_OLD_FILE_ALLOWLIST: readonly string[] = [
   "src/lib/agent/pi-runner.ts",
   "src/lib/agent/pi-tools.ts",
   "src/lib/agent/loop-registry.ts",
-  "src/lib/runtime/event-bus.ts",
   "src/lib/runtime/run-manager.ts",
   "src/lib/runtime/artifact-writer.ts",
   "src/lib/db/schema.ts",
@@ -53,12 +52,13 @@ export const TEMPORARY_OLD_FILE_ALLOWLIST: readonly string[] = [
 
 /**
  * Paths allowed to reference old patterns in both default and strict modes.
- * Only migration tooling, fixtures, and docs.
+ * Only migration tooling, fixtures, docs, and tests that assert old names are absent.
  */
 export const MIGRATION_ONLY_ALLOWLIST: readonly string[] = [
   "src/lib/runtime/no-debt.ts",
   "scripts/check-no-runtime-debt.ts",
   "tests/runtime/no-runtime-debt.test.ts",
+  "tests/runtime/projectors.test.ts",
   "src/lib/migrations/",
   "tests/fixtures/runtime-v0/",
   "tests/migrations/",
