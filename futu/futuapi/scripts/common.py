@@ -231,6 +231,9 @@ from futu import (
         Plate,
 )
 
+from futu.common import FTLog
+FTLog().enable_console_log(False)
+
 try:
     from futu import TradeDateMarket
 except ImportError:
