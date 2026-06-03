@@ -37,6 +37,15 @@ export interface RawResponse<T = unknown> {
   source: string;
   operation: string;
   fetched_at: string; // ISO-8601
+  /** Provenance metadata for RuntimeEvent emission */
+  provenance?: {
+    providerId?: string;
+    adapterId?: string;
+    routeId?: string;
+    market?: string;
+    ticker?: string;
+    capability?: string;
+  };
 }
 
 // ──────────────────────────── Observation ─────────────────────────
