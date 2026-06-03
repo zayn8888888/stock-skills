@@ -1,7 +1,14 @@
 import { create } from "zustand";
+import {
+  applyRuntimeEvent,
+  createInitialState,
+  type RuntimeState,
+  type RuntimeMessage,
+} from "./runtime-reducer";
+import type { RuntimeEvent } from "@/lib/runtime/events";
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (backward-compatible with existing UI components)
 // ---------------------------------------------------------------------------
 
 export interface AgentMessage {
@@ -31,38 +38,18 @@ export interface ToolCallEntry {
   status: "pending" | "running" | "completed" | "error";
 }
 
-// ── Session cache entry: stores full conversation state ─────────────
+// ── Session cache ─────────────────────────────────────────────────────
 
 interface SessionCacheEntry {
-  messages: AgentMessage[];
-  toolCalls: ToolCallEntry[];
-  streamingText: string;
-  pendingRunId: string | null;
+  runtime: RuntimeState;
   lastAccess: number;
 }
-
-// ---------------------------------------------------------------------------
-// LRU Session Cache (10 entries)
-// ---------------------------------------------------------------------------
 
 const MAX_CACHED_SESSIONS = 10;
 const sessionCache = new Map<string, SessionCacheEntry>();
 
-function cacheSession(
-  sessionId: string,
-  messages: AgentMessage[],
-  toolCalls: ToolCallEntry[] = [],
-  streamingText = "",
-  pendingRunId: string | null = null,
-) {
-  sessionCache.set(sessionId, {
-    messages,
-    toolCalls,
-    streamingText,
-    pendingRunId,
-    lastAccess: Date.now(),
-  });
-  // Evict oldest if over capacity
+function cacheSession(sessionId: string, runtime: RuntimeState) {
+  sessionCache.set(sessionId, { runtime, lastAccess: Date.now() });
   if (sessionCache.size > MAX_CACHED_SESSIONS) {
     let oldestKey: string | null = null;
     let oldestTime = Number.POSITIVE_INFINITY;
@@ -76,377 +63,271 @@ function cacheSession(
   }
 }
 
-function getCachedSession(sessionId: string): SessionCacheEntry | null {
+function getCachedSession(sessionId: string): SessionState | null {
   const entry = sessionCache.get(sessionId);
   if (!entry) return null;
   entry.lastAccess = Date.now();
-  return entry;
+  return entry.runtime;
 }
+
+// ---------------------------------------------------------------------------
+// Derived types for backward compatibility
+// ---------------------------------------------------------------------------
+
+type SessionState = RuntimeState;
 
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
 
 export interface AgentState {
-  // Data
-  messages: AgentMessage[];
+  // Runtime state (vNext canonical)
+  runtime: RuntimeState;
   sessionId: string | null;
-  status: "idle" | "streaming" | "error";
-  streamingText: string;
-  streamingThinking: string;
-  toolCalls: ToolCallEntry[];
-
-  // SSE status (mirrors useSSE)
+  sessionLoading: boolean;
   sseStatus: "disconnected" | "connected" | "reconnecting";
   sseRetryAttempt: number;
 
-  // Loading
-  sessionLoading: boolean;
-
-  // Pending run (waiting for assistant response)
-  pendingRunId: string | null;
-
   // Actions
   switchSession: (sessionId: string) => void;
-  loadHistory: (
-    sessionId: string,
-    messages: AgentMessage[],
-    toolCallsByRun?: Record<string, ToolCallEntry[]>,
-  ) => void;
-  addMessage: (message: AgentMessage) => void;
-  appendDelta: (delta: string) => void;
-  appendThinkingDelta: (delta: string) => void;
-  addToolCall: (toolCall: ToolCallEntry) => void;
-  updateToolCall: (id: string, update: Partial<ToolCallEntry>) => void;
-  clearStreaming: (force?: boolean) => void;
+  loadTimeline: (sessionId: string, timeline: SessionTimelineResponse) => void;
+  addRuntimeEvent: (event: RuntimeEvent) => void;
   syncFromServer: (sessionId: string) => Promise<void>;
   setSSEStatus: (status: "disconnected" | "connected" | "reconnecting") => void;
   setSSERetryAttempt: (attempt: number) => void;
   setPendingRunId: (runId: string) => void;
   fetchRunArtifacts: (runId: string) => Promise<void>;
+
+  // Backward-compatible selectors
+  messages: () => AgentMessage[];
+  streamingText: () => string;
+  streamingThinking: () => string;
+  toolCalls: () => ToolCallEntry[];
+  pendingRunId: () => string | null;
+}
+
+interface SessionTimelineResponse {
+  messages: Array<{
+    id: string;
+    role: string;
+    content: string;
+    messageType: string;
+    runId: string | null;
+    createdAt: string;
+  }>;
+  runs: Array<{
+    id: string;
+    status: string;
+    skillName: string;
+    ticker: string | null;
+    createdAt: string;
+    finishedAt: string | null;
+  }>;
+  toolCalls: Array<{
+    id: string;
+    runId: string;
+    name: string;
+    status: string;
+    createdAt: string;
+  }>;
+  artifacts: Array<{
+    id: string;
+    runId: string;
+    kind: string;
+    name: string;
+    path: string | null;
+  }>;
+  activeRunId: string | null;
+}
+
+/** Convert RuntimeMessage to backward-compatible AgentMessage */
+function toAgentMessage(m: RuntimeMessage, rt: RuntimeState): AgentMessage {
+  const toolCallsForMsg = Object.values(rt.toolCallsById).filter(
+    (tc) => tc.runId === m.runId,
+  );
+  const artifactsForMsg = m.runId ? (rt.artifactsByRunId[m.runId] ?? []) : [];
+
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    timestamp: new Date(m.createdAt).getTime(),
+    runId: m.runId ?? undefined,
+    toolCalls: toolCallsForMsg.length > 0
+      ? toolCallsForMsg.map((tc) => ({
+          id: tc.id,
+          name: tc.name,
+          args: tc.args ? JSON.stringify(tc.args) : undefined,
+          result: tc.result ? JSON.stringify(tc.result) : undefined,
+          status: tc.status as ToolCallEntry["status"],
+        }))
+      : undefined,
+    artifacts: artifactsForMsg.length > 0
+      ? artifactsForMsg.map((a) => ({
+          id: a.id,
+          kind: a.kind,
+          name: a.name,
+          path: a.path,
+        }))
+      : undefined,
+  };
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
-  // Initial state
-  messages: [],
+  runtime: createInitialState(),
   sessionId: null,
-  status: "idle",
-  streamingText: "",
-  streamingThinking: "",
-  toolCalls: [],
+  sessionLoading: false,
   sseStatus: "disconnected",
   sseRetryAttempt: 0,
-  sessionLoading: false,
-  pendingRunId: null as string | null,
 
   switchSession: (sessionId: string) => {
     const state = get();
-
-    // Save current session state before switching
+    // Save current session
     if (state.sessionId) {
-      cacheSession(
-        state.sessionId,
-        state.messages,
-        state.toolCalls,
-        state.streamingText,
-        state.pendingRunId,
-      );
+      cacheSession(state.sessionId, state.runtime);
     }
 
     // Load target session
     const cached = getCachedSession(sessionId);
     if (cached) {
-      set({
-        sessionId,
-        messages: cached.messages,
-        toolCalls: cached.toolCalls,
-        streamingText: cached.streamingText,
-        pendingRunId: cached.pendingRunId,
-        status: cached.streamingText ? "streaming" : "idle",
-        sessionLoading: false,
-      });
+      set({ sessionId, runtime: cached, sessionLoading: false });
     } else {
-      set({
-        sessionId,
-        messages: [],
-        streamingText: "",
-        toolCalls: [],
-        status: "idle",
-        pendingRunId: null,
-        sessionLoading: true,
-      });
+      set({ sessionId, runtime: createInitialState(), sessionLoading: true });
     }
   },
 
-  loadHistory: (
-    sessionId: string,
-    messages: AgentMessage[],
-    toolCallsByRun?: Record<string, ToolCallEntry[]>,
-  ) => {
-    // Attach historical tool calls to assistant messages by runId
-    const attachedRunIds = new Set<string>();
-    let merged = messages;
-    if (toolCallsByRun) {
-      merged = messages.map((msg) => {
-        if (msg.role === "assistant" && msg.runId && toolCallsByRun[msg.runId]?.length) {
-          attachedRunIds.add(msg.runId);
-          return { ...msg, toolCalls: toolCallsByRun[msg.runId] };
-        }
-        return msg;
-      });
-    }
-
-    // A running session may not have an assistant message yet, but its tool
-    // events can already be persisted. Keep those visible as pending activity.
-    const orphanEntries = Object.entries(toolCallsByRun ?? {}).filter(
-      ([runId, calls]) => !attachedRunIds.has(runId) && calls.length > 0,
-    );
-    const orphanToolCalls = orphanEntries.flatMap(([, calls]) => calls);
-    const orphanRunId = orphanEntries[0]?.[0] ?? null;
-    const current = get();
-    const streamingText = current.sessionId === sessionId ? current.streamingText : "";
-    const pendingToolCalls =
-      orphanToolCalls.length > 0
-        ? orphanToolCalls
-        : current.sessionId === sessionId
-          ? current.toolCalls
-          : [];
-    const pendingRunId =
-      orphanRunId ?? (current.sessionId === sessionId ? current.pendingRunId : null);
-    const isResuming = streamingText.length > 0 || pendingToolCalls.length > 0;
-
-    cacheSession(sessionId, merged, pendingToolCalls, streamingText, pendingRunId);
-    set({
-      messages: merged,
-      sessionId,
-      toolCalls: pendingToolCalls,
-      streamingText,
-      pendingRunId,
-      status: isResuming ? "streaming" : "idle",
-      sessionLoading: false,
-    });
-  },
-
-  addMessage: (message: AgentMessage) => {
+  loadTimeline: (sessionId: string, timeline: SessionTimelineResponse) => {
     const state = get();
-    const next = [...state.messages, message];
-    if (state.sessionId) {
-      cacheSession(state.sessionId, next, state.toolCalls, state.streamingText, state.pendingRunId);
-    }
-    set({ messages: next });
-  },
+    let rt = createInitialState();
 
-  appendDelta: (delta: string) => {
-    set((s) => ({
-      streamingText: s.streamingText + delta,
-      status: "streaming",
-    }));
-    const state = get();
-    if (state.sessionId) {
-      cacheSession(
-        state.sessionId,
-        state.messages,
-        state.toolCalls,
-        state.streamingText,
-        state.pendingRunId,
-      );
-    }
-  },
-
-  appendThinkingDelta: (delta: string) => {
-    set((s) => ({
-      streamingThinking: s.streamingThinking + delta,
-      status: "streaming",
-    }));
-  },
-
-  addToolCall: (toolCall: ToolCallEntry) => {
-    set((s) => ({
-      toolCalls: [...s.toolCalls, toolCall],
-      status: "streaming",
-    }));
-    const state = get();
-    if (state.sessionId) {
-      cacheSession(
-        state.sessionId,
-        state.messages,
-        state.toolCalls,
-        state.streamingText,
-        state.pendingRunId,
-      );
-    }
-  },
-
-  updateToolCall: (id: string, update: Partial<ToolCallEntry>) => {
-    set((s) => ({
-      toolCalls: s.toolCalls.map((tc) => (tc.id === id ? { ...tc, ...update } : tc)),
-    }));
-    const state = get();
-    if (state.sessionId) {
-      cacheSession(
-        state.sessionId,
-        state.messages,
-        state.toolCalls,
-        state.streamingText,
-        state.pendingRunId,
-      );
-    }
-  },
-
-  /**
-   * Clear streaming state and create an assistant message.
-   *
-   * If `force` is false (default) and streamingText is empty but toolCalls
-   * exist, the tool calls are preserved as a tool-only assistant message.
-   * If `force` is true, all streaming state is discarded.
-   */
-  clearStreaming: (force = false) => {
-    const state = get();
-    const hasText = state.streamingText.length > 0;
-    const hasToolCalls = state.toolCalls.length > 0;
-
-    if (!force && (hasText || hasToolCalls)) {
-      // Create assistant message with whatever we have
-      const assistantMsg: AgentMessage = {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: state.streamingText || (hasToolCalls ? "" : ""),
-        timestamp: Date.now(),
-        toolCalls: hasToolCalls ? [...state.toolCalls] : undefined,
-        runId: state.pendingRunId ?? undefined,
+    // Load messages
+    for (const m of timeline.messages) {
+      const msg: RuntimeMessage = {
+        id: m.id,
+        role: m.role as RuntimeMessage["role"],
+        content: m.content,
+        runId: m.runId,
+        createdAt: m.createdAt,
       };
-      const next = [...state.messages, assistantMsg];
+      rt = {
+        ...rt,
+        messagesById: { ...rt.messagesById, [m.id]: msg },
+        messageOrder: [...rt.messageOrder, m.id],
+      };
+    }
+
+    // Load runs
+    for (const r of timeline.runs) {
+      rt.runsById[r.id] = {
+        id: r.id,
+        status: r.status,
+        skillName: r.skillName,
+        ticker: r.ticker ?? undefined,
+        createdAt: r.createdAt,
+        finishedAt: r.finishedAt ?? undefined,
+      };
+    }
+
+    // Load tool calls
+    for (const tc of timeline.toolCalls) {
+      rt.toolCallsById[tc.id] = {
+        id: tc.id,
+        runId: tc.runId,
+        name: tc.name,
+        status: tc.status,
+        createdAt: tc.createdAt,
+      };
+    }
+
+    // Load artifacts
+    for (const a of timeline.artifacts) {
+      const existing = rt.artifactsByRunId[a.runId] ?? [];
+      rt.artifactsByRunId[a.runId] = [
+        ...existing,
+        { id: a.id, runId: a.runId, kind: a.kind, name: a.name, path: a.path ?? undefined },
+      ];
+    }
+
+    rt.activeRunId = timeline.activeRunId;
+
+    cacheSession(sessionId, rt);
+    set({ runtime: rt, sessionId, sessionLoading: false });
+  },
+
+  addRuntimeEvent: (event: RuntimeEvent) => {
+    const state = get();
+    try {
+      const nextRuntime = applyRuntimeEvent(state.runtime, event);
+      set({ runtime: nextRuntime });
       if (state.sessionId) {
-        cacheSession(state.sessionId, next);
+        cacheSession(state.sessionId, nextRuntime);
       }
-      set({
-        messages: next,
-        streamingText: "",
-        streamingThinking: "",
-        toolCalls: [],
-        status: "idle",
-        pendingRunId: null,
-      });
-    } else {
-      if (state.sessionId) {
-        cacheSession(state.sessionId, state.messages);
-      }
-      set({
-        streamingText: "",
-        streamingThinking: "",
-        toolCalls: [],
-        status: "idle",
-        pendingRunId: null,
-      });
+    } catch (err) {
+      // Log but don't crash on unknown events
+      console.warn("[agent-store] Failed to apply event:", err);
     }
   },
 
-  /**
-   * Sync messages from the server API.
-   * Called after a run completes to ensure the DB-persisted assistant
-   * message (which may not have been fully captured via SSE) is loaded.
-   */
   syncFromServer: async (sessionId: string) => {
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/messages`);
+      const res = await fetch(`/api/sessions/${sessionId}/timeline`);
       if (!res.ok) return;
-      const msgs: Array<{
-        message_id: string;
-        role: string;
-        content: string;
-        created_at: string;
-        metadata?: Record<string, unknown> | null;
-      }> = await res.json();
-
-      // Also fetch tool events so we can attach them to assistant messages
-      let toolCallsByRun: Record<string, ToolCallEntry[]> = {};
-      try {
-        const toolRes = await fetch(`/api/sessions/${sessionId}/tool-events`);
-        if (toolRes.ok) toolCallsByRun = await toolRes.json();
-      } catch {
-        // ignore
-      }
-
-      // Build a map of existing tool calls from current store state (by runId)
-      // so we don't lose tool calls that arrived via SSE but aren't in the DB yet
-      const current = get();
-      const storeToolCallsByRun = new Map<string, ToolCallEntry[]>();
-      for (const msg of current.messages) {
-        if (msg.runId && msg.toolCalls?.length) {
-          storeToolCallsByRun.set(msg.runId, msg.toolCalls);
-        }
-      }
-
-      const agentMessages: AgentMessage[] = msgs.map((m) => {
-        const runId = m.metadata?.runId as string | undefined;
-        // Prefer DB tool calls, fall back to store-cached ones
-        const dbTools = runId ? toolCallsByRun[runId] : undefined;
-        const storeTools = runId ? storeToolCallsByRun.get(runId) : undefined;
-        const toolCalls = dbTools?.length ? dbTools : storeTools;
-        return {
-          id: m.message_id,
-          role: m.role as AgentMessage["role"],
-          content: m.content,
-          timestamp: new Date(m.created_at).getTime(),
-          runId,
-          toolCalls: toolCalls?.length ? toolCalls : undefined,
-        };
-      });
-
-      // Only update if this is still the current session
-      if (current.sessionId !== sessionId) return;
-
-      cacheSession(sessionId, agentMessages);
-      set({
-        messages: agentMessages,
-        sessionLoading: false,
-      });
+      const timeline = (await res.json()) as SessionTimelineResponse;
+      const state = get();
+      if (state.sessionId !== sessionId) return;
+      get().loadTimeline(sessionId, timeline);
     } catch {
       // silently ignore
     }
   },
 
-  setPendingRunId: (runId: string) => {
-    set({ pendingRunId: runId, status: "streaming" });
-    const state = get();
-    if (state.sessionId) {
-      cacheSession(state.sessionId, state.messages, state.toolCalls, state.streamingText, runId);
-    }
-  },
-
-  fetchRunArtifacts: async (runId: string) => {
-    try {
-      const res = await fetch(`/api/runs/${runId}/artifacts`);
-      if (!res.ok) return;
-      const data: Array<{
-        artifact_id?: string;
-        id?: string;
-        kind: string;
-        name: string;
-        path?: string | null;
-        content?: string | null;
-        mime_type?: string | null;
-      }> = await res.json();
-      if (!Array.isArray(data) || data.length === 0) return;
-
-      const artifacts: ArtifactEntry[] = data.map((a) => ({
-        id: a.artifact_id ?? a.id ?? "",
-        kind: a.kind,
-        name: a.name,
-        path: a.path,
-        content: a.content,
-        mimeType: a.mime_type,
-      }));
-
-      // Attach artifacts to the assistant message that has this runId
-      set((s) => ({
-        messages: s.messages.map((msg) => (msg.runId === runId ? { ...msg, artifacts } : msg)),
-      }));
-    } catch {
-      // silently ignore artifact fetch errors
-    }
-  },
-
   setSSEStatus: (sseStatus) => set({ sseStatus }),
   setSSERetryAttempt: (sseRetryAttempt) => set({ sseRetryAttempt }),
+
+  setPendingRunId: (_runId: string) => {
+    // vNext: active run is tracked in runtime.runsById
+    // This is kept for backward compatibility
+  },
+
+  fetchRunArtifacts: async (_runId: string) => {
+    // vNext: artifacts come via RuntimeEvent or timeline API
+    // This is kept for backward compatibility
+  },
+
+  // ─── Backward-compatible selectors ──────────────────────────────
+  messages: () => {
+    const { runtime } = get();
+    return runtime.messageOrder
+      .map((id) => runtime.messagesById[id])
+      .filter(Boolean)
+      .map((m) => toAgentMessage(m, runtime));
+  },
+
+  streamingText: () => {
+    const { runtime } = get();
+    if (!runtime.activeRunId) return "";
+    return runtime.streamByRunId[runtime.activeRunId]?.text ?? "";
+  },
+
+  streamingThinking: () => {
+    const { runtime } = get();
+    if (!runtime.activeRunId) return "";
+    return runtime.streamByRunId[runtime.activeRunId]?.reasoningSummary ?? "";
+  },
+
+  toolCalls: () => {
+    const { runtime } = get();
+    return Object.values(runtime.toolCallsById).map((tc) => ({
+      id: tc.id,
+      name: tc.name,
+      args: tc.args ? JSON.stringify(tc.args) : undefined,
+      result: tc.result ? JSON.stringify(tc.result) : undefined,
+      status: tc.status as ToolCallEntry["status"],
+    }));
+  },
+
+  pendingRunId: () => {
+    const { runtime } = get();
+    return runtime.activeRunId;
+  },
 }));

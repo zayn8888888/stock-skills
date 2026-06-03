@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import type { RuntimeEvent } from "@/lib/runtime/events";
 
 type SSEStatus = "disconnected" | "connected" | "reconnecting";
 
-type HandlerMap = Record<string, (data: string) => void>;
+type RuntimeEventHandler = (event: RuntimeEvent) => void;
 
 interface LRUSet {
   set: Set<string>;
@@ -33,23 +34,25 @@ const INITIAL_BACKOFF = 1000;
 const MAX_BACKOFF = 30000;
 const DEDUP_CAPACITY = 500;
 
-export function getSSEEventData(event: Event): string | null {
-  const data = (event as MessageEvent).data;
-  return typeof data === "string" ? data : null;
-}
-
 export interface UseSSEReturn {
-  connect: (url: string, handlers?: HandlerMap) => void;
+  connect: (url: string, handler?: RuntimeEventHandler) => void;
   disconnect: () => void;
   getStatus: () => SSEStatus;
   onStatusChange: (cb: (status: SSEStatus) => void) => () => void;
   waitForConnection: () => Promise<void>;
 }
 
+/**
+ * vNext SSE hook — subscribes only to "event: runtime.event".
+ *
+ * All events are parsed as RuntimeEvent and passed to the handler.
+ * Native EventSource.onerror is treated as transport status change only.
+ * Business errors come from event.type === "error.created".
+ */
 export function useSSE(): UseSSEReturn {
   const sourceRef = useRef<EventSource | null>(null);
   const statusRef = useRef<SSEStatus>("disconnected");
-  const handlersRef = useRef<HandlerMap>({});
+  const handlerRef = useRef<RuntimeEventHandler | null>(null);
   const urlRef = useRef<string>("");
   const backoffRef = useRef<number>(INITIAL_BACKOFF);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,39 +115,37 @@ export function useSSE(): UseSSEReturn {
       connectedResolversRef.current = [];
     };
 
-    es.onmessage = (event: MessageEvent) => {
-      const data = getSSEEventData(event);
+    // Listen only to "runtime.event" — the single SSE event type
+    es.addEventListener("runtime.event", ((event: MessageEvent) => {
+      const data = typeof event.data === "string" ? event.data : null;
       if (data === null) return;
+
       if (event.lastEventId) {
         lastEventIdRef.current = event.lastEventId;
       }
+
+      // Dedup by lastEventId or data hash
       const eventId = event.lastEventId || data;
       if (!dedupRef.current.add(eventId)) return;
-      const handler = handlersRef.current.message;
-      if (handler) handler(data);
-    };
 
+      // Parse as RuntimeEvent and pass to handler
+      try {
+        const runtimeEvent = JSON.parse(data) as RuntimeEvent;
+        if (handlerRef.current) {
+          handlerRef.current(runtimeEvent);
+        }
+      } catch {
+        // Ignore malformed events
+      }
+    }) as EventListener);
+
+    // Native onerror is transport-only — just set status and reconnect
     es.onerror = () => {
       setStatus("disconnected");
       es.close();
       sourceRef.current = null;
       scheduleReconnect();
     };
-
-    for (const eventName of Object.keys(handlersRef.current)) {
-      if (eventName === "message") continue;
-      es.addEventListener(eventName, ((event: MessageEvent) => {
-        const data = getSSEEventData(event);
-        if (data === null) return;
-        if (event.lastEventId) {
-          lastEventIdRef.current = event.lastEventId;
-        }
-        const eventId = event.lastEventId || data;
-        if (!dedupRef.current.add(eventId)) return;
-        const handler = handlersRef.current[eventName];
-        if (handler) handler(data);
-      }) as EventListener);
-    }
   }, [cleanup, scheduleReconnect, setStatus]);
 
   useEffect(() => {
@@ -155,15 +156,14 @@ export function useSSE(): UseSSEReturn {
     cleanup();
     setStatus("disconnected");
     backoffRef.current = INITIAL_BACKOFF;
-    // Clear all pending connection waiters to prevent memory leak
     connectedResolversRef.current.length = 0;
   }, [cleanup, setStatus]);
 
   const connect = useCallback(
-    (url: string, handlers?: HandlerMap) => {
+    (url: string, handler?: RuntimeEventHandler) => {
       disconnect();
       urlRef.current = url;
-      handlersRef.current = handlers ?? {};
+      handlerRef.current = handler ?? null;
       backoffRef.current = INITIAL_BACKOFF;
       lastEventIdRef.current = null;
       dedupRef.current = createLRUSet(DEDUP_CAPACITY);

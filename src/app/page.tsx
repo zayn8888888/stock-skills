@@ -9,7 +9,7 @@ import { useSSE } from "@/hooks/useSSE";
 import { authFetch } from "@/lib/api/auth-fetch";
 import { buildMessageContext } from "@/lib/research/message-context";
 import { useAgentStore } from "@/stores/agent";
-import type { AgentMessage } from "@/stores/agent";
+import type { RuntimeEvent } from "@/lib/runtime/events";
 import { FileText, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -34,26 +34,24 @@ const LABELS = {
 
 export default function Home() {
   const {
-    messages,
     sessionId,
-    status,
-    streamingText,
-    streamingThinking,
-    toolCalls,
     sessionLoading,
     switchSession,
-    loadHistory,
-    addMessage,
-    appendDelta,
-    appendThinkingDelta,
-    addToolCall,
-    updateToolCall,
-    clearStreaming,
+    loadTimeline,
+    addRuntimeEvent,
     setSSEStatus,
-    setPendingRunId,
-    fetchRunArtifacts,
     syncFromServer,
   } = useAgentStore();
+
+  // Use selectors for rendering
+  const messages = useAgentStore((s) => s.messages());
+  const streamingText = useAgentStore((s) => s.streamingText());
+  const streamingThinking = useAgentStore((s) => s.streamingThinking());
+  const toolCalls = useAgentStore((s) => s.toolCalls());
+  const pendingRunId = useAgentStore((s) => s.pendingRunId());
+
+  const runtime = useAgentStore((s) => s.runtime);
+  const status = pendingRunId ? "streaming" : "idle";
 
   const { connect, disconnect, onStatusChange } = useSSE();
   const { language } = useLanguage();
@@ -62,35 +60,21 @@ export default function Home() {
   const [composerContext, setComposerContext] = useState<ComposerContext>({});
   const [requestPending, setRequestPending] = useState(false);
   const skipNextHistoryLoad = useRef(false);
-  // Ref to hold latest store functions — prevents SSE effect from re-running
-  // on every store state change (Zustand selector returns new function refs).
+
+  // Ref to hold latest store functions
   const storeFnsRef = useRef({
-    appendDelta,
-    appendThinkingDelta,
-    addToolCall,
-    updateToolCall,
-    addMessage,
-    clearStreaming,
-    setPendingRunId,
-    fetchRunArtifacts,
+    addRuntimeEvent,
     syncFromServer,
-    setRequestPending,
+    setRequestPending: (v: boolean) => setRequestPending(v),
   });
   storeFnsRef.current = {
-    appendDelta,
-    appendThinkingDelta,
-    addToolCall,
-    updateToolCall,
-    addMessage,
-    clearStreaming,
-    setPendingRunId,
-    fetchRunArtifacts,
+    addRuntimeEvent,
     syncFromServer,
-    setRequestPending,
+    setRequestPending: (v: boolean) => setRequestPending(v),
   };
 
   // ---------------------------------------------------------------------------
-  // SSE connection on session change
+  // SSE connection — subscribe to canonical "runtime.event"
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
@@ -99,121 +83,36 @@ export default function Home() {
       return;
     }
 
-    const handlers = {
-      text_delta: (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          storeFnsRef.current.appendDelta(parsed.delta ?? parsed.text ?? data);
-        } catch {
-          storeFnsRef.current.appendDelta(data);
-        }
-      },
-      thinking_delta: (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          storeFnsRef.current.appendThinkingDelta(parsed.text ?? parsed.delta ?? data);
-        } catch {
-          storeFnsRef.current.appendThinkingDelta(data);
-        }
-      },
-      tool_call: (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          storeFnsRef.current.addToolCall({
-            id: parsed.toolId ?? parsed.id,
-            name: parsed.toolName ?? parsed.name,
-            args:
-              typeof parsed.input === "string" ? parsed.input : JSON.stringify(parsed.input ?? {}),
-            status: "running",
-          });
-        } catch {
-          // ignore malformed events
-        }
-      },
-      tool_result: (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          const id = parsed.toolId ?? parsed.id;
-          if (id) {
-            storeFnsRef.current.updateToolCall(id, {
-              status: parsed.status ?? (parsed.error ? "error" : "completed"),
-              result: parsed.result ?? parsed.error,
-            });
-          }
-        } catch {
-          // ignore
-        }
-      },
-      "run.created": (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.runId) {
-            storeFnsRef.current.setPendingRunId(parsed.runId);
-            storeFnsRef.current.setRequestPending(true);
-          }
-        } catch {
-          // ignore
-        }
-      },
-      "run.updated": (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          if (parsed.runId && (parsed.status === "pending" || parsed.status === "running")) {
-            storeFnsRef.current.setPendingRunId(parsed.runId);
-            storeFnsRef.current.setRequestPending(true);
-            return;
-          }
-          if (
-            parsed.status === "success" ||
-            parsed.status === "failed" ||
-            parsed.status === "cancelled"
-          ) {
-            if (parsed.status === "success" && parsed.runId) {
-              storeFnsRef.current.fetchRunArtifacts(parsed.runId);
-            }
-            storeFnsRef.current.clearStreaming();
-            storeFnsRef.current.setRequestPending(false);
-            window.dispatchEvent(new Event("stock-skills:sessions-updated"));
-            const currentSessionId = sessionId;
-            if (currentSessionId) {
-              setTimeout(() => {
-                storeFnsRef.current.syncFromServer(currentSessionId);
-              }, 500);
-            }
-          }
-        } catch {
-          storeFnsRef.current.clearStreaming();
-          storeFnsRef.current.setRequestPending(false);
-        }
-      },
-      error: (data: string) => {
-        try {
-          const parsed = JSON.parse(data);
-          storeFnsRef.current.addMessage({
-            id: crypto.randomUUID(),
-            role: "system",
-            content: `${labels.errorPrefix}: ${parsed.message ?? parsed.error ?? data}`,
-            timestamp: Date.now(),
-          });
-        } catch {
-          storeFnsRef.current.addMessage({
-            id: crypto.randomUUID(),
-            role: "system",
-            content: `${labels.errorPrefix}: ${data}`,
-            timestamp: Date.now(),
-          });
-        }
-        storeFnsRef.current.clearStreaming();
+    const handler = (event: RuntimeEvent) => {
+      storeFnsRef.current.addRuntimeEvent(event);
+
+      // Handle terminal run events
+      if (
+        event.type === "run.completed" ||
+        event.type === "run.failed" ||
+        event.type === "run.cancelled"
+      ) {
         storeFnsRef.current.setRequestPending(false);
-      },
+        window.dispatchEvent(new Event("stock-skills:sessions-updated"));
+        // Sync from server to get final DB state
+        const currentSessionId = sessionId;
+        if (currentSessionId) {
+          setTimeout(() => storeFnsRef.current.syncFromServer(currentSessionId), 500);
+        }
+      }
+
+      // Handle error events
+      if (event.type === "error.created") {
+        storeFnsRef.current.setRequestPending(false);
+      }
     };
 
-    connect(`/api/sessions/${sessionId}/events`, handlers);
+    connect(`/api/sessions/${sessionId}/events`, handler);
 
     return () => {
       disconnect();
     };
-  }, [sessionId, connect, disconnect, labels.errorPrefix]);
+  }, [sessionId, connect, disconnect]);
 
   // Sync SSE status to store
   useEffect(() => {
@@ -229,45 +128,28 @@ export default function Home() {
 
   useEffect(() => {
     if (!sessionId) return;
-    // Skip fetch if messages were already loaded from cache
     if (!sessionLoading) return;
-    // Skip if we just created this session (user message already in store)
     if (skipNextHistoryLoad.current) {
       skipNextHistoryLoad.current = false;
       useAgentStore.setState({ sessionLoading: false });
       return;
     }
 
-    Promise.all([
-      fetch(`/api/sessions/${sessionId}/messages`).then((r) => (r.ok ? r.json() : [])),
-      fetch(`/api/sessions/${sessionId}/tool-events`).then((r) => (r.ok ? r.json() : {})),
-    ])
-      .then(([msgs, toolCallsByRun]) => {
-        const agentMessages: AgentMessage[] = msgs.map(
-          (m: {
-            message_id: string;
-            role: string;
-            content: string;
-            created_at: string;
-            metadata?: { runId?: string } | null;
-          }) => ({
-            id: m.message_id,
-            role: m.role as AgentMessage["role"],
-            content: m.content,
-            timestamp: new Date(m.created_at).getTime(),
-            runId: m.metadata?.runId,
-          }),
-        );
-        loadHistory(sessionId, agentMessages, toolCallsByRun);
+    fetch(`/api/sessions/${sessionId}/timeline`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((timeline) => {
+        if (timeline) {
+          loadTimeline(sessionId, timeline);
+        }
       })
       .catch(() => {});
-  }, [sessionId, sessionLoading, loadHistory]);
+  }, [sessionId, sessionLoading, loadTimeline]);
 
   // ---------------------------------------------------------------------------
-  // Auto-scroll on new messages
+  // Auto-scroll
   // ---------------------------------------------------------------------------
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: auto-scroll intentionally reruns when timeline content changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: auto-scroll on timeline changes
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -275,8 +157,7 @@ export default function Home() {
   }, [messages, streamingText, toolCalls]);
 
   // ---------------------------------------------------------------------------
-  // Polling fallback — if SSE events never arrive, poll for final result
-  // Only fires when SSE is broken; timeout aligned with TaskRunner (10 min).
+  // Polling fallback (aligned with TaskRunner timeout: 10 min)
   // ---------------------------------------------------------------------------
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -284,54 +165,40 @@ export default function Home() {
   useEffect(() => {
     if (!requestPending || !sessionId) return;
 
-    const MAX_POLLS = 60; // 60 * 10s = 10 min (aligned with TaskRunner timeout)
+    const MAX_POLLS = 60;
 
-    // Wait 10s for SSE events; if no assistant message appears, start polling
     const timer = setTimeout(() => {
       let pollCount = 0;
       pollRef.current = setInterval(async () => {
         pollCount++;
         if (pollCount >= MAX_POLLS) {
-          // Timeout: clear pending state
           if (pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
           }
-          storeFnsRef.current.addMessage({
-            id: crypto.randomUUID(),
-            role: "system",
-            content:
-              language === "zh" ? "请求超时，请重试。" : "Request timed out. Please try again.",
-            timestamp: Date.now(),
-          });
-          storeFnsRef.current.clearStreaming();
           storeFnsRef.current.setRequestPending(false);
           return;
         }
         try {
-          const res = await fetch(`/api/sessions/${sessionId}/messages`);
+          const res = await fetch(`/api/sessions/${sessionId}/timeline`);
           if (!res.ok) return;
-          const msgs: Array<{
-            message_id: string;
-            role: string;
-            content: string;
-            created_at: string;
-            metadata?: { runId?: string } | null;
-          }> = await res.json();
-          const assistantMsg = msgs.find((m) => m.role === "assistant");
-          if (assistantMsg) {
-            // Agent finished — sync from server
+          const timeline = await res.json();
+          // Check if any run is in terminal state
+          const terminalRun = timeline.runs?.find(
+            (r: { status: string }) =>
+              r.status === "succeeded" || r.status === "failed" || r.status === "cancelled",
+          );
+          if (terminalRun) {
             if (pollRef.current) {
               clearInterval(pollRef.current);
               pollRef.current = null;
             }
             storeFnsRef.current.syncFromServer(sessionId);
-            storeFnsRef.current.clearStreaming();
             storeFnsRef.current.setRequestPending(false);
             window.dispatchEvent(new Event("stock-skills:sessions-updated"));
           }
         } catch {
-          /* retry on next interval */
+          /* retry */
         }
       }, 10_000);
     }, 10_000);
@@ -343,102 +210,112 @@ export default function Home() {
         pollRef.current = null;
       }
     };
-  }, [requestPending, sessionId, language]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [requestPending, sessionId]);
 
   // ---------------------------------------------------------------------------
-  // Send message
+  // Send message via canonical API
   // ---------------------------------------------------------------------------
 
   const handleSend = useCallback(
     async (content: string, ctx?: ComposerContext) => {
       if (!sessionId) {
-        // Create a new session first
+        // Create session + send message via commands API
         try {
-          const res = await authFetch("/api/sessions", {
+          const res = await authFetch("/api/runtime/commands", {
             method: "POST",
             body: JSON.stringify({
-              title: content.slice(0, 60),
+              schemaVersion: "runtime-command.v1",
+              type: "session.message.append_user",
+              source: "research_desk",
+              actor: "web_ui",
+              content,
+              context: buildMessageContext(content, ctx),
+              startRun: true,
             }),
           });
           if (!res.ok) {
-            addMessage({
-              id: crypto.randomUUID(),
-              role: "system",
-              content: `${labels.fallbackError}: ${res.status}`,
-              timestamp: Date.now(),
-            });
-            return;
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error ?? `HTTP ${res.status}`);
           }
-          const { session_id } = await res.json();
-          switchSession(session_id);
-          skipNextHistoryLoad.current = true;
-          window.dispatchEvent(new Event("stock-skills:sessions-updated"));
-          // Send message after a slight delay to allow SSE connection to establish
-          setTimeout(() => {
-            sendMessage(session_id, content, ctx);
-          }, 300);
+          const data = await res.json();
+          if (data.sessionId) {
+            switchSession(data.sessionId);
+            skipNextHistoryLoad.current = true;
+            window.dispatchEvent(new Event("stock-skills:sessions-updated"));
+            setRequestPending(true);
+          }
         } catch (err) {
-          addMessage({
-            id: crypto.randomUUID(),
-            role: "system",
-            content: `${labels.fallbackError}: ${err instanceof Error ? err.message : String(err)}`,
-            timestamp: Date.now(),
+          useAgentStore.getState().addRuntimeEvent({
+            id: `err_${Date.now()}`,
+            schemaVersion: "runtime-event.v1",
+            sessionSeq: 0,
+            scope: "system",
+            type: "error.created",
+            category: "error",
+            sessionId: sessionId ?? "",
+            producer: "server",
+            visibility: "ui",
+            persist: 1,
+            createdAt: new Date().toISOString(),
+            payload: {
+              code: "system.unexpected",
+              message: `${labels.fallbackError}: ${err instanceof Error ? err.message : String(err)}`,
+              retriable: false,
+            },
           });
-          return;
         }
       } else {
         sendMessage(sessionId, content, ctx);
       }
     },
-    [sessionId, switchSession, addMessage, labels.fallbackError],
+    [sessionId, switchSession, labels.fallbackError],
   );
 
   function sendMessage(sid: string, content: string, ctx?: ComposerContext) {
-    // Add user message to local store immediately
-    addMessage({
-      id: crypto.randomUUID(),
-      role: "user",
-      content,
-      timestamp: Date.now(),
-    });
-
-    // Clear any previous streaming state and mark as pending
-    clearStreaming(true);
     setRequestPending(true);
 
-    // Send to API
-    authFetch(`/api/sessions/${sid}/messages`, {
+    authFetch("/api/runtime/commands", {
       method: "POST",
       body: JSON.stringify({
+        schemaVersion: "runtime-command.v1",
+        type: "session.message.append_user",
+        source: "research_desk",
+        actor: "web_ui",
+        sessionId: sid,
         content,
         context: buildMessageContext(content, ctx),
+        startRun: true,
       }),
     })
       .then((res) => {
         if (!res.ok) {
-          addMessage({
-            id: crypto.randomUUID(),
-            role: "system",
-            content: `${labels.fallbackError}: ${res.status}`,
-            timestamp: Date.now(),
-          });
-          setRequestPending(false);
-          return undefined;
+          throw new Error(`HTTP ${res.status}`);
         }
         return res.json();
       })
       .then((data) => {
-        // If no run was created, clear pending immediately
-        if (data && !data.linked_run_id) {
+        if (data && !data.runId) {
           setRequestPending(false);
         }
       })
       .catch((err) => {
-        addMessage({
-          id: crypto.randomUUID(),
-          role: "system",
-          content: `${labels.fallbackError}: ${err instanceof Error ? err.message : String(err)}`,
-          timestamp: Date.now(),
+        useAgentStore.getState().addRuntimeEvent({
+          id: `err_${Date.now()}`,
+          schemaVersion: "runtime-event.v1",
+          sessionSeq: 0,
+          scope: "system",
+          type: "error.created",
+          category: "error",
+          sessionId: sid,
+          producer: "server",
+          visibility: "ui",
+          persist: 1,
+          createdAt: new Date().toISOString(),
+          payload: {
+            code: "system.unexpected",
+            message: `${labels.fallbackError}: ${err instanceof Error ? err.message : String(err)}`,
+            retriable: false,
+          },
         });
         setRequestPending(false);
       });
@@ -446,13 +323,24 @@ export default function Home() {
 
   const handleStop = useCallback(() => {
     if (sessionId) {
-      authFetch(`/api/sessions/${sessionId}/cancel`, {
-        method: "POST",
-      }).catch(() => {});
+      // Cancel via commands API
+      const activeRunId = useAgentStore.getState().runtime.activeRunId;
+      if (activeRunId) {
+        authFetch("/api/runtime/commands", {
+          method: "POST",
+          body: JSON.stringify({
+            schemaVersion: "runtime-command.v1",
+            type: "run.cancel",
+            source: "research_desk",
+            actor: "web_ui",
+            sessionId,
+            runId: activeRunId,
+          }),
+        }).catch(() => {});
+      }
     }
-    clearStreaming(true); // force-clear, don't create partial message
     setRequestPending(false);
-  }, [clearStreaming, sessionId]);
+  }, [sessionId]);
 
   const handlePromptClick = useCallback(
     (query: string) => {
@@ -531,7 +419,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Composer — only visible once conversation has started */}
+      {/* Composer */}
       {hasMessages && (
         <div className="border-t border-border px-8 py-3 shrink-0 max-w-5xl mx-auto w-full animate-composer-slide-up">
           <Composer
