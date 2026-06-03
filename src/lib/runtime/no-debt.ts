@@ -29,24 +29,15 @@ export const FORBIDDEN_RUNTIME_PATTERNS: readonly string[] = [
 
 /**
  * Pre-existing files that currently use old patterns.
- * During incremental migration (non-strict mode) these are allowed.
- * Once migration is complete, this list should be empty.
+ * After Task 11, most old files have been deleted. This list is now nearly empty.
  */
 export const TEMPORARY_OLD_FILE_ALLOWLIST: readonly string[] = [
-  "src/lib/agent/pi-runner.ts",
-  "src/lib/agent/pi-tools.ts",
-  "src/lib/agent/loop-registry.ts",
   "src/lib/runtime/run-manager.ts",
   "src/lib/runtime/artifact-writer.ts",
   "src/lib/db/schema.ts",
+  "src/lib/agent/loop-registry.ts",
   "src/app/page.tsx",
-  "src/app/api/sessions/[id]/messages/route.ts",
-  "src/app/api/sessions/[id]/tool-events/route.ts",
-  "src/app/api/sessions/[id]/cancel/route.ts",
-  "src/app/api/runs/[id]/route.ts",
-  "tests/sse.test.ts",
   "tests/event-bus.test.ts",
-  "tests/use-sse.test.ts",
   "tests/agent-store.test.ts",
 ];
 
