@@ -21,6 +21,16 @@
 
 Claude Code 的 `MEMORY.md` 可**可选**追加指向全局文件的绝对路径；**不能**替代上述 Glob。
 
+## Ticker 规范化（写文件前必须先执行）
+
+所有文件名和 INDEX 键中的 `{ticker}` 均使用 **CANONICAL_TICKER**，规则与 `ticker-journal` skill 完全一致：
+- 港股：`HK-{数字代码}-{中文简称}`，如 `HK-1810-小米`
+- 上交所 A 股：`SH-{6位代码}-{中文简称}`，如 `SH-601166-兴业银行`
+- 深交所 A 股：`SZ-{6位代码}-{中文简称}`，如 `SZ-000858-五粮液`
+- 美股：`US-{ticker}`，如 `US-FUTU`、`US-PDD`
+- 加密资产：`CRYPTO-{ticker}`，如 `CRYPTO-BTC`、`CRYPTO-HYPE`
+- 中文简称从 futuapi snapshot 或分析 context 中提取，不确定时省略中文名（退化为 `HK-1810`）
+
 ## 存档（阶段 8b，PM 完成后立即）
 
 `Write`：`~/.stock-skills/trading-debate/decisions/trading-debate-decision-{ticker}-{YYYYMMDD}.md`
@@ -58,12 +68,14 @@ description: trading-debate 对 {ticker} 的决策记录 — {rating}, entry {en
 
 `Edit`/`Write` `INDEX.md` 追加一行，例如：
 
-`- [trading-debate-decision-NVDA-20260514](trading-debate-decision-NVDA-20260514.md) — Overweight @$215, 待反思`
+`- [trading-debate-decision-US-NVDA-20260514](trading-debate-decision-US-NVDA-20260514.md) — Overweight @$215, 待反思`
 
 ## 召回（阶段 8a，阶段 0 之前）
 
 1. Glob 全局 + legacy（见上）
-2. 该 ticker 最近 5 条
+2. 该 ticker 最近 5 条 — **按代码前缀过滤文件名**，不要求完整匹配：
+   - 当前分析 `1810-小米` → 过滤条件为文件名包含 `1810`
+   - 兼容旧格式（无公司名）：`trading-debate-decision-1810-20260604.md` 同样命中
 3. 决策 ≥ 3 个月且未反思 → 问用户是否先反思
 4. 已反思 → 注入阶段 6 PM：
 
@@ -112,7 +124,7 @@ Beta 调整 alpha（CAPM）：{capm_alpha:+.1%}（Beta={beta:.2f}）
 
 ## 清理（可选）
 
-- 已反思且 >12 个月：可汇总到 `lessons/trading-debate-lessons-{ticker}.md` 后删 decisions 快照
+- 已反思且 >12 个月：可汇总到 `lessons/trading-debate-lessons-{ticker}.md` 后删 decisions 快照（`{ticker}` 同样使用 CANONICAL_TICKER，如 `trading-debate-lessons-1810-小米.md`）
 - >6 个月未反思：提示用户补反思
 
 ## 自检清单

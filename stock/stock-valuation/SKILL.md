@@ -138,6 +138,8 @@ JSON 字段提取要点：
 > ⚠️ 本报告为估值模型计算结果，不构成投资建议。
 ```
 
+报告输出完成后，**立即**调用 `Skill(skill="stock-skills:ticker-journal")` → write 存档（来源 `stock-valuation`，评级 `纯分析`，见下方「分析存档」）。
+
 ## 中概股 / 中国 ADR
 
 处理 PDD / BABA / BIDU 等标的时有专项陷阱（单位跳变 / 汇率时效 / VIE 折价）——见 [references/china-adr-pitfalls.md](references/china-adr-pitfalls.md)。

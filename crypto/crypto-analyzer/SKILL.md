@@ -152,6 +152,7 @@ Tavily（days=90）：`{coin_name} upgrade unlock airdrop event schedule 2026`
 ## ⚠️ 输出即止规则
 
 七个维度数据全部在 context 后，**立即**以 `## 📊 <标的>` 或报告模板标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
+报告输出完成后，**立即**调用 `Skill(skill="stock-skills:ticker-journal")` → write 存档（来源 `crypto-analyzer`，评级 `纯分析`，见下方「分析存档」）。
 
 ## 输出规范
 

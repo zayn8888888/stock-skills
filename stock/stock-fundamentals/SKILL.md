@@ -153,6 +153,7 @@ JSON 字段提取要点：
 ## ⚠️ 输出即止规则
 
 四步分析数据及新闻快扫全部在 context 后，**立即**以 `## 📋 <公司名>` 或报告模板对应标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
+报告输出完成后，**立即**调用 `Skill(skill="stock-skills:ticker-journal")` → write 存档（来源 `stock-fundamentals`，评级 `纯分析`，见下方「分析存档」）。
 
 ## 输出格式
 

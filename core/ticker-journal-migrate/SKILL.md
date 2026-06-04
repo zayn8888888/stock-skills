@@ -60,18 +60,23 @@ if not proj_dir.exists():
 
 files = sorted(proj_dir.glob('*.jsonl'), key=lambda f: f.stat().st_mtime, reverse=True)
 
-# 构建 {TICKER: {已入档日期集合}}，精确到 ticker+日期，避免漏掉同标的新日期
+# 构建 {代码: {已入档日期集合}}，精确到 ticker+日期，避免漏掉同标的新日期
+# 注意：journal 文件名格式为 `{代码}-{简称}.md`（港股/A股）或 `{TICKER}.md`（美股/加密）
+# INDEX 里的 key 是完整 canonical ticker（如 `1810-小米`），这里同时建立「代码→canonical」映射
 journals_dir = Path.home() / '.stock-skills/journals'
 idx = journals_dir / 'INDEX.md'
-journaled = {}  # {'FUTU': {'2026-05-27', '2026-05-29'}, ...}
+journaled = {}       # {'1810': {'2026-05-27', '2026-05-29'}, 'FUTU': {...}, ...}
+code_to_canonical = {}  # {'1810': '1810-小米', 'FUTU': 'FUTU', ...}
 if idx.exists():
     for ln in idx.read_text().splitlines():
         m = re.match(r'- \[([^\]]+)\]', ln)
         if not m: continue
-        ticker = m.group(1).upper()
-        jfile = journals_dir / f"{ticker}.md"
+        canonical = m.group(1)  # 如 '1810-小米' 或 'FUTU'
+        code = canonical.split('-')[0].upper()  # 纯代码部分：'1810' 或 'FUTU'
+        code_to_canonical[code] = canonical
+        jfile = journals_dir / f"{canonical}.md"
         if jfile.exists():
-            journaled[ticker] = set(re.findall(r'## (\d{4}-\d{2}-\d{2})', jfile.read_text()))
+            journaled[code] = set(re.findall(r'## (\d{4}-\d{2}-\d{2})', jfile.read_text()))
 
 target_skills = {'stock-analyzer','crypto-analyzer','stock-fundamentals',
                  'stock-valuation','trading-debate'}
@@ -100,13 +105,18 @@ for f in files:
     except: pass
 
 for r in results:
-    # 从 args 提取 ticker（去掉市场前缀）
+    # 从 args 提取代码（去掉市场前缀、HK后缀、前导零）
     raw = r['args'].split()[0].upper()
-    ticker = re.sub(r'^(US\.|HK\.|SZ\.|SH\.)', '', raw)
-    # ticker+日期 双重检查，同标的新日期不会被漏掉
-    already = ticker in journaled and r['date'] in journaled.get(ticker, set())
+    code = re.sub(r'^(US\.|HK\.|SZ\.|SH\.)', '', raw)
+    code = re.sub(r'\.?HK$', '', code)       # 去掉 HK 后缀
+    code = re.sub(r'^HK\.?', '', code)       # 去掉 HK 前缀
+    code = code.lstrip('0') or code          # 去掉前导零（保留全零情况）
+    # 显示时用 canonical（有则用，无则退化为纯代码）
+    display = code_to_canonical.get(code, code)
+    # 代码+日期 双重检查，同标的新日期不会被漏掉
+    already = code in journaled and r['date'] in journaled.get(code, set())
     flag = "  [已入档]" if already else "  <<< 未入档"
-    print(f"{r['date']}  {ticker:<10}  [{r['skill']:<22}]  {flag}")
+    print(f"{r['date']}  {display:<14}  [{r['skill']:<22}]  {flag}")
 ```
 
 ---
@@ -115,15 +125,18 @@ for r in results:
 
 每条调用记录以 **(ticker, date, skill)** 为唯一 key，独立判断是否已入档。`stock-analyzer` 和 `stock-fundamentals` 即使同天调用也是两条不同的 journal 条目，不合并。
 
-**检查是否已入档**：读 `~/.stock-skills/journals/{TICKER}.md`，看是否已有 `{YYYY-MM-DD} · {skill}` 的区块头。若已有则跳过，若无则进 Step 3。
+**检查是否已入档**：读 `~/.stock-skills/journals/{CANONICAL_TICKER}.md`（如 `1810-小米.md`），看是否已有 `{YYYY-MM-DD} · {skill}` 的区块头。若已有则跳过，若无则进 Step 3。
 
 每条未入档记录按 **skill 类型**决定数据来源：
 
-**skill = `trading-debate`**：先查决策文件（两处都检查），有则直接读，无则进 Step 3 从 session 提取。
+**skill = `trading-debate`**：先查决策文件（两处都检查），有则直接读，无则进 Step 3 从 session 提取。决策文件名使用 CANONICAL_TICKER（含公司名），旧文件可能只有纯代码，两种都要尝试。
 
 ```bash
-NEW=~/.stock-skills/trading-debate/decisions/trading-debate-decision-${TICKER}-${DATE}.md
-OLD=$(ls ~/.claude/projects/*/memory/trading-debate-decision-${TICKER,,}-${DATE}.md 2>/dev/null | head -1)
+# 新格式（含公司名，如 trading-debate-decision-1810-小米-20260604.md）
+NEW=~/.stock-skills/trading-debate/decisions/trading-debate-decision-${CANONICAL_TICKER}-${DATE}.md
+# 兼容旧格式（纯代码）
+NEW_LEGACY=~/.stock-skills/trading-debate/decisions/trading-debate-decision-${CODE}-${DATE}.md
+OLD=$(ls ~/.claude/projects/*/memory/trading-debate-decision-${CODE,,}-${DATE}.md 2>/dev/null | head -1)
 [ -f "$NEW" ] && echo "新版: $NEW"
 [ -n "$OLD" ] && echo "旧版: $OLD"
 ```

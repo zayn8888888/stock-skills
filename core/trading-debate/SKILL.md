@@ -11,16 +11,12 @@ description: 多 agent 辩论决策助手。忠实复刻 TradingAgents (TauricRe
 
 ## 执行前必读（收到任务后第一步，不与任何阶段并行）
 
-```bash
-Read references/framework-reference.md    # 七阶段架构完整说明（TradingAgents 对照）
-Read references/master-styles.md          # 7 个大师 agent 完整 prompt 模板（v0.2）
-Read references/role-prompts.md           # Bull/Bear/Risk/RM/Trader/PM 角色 prompt 细节
-Read references/reflection.md             # 阶段 8 决策存档 + 历史召回完整规范（v0.3）
-Read references/portfolio-layer.md        # 阶段 P1-P4 多标的组合层完整规范（v0.4）
-Read references/cross-ticker-lessons.md   # 阶段 L1 跨标的反思教训聚合完整规范（v0.5）
-Read references/multi-market.md           # 阶段 M1 跨市场基准选择完整规范（v0.5）
-```
+**先加载两个始终必要的文件**，其余按需加载（见各阶段说明）。
 
+```bash
+Read references/role-prompts.md           # Bull/Bear/Risk/RM/Trader/PM 角色 prompt 细节（阶段 2-6 必用）
+Read references/reflection.md             # 阶段 8 决策存档 + 历史召回完整规范（v0.3，阶段 8a/8b 必用）
+```
 ## 核心原则
 
 1. **不引入新数据源**：只编排现有 skill（stock-analyzer / event-calendar / stock-fundamentals / stock-valuation）的输出
@@ -66,7 +62,7 @@ Read references/multi-market.md           # 阶段 M1 跨市场基准选择完�
 
 ## 执行流程（七阶段）
 
-完整 prompt 模板见 `references/role-prompts.md`（已在执行前必读块加载）。本节只列流程骨架。
+完整 prompt 模板见 `references/role-prompts.md`（已在执行前加载）。本节只列流程骨架。
 
 ### 阶段 0a：启动前 skill 确认（**新增硬约束 — 防止默认套餐偷懒**）
 
@@ -280,9 +276,15 @@ skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
 
 ### 阶段 1（可选）：大师风格 agent 团（致敬 ai-hedge-fund）
 
+> ⚠️ **READ GATE — 进入本阶段前必须执行，未执行禁止继续**
+> ```
+> Read references/master-styles.md
+> ```
+> 未见上方 Read 工具调用记录 → 停在此处补读，禁止凭记忆继续。
+
 **默认不跑**。用户明确要求"用 X 视角"或"凑齐对冲基金团队"或"模拟 Buffett 怎么看 / Burry 怎么看"时启用。
 
-**完整 prompt 模板见 `references/master-styles.md`**（已在执行前必读块加载）。
+**完整 prompt 模板见 `references/master-styles.md`**（已由上方 READ GATE 加载）。
 
 #### 内置大师与适用场景
 
@@ -422,7 +424,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 8：决策存档 + 历史召回（v0.3 跨会话 Reflection）
 
-**完整规范见 `references/reflection.md`**（已在执行前必读块加载）。两个动作：
+**完整规范见 `references/reflection.md`**（已在执行前加载）。两个动作：
 
 **8a. 阶段 0 之前**（决策开始前）：
 - **必须显式调用 `Glob` / `Read` 工具**检索决策存档（**路径、旧版兼容、去重**见 `references/reflection.md` §持久化布局），匹配 `trading-debate-decision-{ticker}-*.md`
@@ -448,7 +450,13 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 P1-P4：多标的组合层（v0.4，可选）
 
-**完整规范见 `references/portfolio-layer.md`**（已在执行前必读块加载）。仅当用户明确提交多个候选标的时启用：
+> ⚠️ **READ GATE — 进入本阶段前必须执行，未执行禁止继续**
+> ```
+> Read references/portfolio-layer.md
+> ```
+> 未见上方 Read 工具调用记录 → 停在此处补读，禁止凭记忆继续。
+
+**完整规范见 `references/portfolio-layer.md`**（已由上方 READ GATE 加载）。仅当用户明确提交多个候选标的时启用：
 
 | 阶段 | 内容 | 硬约束 |
 |-----|------|-------|
@@ -463,7 +471,13 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 L1：跨标的反思教训聚合（v0.5，自动）
 
-**完整规范见 `references/cross-ticker-lessons.md`**（已在执行前必读块加载）。在阶段 8a（历史召回）时自动检查：
+> ⚠️ **READ GATE — 检测到 ≥3 条已反思决策时，进入本阶段前必须执行，未执行禁止继续**
+> ```
+> Read references/cross-ticker-lessons.md
+> ```
+> 未见上方 Read 工具调用记录 → 停在此处补读，禁止凭记忆继续。
+
+**完整规范见 `references/cross-ticker-lessons.md`**（已由上方 READ GATE 加载）。在阶段 8a（历史召回）时自动检查：
 
 - **必须显式调用 `Glob` 工具**列出所有 `trading-debate-decision-*.md`（检索范围见 `reflection.md`），**Read** 已反思的决策——禁止凭印象说"我记得有 N 条"
 - 该 ticker 所属行业 / 主题已有 ≥ 3 条已反思决策 → 自动跑教训聚合
@@ -479,7 +493,13 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 
 ### 阶段 M1：跨市场基准选择（v0.5，自动）
 
-**完整规范见 `references/multi-market.md`**（已在执行前必读块加载）。仅当组合候选含 ≥ 2 个市场（美 / 港 / A 股）时自动启用：
+> ⚠️ **READ GATE — 组合含 ≥2 个市场时，进入本阶段前必须执行，未执行禁止继续**
+> ```
+> Read references/multi-market.md
+> ```
+> 未见上方 Read 工具调用记录 → 停在此处补读，禁止凭记忆继续。
+
+**完整规范见 `references/multi-market.md`**（已由上方 READ GATE 加载）。仅当组合候选含 ≥ 2 个市场（美 / 港 / A 股）时自动启用：
 
 | 问题 | 解法 |
 |-----|------|
@@ -516,6 +536,15 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 输出契约自检全部通过后，**立即**以 PM 最终决策报告模板对应标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
 
 ## 不允许的偷懒模式
+
+### READ GATE 违规
+
+- ❌ **进入阶段 1 但未执行 `Read references/master-styles.md`**（大师 prompt 模板未加载 = 全部大师信号是编的）
+- ❌ **进入阶段 P1 但未执行 `Read references/portfolio-layer.md`**（组合层规范未加载 = 相关性矩阵 / 行业封顶规则无从遵循）
+- ❌ **进入阶段 L1 但未执行 `Read references/cross-ticker-lessons.md`**（教训聚合规范未加载 = 4 维度切片 / 胜率公式无据可依）
+- ❌ **进入阶段 M1 但未执行 `Read references/multi-market.md`**（跨市场规范未加载 = 基准选择 / 汇率对齐逻辑缺失）
+
+READ GATE 存在的唯一理由是强制工具调用留下可见记录——**凭记忆"我已经知道内容了"不能替代 Read 调用**。
 
 ### 启动层（阶段 0a）
 
