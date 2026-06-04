@@ -168,3 +168,18 @@ crypto-analyzer ──→ trading-debate（可选决策层）
 event-calendar  ──→ 维度 7
 hyperliquid-perps → 维度 3
 ```
+
+## 分析存档（自动，输出报告后立即执行）
+
+七维度报告输出完成后，**立即**调用：
+
+```
+Skill(skill="stock-skills:ticker-journal") → write 操作
+```
+
+- 来源标记为 `crypto-analyzer`
+- 评级填 `纯分析`
+- 大师信号填 `N/A`，复盘锚点填 `N/A`
+- PE/PB 百分位不适用时填 `N/A`，改填 MV/RV 比率（如有）
+- 字段从刚输出的报告中提取，禁止重新调用 API
+- 提取失败的字段填 `N/A`，不中止流程
