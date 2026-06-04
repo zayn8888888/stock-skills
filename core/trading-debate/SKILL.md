@@ -435,6 +435,11 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - ❌ 禁止"承诺写但不真写"——主对话必须出现 Write / Edit 工具调用记录
 - 标注"待 3 个月后反思"
 
+**8c. 阶段 8b 完成后（立即）**：
+- 调用 `Skill(skill="stock-skills:ticker-journal")` → **write** 操作
+- 数据来源：从阶段 6 PM 最终报告（评级/仓位/入场价/止损/目标/大师信号/复盘锚点）+ 阶段 0 共享报告（价格/估值/技术位/核心催化风险）提取快照字段
+- ❌ 禁止在 8b 的 Write 工具调用未完成时就启动 8c
+
 **反思触发**（用户主动 / 自动）：
 - 用户说"复盘 NVDA / 反思我对 X 的决策"
 - 或下次相似分析时检测到超期未反思
@@ -500,6 +505,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - [ ] Risk 三方都发言，每个角色都直接回应了至少一位对方
 - [ ] PM 最终评级 + executive_summary + investment_thesis 都有
 - [ ] **启用 v0.3 反思**：阶段 8a/8b 按 `reflection.md` 真 Glob/Read/Write 了决策存档
+- [ ] **阶段 8c**：已调用 `ticker-journal` write，`~/.stock-skills/journals/{TICKER}.md` 已更新（Write/Edit 工具调用记录可见）
 - [ ] **启用 v0.4 组合层**：每个候选标的的 stock-analyzer 调用都有记录，相关性矩阵基于真实 K 线
 - [ ] **启用 v0.5 教训聚合**：真的 Read 了 ≥ 3 条已反思决策，4 维度切片胜率公式一致
 - [ ] 所有数据点标了来源 skill + 时点
