@@ -228,7 +228,11 @@ def generate_html(data: dict) -> str:
   /* ── header ── */
   .header {{ padding: 18px 24px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }}
   .header h1 {{ font-size: 17px; font-weight: 600; }}
+  .header-right {{ display: flex; align-items: center; gap: 12px; }}
   .header .updated {{ color: var(--muted); font-size: 12px; }}
+  .refresh-btn {{ padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; transition: all .15s; }}
+  .refresh-btn:hover {{ border-color: var(--blue); color: var(--blue); background: rgba(96,165,250,.1); }}
+  .refresh-btn.spinning {{ opacity: .5; pointer-events: none; }}
 
   /* ── stats ── */
   .stats {{ display: flex; gap: 16px; padding: 12px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }}
@@ -339,7 +343,10 @@ def generate_html(data: dict) -> str:
 
 <div class="header">
   <h1>📊 Ticker Journal</h1>
-  <span class="updated">更新于 {now}</span>
+  <div class="header-right">
+    <span class="updated">更新于 {now}</span>
+    <button class="refresh-btn" onclick="refresh(this)" title="重新读取 journals 目录">↻ 刷新</button>
+  </div>
 </div>
 <div class="stats">
   <div class="stat"><div class="stat-dot" style="background:#22c55e"></div><span class="stat-label">Overweight</span><span class="stat-val">{count_ow}</span></div>
@@ -488,6 +495,12 @@ function setActive(idx) {{
 }}
 document.querySelectorAll('.filter-btn').forEach((btn, i) =>
   btn.addEventListener('click', () => setActive(i)));
+
+function refresh(btn) {{
+  btn.classList.add('spinning');
+  btn.textContent = '↻ 加载中…';
+  location.reload();
+}}
 </script>
 </body>
 </html>'''
