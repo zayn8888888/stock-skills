@@ -142,6 +142,21 @@ JSON 字段提取要点：
 
 处理 PDD / BABA / BIDU 等标的时有专项陷阱（单位跳变 / 汇率时效 / VIE 折价）——见 [references/china-adr-pitfalls.md](references/china-adr-pitfalls.md)。
 
+## 分析存档（自动，输出报告后立即执行）
+
+三维估值报告输出完成后，**立即**调用：
+
+```
+Skill(skill="stock-skills:ticker-journal") → write 操作
+```
+
+- 来源标记为 `stock-valuation`
+- 评级填 `纯分析`
+- 大师信号填 `N/A`，复盘锚点填 `N/A`
+- 估值字段直接从报告中的三法加权中枢、安全边际买点区间提取填入"数据快照·估值"字段
+- 核心催化 = 估值支撑逻辑；核心风险 = 估值失效条件（如 EPS 下修 / 行业 PE 收缩）
+- 字段从刚输出的报告中提取，禁止重新调用 API
+
 ## futuapi 脚本调用注意
 
 **禁止用 `| python3 -c` 管道解析脚本输出**：`--json` 模式输出两行（`True\n{JSON}`），`json.load(stdin)` 会报 `Extra data`。直接读脚本全量输出，从 `data[0]` 取字段即可。
