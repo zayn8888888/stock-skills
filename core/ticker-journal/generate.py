@@ -48,7 +48,7 @@ def parse_journal(filepath: Path) -> list[dict]:
         target = target_m.group(1) if target_m else 'N/A'
 
         pos_m = re.search(r'^([^@]+?)@', decision_text)
-        position = pos_m.group(1).strip().lstrip('Overweight').lstrip('Underweight').lstrip('Hold').lstrip('纯分析').strip() if pos_m else 'N/A'
+        position = re.sub(r'^(Overweight|Underweight|Hold|纯分析)\s*', '', pos_m.group(1).strip()).strip() if pos_m else 'N/A'
 
         price_m = re.search(r'- 价格：([^\n（(]+)', block)
         price_snap = price_m.group(1).strip() if price_m else 'N/A'
@@ -72,16 +72,20 @@ def parse_journal(filepath: Path) -> list[dict]:
 
         # 全部催化（不截断）
         cat_start = block.find('核心催化')
-        cat_end = block.find('核心风险', cat_start) if cat_start >= 0 else -1
         catalysts_all = []
-        if cat_start >= 0 and cat_end >= 0:
+        if cat_start >= 0:
+            cat_end = block.find('核心风险', cat_start)
+            if cat_end == -1:
+                cat_end = block.find('\n---', cat_start)
             catalysts_all = [l.lstrip('- ').strip() for l in block[cat_start:cat_end].split('\n') if l.strip().startswith('-')]
 
         # 全部风险（不截断）
         risk_start = block.find('核心风险')
-        risk_end = block.find('\n**大师信号', risk_start) if risk_start >= 0 else risk_start + 500
         risks_all = []
         if risk_start >= 0:
+            risk_end = block.find('\n**大师信号', risk_start)
+            if risk_end == -1:
+                risk_end = block.find('\n---', risk_start)
             risks_all = [l.lstrip('- ').strip() for l in block[risk_start:risk_end].split('\n') if l.strip().startswith('-')]
 
         days_to_review = None
@@ -157,8 +161,20 @@ def build_card(ticker: str, entries: list[dict]) -> str:
     entry_count = len(entries)
     days_val = latest['days_to_review'] if latest['days_to_review'] is not None else 9999
 
+    # 纯分析卡片：params 行改为显示数据快照前 3 行（价格 + 估值 + 主要指标）
+    if latest['rating'] == '纯分析' and latest['snap_lines']:
+        snap_rows = ''.join(f'<div class="snap-preview-row">{l}</div>' for l in latest['snap_lines'][:3])
+        params_section = f'<div class="snap-preview">{snap_rows}</div>'
+    else:
+        params_section = f'''<div class="params">
+      <div class="param"><span class="label">入场</span><span class="value">{latest["entry_price"]}</span></div>
+      <div class="param"><span class="label">止损</span><span class="value stop">{latest["stop"]}</span></div>
+      <div class="param"><span class="label">目标</span><span class="value target">{latest["target"]}</span></div>
+      <div class="param"><span class="label">仓位</span><span class="value">{latest["position"]}</span></div>
+    </div>'''
+
     return f'''
-<div class="card" data-ticker="{ticker}" data-rating="{latest["rating"]}" data-days="{days_val}" onclick="openModal('{ticker}')">
+<div class="card" data-ticker="{ticker}" data-rating="{latest["rating"]}" data-source="{latest["source"]}" data-days="{days_val}" onclick="openModal('{ticker}')">
   <div class="card-header" style="border-left:4px solid {rc}; background:{rb}">
     <div class="card-title-row">
       <span class="ticker">{ticker}</span>
@@ -171,12 +187,7 @@ def build_card(ticker: str, entries: list[dict]) -> str:
     </div>
   </div>
   <div class="card-body">
-    <div class="params">
-      <div class="param"><span class="label">入场</span><span class="value">{latest["entry_price"]}</span></div>
-      <div class="param"><span class="label">止损</span><span class="value stop">{latest["stop"]}</span></div>
-      <div class="param"><span class="label">目标</span><span class="value target">{latest["target"]}</span></div>
-      <div class="param"><span class="label">仓位</span><span class="value">{latest["position"]}</span></div>
-    </div>
+    {params_section}
     <div class="masters">{latest["masters"]}</div>
     <div class="cr-grid">
       <div class="cr-col"><div class="cr-title bull">催化</div><ul>{catalysts_html}</ul></div>
@@ -207,8 +218,19 @@ def generate_html(data: dict) -> str:
     count_urgent = sum(1 for e in all_latest if e['days_to_review'] is not None and 0 <= e['days_to_review'] <= 14)
     total = len(data)
 
+    # 来源过滤按钮（动态枚举实际存在的 source）
+    source_counts: dict[str, int] = {}
+    for entries in data.values():
+        if entries:
+            s = entries[0]['source']
+            source_counts[s] = source_counts.get(s, 0) + 1
+    source_filter_btns = '\n  '.join(
+        f'<button class="filter-btn" onclick="filterSource(\'{s}\')">{s} ({c})</button>'
+        for s, c in sorted(source_counts.items())
+    )
+
     # 把全部 journal 数据序列化给 JS 用
-    journal_json = json.dumps({t: e for t, e in data.items()}, ensure_ascii=False)
+    journal_json = json.dumps(data, ensure_ascii=False)
 
     return f'''<!DOCTYPE html>
 <html lang="zh-CN">
@@ -279,6 +301,10 @@ def generate_html(data: dict) -> str:
   .history-label, .review-date {{ color: var(--muted); font-size: 11px; }}
   .dots {{ display: flex; gap: 4px; align-items: center; }}
   .dot {{ width: 7px; height: 7px; border-radius: 50%; opacity: .8; }}
+
+  /* ── snap preview（纯分析卡片替代 params 行） ── */
+  .snap-preview {{ margin-bottom: 8px; }}
+  .snap-preview-row {{ font-size: 11px; color: var(--muted); line-height: 1.6; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
 
   /* ── modal overlay ── */
   .modal-overlay {{ display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 100; backdrop-filter: blur(2px); }}
@@ -362,6 +388,7 @@ def generate_html(data: dict) -> str:
   <button class="filter-btn" onclick="filterRating('Hold')">🟡 Hold ({count_hold})</button>
   <button class="filter-btn" onclick="filterRating('Underweight')">🟠 Underweight ({count_uw})</button>
   <button class="filter-btn" onclick="filterUrgent()">⚠ 待复盘 ({count_overdue + count_urgent})</button>
+  {source_filter_btns}
 </div>
 
 <div class="grid" id="grid">
@@ -487,6 +514,11 @@ function filterUrgent() {{
     const d = parseInt(c.dataset.days);
     c.classList.toggle('hidden', d >= 15 || isNaN(d));
   }});
+  setActive(null);
+}}
+function filterSource(s) {{
+  document.querySelectorAll('.card').forEach(c =>
+    c.classList.toggle('hidden', c.dataset.source !== s));
   setActive(null);
 }}
 function setActive(idx) {{

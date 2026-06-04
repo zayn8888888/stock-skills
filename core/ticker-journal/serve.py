@@ -8,6 +8,7 @@ Ticker Journal 本地服务器。
 import sys
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from pathlib import Path
 
 # 把 journals 目录加入 path，直接复用 generate.py 的解析逻辑
@@ -46,8 +47,12 @@ class Handler(BaseHTTPRequestHandler):
             print(f'  {args[1]}  {args[0]}')
 
 
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
+
+
 if __name__ == '__main__':
-    server = HTTPServer(('127.0.0.1', PORT), Handler)
+    server = ThreadedHTTPServer(('127.0.0.1', PORT), Handler)
     url = f'http://localhost:{PORT}'
     print(f'✅ Ticker Journal 已启动：{url}')
     print(f'   每次刷新页面自动重新读取 journals/')
