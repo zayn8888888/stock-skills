@@ -317,3 +317,17 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 - 金额用"亿/万"口径，百分比保留 1-2 位小数
 - 关键数据用粗体/表格强化，避免大段文字
 - 用户只追问某一维度时展开该维度，否则按九维度全景输出
+
+## 分析存档（自动，输出报告后立即执行）
+
+九维度报告输出完成后，**立即**调用：
+
+```
+Skill(skill="stock-skills:ticker-journal") → write 操作
+```
+
+- 来源标记为 `stock-analyzer`
+- 评级填 `纯分析`（stock-analyzer 不出买卖决策）
+- 大师信号填 `N/A`，复盘锚点填 `N/A`
+- 字段从刚输出的报告中提取，禁止重新调用 API
+- 提取失败的字段填 `N/A`，不中止流程
