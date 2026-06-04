@@ -1,6 +1,6 @@
 ---
 name: ticker-journal
-description: 标的档案读写助手。write=分析后写快照，load=新会话加载历史 context，followup=拉最新行情+新闻做增量建议。触发场景：(1) 分析结束后被 stock-analyzer / trading-debate / crypto-analyzer 自动调用写档；(2) 用户说"加载 XX 档案"/"XX 追问"/"XX 最新行情怎样"；(3) 用户提某标的且 INDEX.md 已有记录时 AI 提示。
+description: 标的档案读写助手。write=分析后写快照，load=新会话加载历史 context，followup=拉最新行情+新闻做增量建议，dashboard=启动本地仪表盘。触发场景：(1) 分析结束后被 stock-analyzer / trading-debate / crypto-analyzer / stock-fundamentals / stock-valuation 自动调用写档；(2) 用户说"加载 XX 档案"/"XX 追问"/"XX 最新行情怎样"；(3) 用户提某标的且 INDEX.md 已有记录时 AI 提示；(4) 用户说"打开仪表盘"/"看档案总览"/"dashboard"时启动本地服务器。
 ---
 
 # Ticker Journal — 标的档案读写
@@ -187,6 +187,32 @@ INDEX.md 每行格式：
 
 ---
 
+---
+
+## 操作四：dashboard（本地仪表盘）
+
+**触发语**：
+- "打开仪表盘" / "看档案总览" / "dashboard" / "看看我的持仓"
+
+### 执行步骤
+
+1. 检查服务器是否已在运行：
+   `Bash: curl -s --max-time 1 http://localhost:7788/ > /dev/null && echo "RUNNING" || echo "STOPPED"`
+2. **已运行** → 直接告知用户访问 `http://localhost:7788`，无需重复启动
+3. **未运行** → 启动服务器（后台运行）：
+   `Bash: python3 ~/.stock-skills/journals/serve.py &`
+   然后告知用户访问 `http://localhost:7788`
+
+### 仪表盘说明
+
+- **serve.py**：本地 HTTP 服务器，每次刷新页面自动重新读取 `~/.stock-skills/journals/` 目录，无需手动 generate
+- **generate.py**：独立脚本，输出静态 `dashboard.html`（离线使用时用）
+- 页面右上角有 **↻ 刷新** 按钮，新的分析存档后点一下即可更新
+- 点任意标的卡片打开右侧详情抽屉，展示该标的所有历史条目
+- 卡片按最新分析日期降序排列
+
+---
+
 ## 偷懒检测 & 硬约束
 
 - ❌ 从 context "印象"提取字段而不读取报告对应章节——必须定位到报告里的具体数字
@@ -194,3 +220,4 @@ INDEX.md 每行格式：
 - ❌ followup 重新做全量 9 维度分析——只拉价格快照 + 近 7 天新闻
 - ❌ 写新区块时覆盖已有区块——必须 Edit 追加在末尾 `---` 之后
 - ❌ write 完成后不更新 INDEX.md——每次 write 都必须同步 INDEX
+- ❌ dashboard 已运行时重复启动服务器——先 curl 检测再决定是否启动
