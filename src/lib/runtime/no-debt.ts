@@ -21,6 +21,9 @@ export const FORBIDDEN_RUNTIME_PATTERNS: readonly string[] = [
   "event: tool_call",
   "event: tool_result",
   "event: run.updated",
+  // Removed legacy event-table exports
+  "\\brunEvents\\b",
+  "\\bsessionEvents\\b",
   // Pi runtime imports
   "from.*pi-runner",
   "from.*pi-tools",
@@ -32,8 +35,6 @@ export const FORBIDDEN_RUNTIME_PATTERNS: readonly string[] = [
  * After Task 11, most old files have been deleted. This list is now nearly empty.
  */
 export const TEMPORARY_OLD_FILE_ALLOWLIST: readonly string[] = [
-  "src/lib/runtime/artifact-writer.ts",
-  "src/lib/db/schema.ts",
   "src/lib/agent/loop-registry.ts",
   "src/app/page.tsx",
   "tests/event-bus.test.ts",

@@ -68,9 +68,19 @@ export interface RuntimeEventSink {
   textCompleted(text: string): Promise<void>;
   reasoningDelta(summary: string): Promise<void>;
   toolCallCreated(data: { toolCallId: string; name: string; args?: unknown }): Promise<void>;
-  toolCallCompleted(data: { toolCallId: string; name: string; status: string; result?: unknown }): Promise<void>;
+  toolCallCompleted(data: {
+    toolCallId: string;
+    name: string;
+    status: string;
+    result?: unknown;
+  }): Promise<void>;
   toolCallFailed(data: { toolCallId: string; name: string; error: string }): Promise<void>;
-  artifactCreated(data: { artifactId: string; kind: string; name: string; content: string }): Promise<void>;
+  artifactCreated(data: {
+    artifactId: string;
+    kind: string;
+    name: string;
+    content: string;
+  }): Promise<void>;
   errorCreated(data: { code: string; message: string; retriable: boolean }): Promise<void>;
 }
 

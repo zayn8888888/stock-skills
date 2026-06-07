@@ -1,9 +1,9 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { createTestDB } from "../helpers";
-import { createRuntimeStore } from "@/lib/runtime/repositories";
-import { buildSessionTimeline, buildRunTimeline } from "@/lib/runtime/timeline";
 import type * as schema from "@/lib/db/schema";
+import { createRuntimeStore } from "@/lib/runtime/repositories";
+import { buildRunTimeline, buildSessionTimeline } from "@/lib/runtime/timeline";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { beforeEach, describe, expect, it } from "vitest";
+import { createTestDB } from "../helpers";
 
 describe("Timeline query services", () => {
   let db: ReturnType<typeof createTestDB>;
@@ -43,7 +43,7 @@ describe("Timeline query services", () => {
       content: "Analyze AAPL",
     });
 
-    const run = await store.runs.create({
+    const _run = await store.runs.create({
       id: "tl_run_1",
       sessionId: "tl_session_2",
       skillName: "stock-analyzer",
@@ -82,10 +82,12 @@ describe("Timeline query services", () => {
       updatedAt: new Date().toISOString(),
     });
 
-    const run = await store.runs.create({
+    const _run = await store.runs.create({
       id: "tl_run_2",
       sessionId: "tl_session_3",
       skillName: "test-skill",
+      workflowType: "agent_workflow",
+      ticker: "NVDA",
       status: "succeeded",
       createdAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
@@ -98,15 +100,22 @@ describe("Timeline query services", () => {
       kind: "report",
       name: "report.md",
       path: "/tmp/report.md",
+      inlineContent: "# Report",
+      mimeType: "text/markdown",
       createdAt: new Date().toISOString(),
     });
 
     const timeline = await buildRunTimeline(store, "tl_run_2");
     expect(timeline).toBeDefined();
-    expect(timeline!.runId).toBe("tl_run_2");
-    expect(timeline!.status).toBe("succeeded");
-    expect(timeline!.artifacts.length).toBe(1);
-    expect(timeline!.artifacts[0].name).toBe("report.md");
-    expect(timeline!.durationMs).toBe(5000);
+    expect(timeline?.runId).toBe("tl_run_2");
+    expect(timeline?.status).toBe("succeeded");
+    expect(timeline?.skillName).toBe("test-skill");
+    expect(timeline?.workflowType).toBe("agent_workflow");
+    expect(timeline?.ticker).toBe("NVDA");
+    expect(timeline?.artifacts.length).toBe(1);
+    expect(timeline?.artifacts[0].name).toBe("report.md");
+    expect(timeline?.artifacts[0].content).toBe("# Report");
+    expect(timeline?.artifacts[0].mimeType).toBe("text/markdown");
+    expect(timeline?.durationMs).toBe(5000);
   });
 });

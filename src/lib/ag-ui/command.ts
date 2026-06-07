@@ -2,8 +2,8 @@
  * AG-UI Command — converts AG-UI RunAgentInput to RuntimeCommand.
  */
 
+import { type RuntimeCommand, createCommand } from "@/lib/runtime/commands";
 import { nanoid } from "nanoid";
-import { createCommand, type RuntimeCommand } from "@/lib/runtime/commands";
 
 export interface AgUiRunInput {
   threadId?: string;
@@ -25,10 +25,8 @@ export interface AgUiRunInput {
  * - Sets source to "ag_ui"
  */
 export function parseAgUiInput(input: AgUiRunInput): RuntimeCommand {
-  const sessionId = input.threadId ?? nanoid();
-  const lastUserMessage = [...(input.messages ?? [])]
-    .reverse()
-    .find((m) => m.role === "user");
+  const sessionId = input.threadId;
+  const lastUserMessage = [...(input.messages ?? [])].reverse().find((m) => m.role === "user");
 
   const content = lastUserMessage?.content ?? "";
 
@@ -44,6 +42,6 @@ export function parseAgUiInput(input: AgUiRunInput): RuntimeCommand {
     startRun: true,
     actor: "web_ui",
     source: "ag_ui",
-    idempotencyKey: `ag_ui:${sessionId}:${input.runId ?? nanoid()}`,
+    idempotencyKey: `ag_ui:${sessionId ?? "new"}:${input.runId ?? nanoid()}`,
   });
 }

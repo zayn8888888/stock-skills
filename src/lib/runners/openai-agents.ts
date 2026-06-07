@@ -17,6 +17,8 @@ import {
   type RunnerResult,
 } from "./base";
 
+type OpenAIAgentsSdk = Pick<typeof import("@openai/agents"), "Agent" | "Runner">;
+
 export class ModernOpenAIAgentsRunner implements RunnerAdapter {
   readonly id = "openai-agents";
   readonly displayName = "OpenAI Agents SDK";
@@ -28,9 +30,11 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
   };
 
   private modelId: string;
+  private loadSdk: () => Promise<OpenAIAgentsSdk>;
 
-  constructor(config?: { modelId?: string }) {
+  constructor(config?: { modelId?: string; loadSdk?: () => Promise<OpenAIAgentsSdk> }) {
     this.modelId = config?.modelId ?? "gpt-5.5";
+    this.loadSdk = config?.loadSdk ?? (() => import("@openai/agents"));
   }
 
   async run(input: RunnerInput, ctx: RunnerContext): Promise<RunnerResult> {
@@ -39,16 +43,7 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
     logger.info(`[OpenAIAgentsRunner] Starting run ${input.runId} with model ${this.modelId}`);
 
     try {
-      // Dynamic import to allow tests to mock @openai/agents
-      const { Agent, Runner } = await import("@openai/agents").catch(() => ({
-        Agent: null,
-        Runner: null,
-      }));
-
-      if (!Agent || !Runner) {
-        logger.warn("[OpenAIAgentsRunner] @openai/agents not available, falling back to stub");
-        return this.stubExecute(input, ctx);
-      }
+      const { Agent, Runner } = await this.loadSdk();
 
       // Build agent definition
       const agent = new Agent({
@@ -93,7 +88,10 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
       return {
         status: "succeeded",
         text: fullText,
-        traceId: typeof result === "object" && result !== null && "traceId" in result ? (result as { traceId?: string }).traceId : undefined,
+        traceId:
+          typeof result === "object" && result !== null && "traceId" in result
+            ? (result as { traceId?: string }).traceId
+            : undefined,
       };
     } catch (err) {
       const isCancelled = signal.aborted;
@@ -111,24 +109,6 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
     }
   }
 
-  /**
-   * Stub execution when @openai/agents is not available.
-   */
-  private async stubExecute(input: RunnerInput, ctx: RunnerContext): Promise<RunnerResult> {
-    const { signal, events } = ctx;
-
-    if (signal.aborted) return { status: "cancelled" };
-
-    await events.textDelta(`[OpenAI Agents Stub] Processing: ${input.userInput.slice(0, 100)}`);
-
-    if (signal.aborted) return { status: "cancelled" };
-
-    const text = `[OpenAI Agents Stub] Analysis for ${input.ticker ?? "unknown"} completed.`;
-    await events.textCompleted(text);
-
-    return { status: "succeeded", text };
-  }
-
   private buildInstructions(input: RunnerInput): string {
     const parts = [`You are a ${input.skillName} agent.`];
     if (input.ticker) parts.push(`Analyzing ticker: ${input.ticker}`);
@@ -144,7 +124,11 @@ export class ModernOpenAIAgentsRunner implements RunnerAdapter {
       if (typeof r.output === "string") return r.output;
       if (Array.isArray(r.messages)) {
         const last = r.messages[r.messages.length - 1];
-        if (last && typeof last === "object" && typeof (last as Record<string, unknown>).content === "string") {
+        if (
+          last &&
+          typeof last === "object" &&
+          typeof (last as Record<string, unknown>).content === "string"
+        ) {
           return (last as Record<string, unknown>).content as string;
         }
       }

@@ -1,7 +1,7 @@
-import { describe, expect, it } from "vitest";
-import { projectToAgUi, projectBatch } from "@/lib/ag-ui/projector";
+import { projectBatch, projectToAgUi } from "@/lib/ag-ui/projector";
 import { createRuntimeEvent } from "@/lib/runtime/events";
 import { EventType } from "@ag-ui/core";
+import { describe, expect, it } from "vitest";
 
 function testEvent(type: string, payload: Record<string, unknown> = {}) {
   return createRuntimeEvent({
@@ -18,31 +18,31 @@ describe("AG-UI Projector", () => {
     const event = testEvent("run.started", { status: "running" });
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.RUN_STARTED);
-    expect(agUi!.threadId).toBe("s1");
-    expect(agUi!.runId).toBe("run1");
+    expect(agUi?.type).toBe(EventType.RUN_STARTED);
+    expect(agUi?.threadId).toBe("s1");
+    expect(agUi?.runId).toBe("run1");
   });
 
   it("maps model.text.delta to TEXT_MESSAGE_CONTENT", () => {
     const event = testEvent("model.text.delta", { delta: "hello" });
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.TEXT_MESSAGE_CONTENT);
-    expect(agUi!.delta).toBe("hello");
+    expect(agUi?.type).toBe(EventType.TEXT_MESSAGE_CONTENT);
+    expect(agUi?.delta).toBe("hello");
   });
 
   it("maps model.text.started to TEXT_MESSAGE_START", () => {
     const event = testEvent("model.text.started", {});
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.TEXT_MESSAGE_START);
+    expect(agUi?.type).toBe(EventType.TEXT_MESSAGE_START);
   });
 
   it("maps model.text.completed to TEXT_MESSAGE_END", () => {
     const event = testEvent("model.text.completed", { text: "done" });
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.TEXT_MESSAGE_END);
+    expect(agUi?.type).toBe(EventType.TEXT_MESSAGE_END);
   });
 
   it("maps tool.call.created to TOOL_CALL_START", () => {
@@ -50,9 +50,9 @@ describe("AG-UI Projector", () => {
     event.toolCallId = "tc1";
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.TOOL_CALL_START);
-    expect(agUi!.toolCallId).toBe("tc1");
-    expect(agUi!.toolName).toBe("get_quote");
+    expect(agUi?.type).toBe(EventType.TOOL_CALL_START);
+    expect(agUi?.toolCallId).toBe("tc1");
+    expect(agUi?.toolName).toBe("get_quote");
   });
 
   it("maps tool.call.completed to TOOL_CALL_END", () => {
@@ -60,29 +60,29 @@ describe("AG-UI Projector", () => {
     event.toolCallId = "tc1";
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.TOOL_CALL_END);
-    expect(agUi!.toolCallId).toBe("tc1");
+    expect(agUi?.type).toBe(EventType.TOOL_CALL_END);
+    expect(agUi?.toolCallId).toBe("tc1");
   });
 
   it("maps run.completed to RUN_FINISHED", () => {
     const event = testEvent("run.completed", { status: "succeeded" });
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.RUN_FINISHED);
+    expect(agUi?.type).toBe(EventType.RUN_FINISHED);
   });
 
   it("maps run.failed to RUN_ERROR", () => {
     const event = testEvent("run.failed", { code: "runner.timeout" });
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.RUN_ERROR);
+    expect(agUi?.type).toBe(EventType.RUN_ERROR);
   });
 
   it("maps error.created to RUN_ERROR", () => {
     const event = testEvent("error.created", { code: "tool.failed", message: "bad" });
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.RUN_ERROR);
+    expect(agUi?.type).toBe(EventType.RUN_ERROR);
   });
 
   it("maps artifact.created to STATE_DELTA", () => {
@@ -90,14 +90,14 @@ describe("AG-UI Projector", () => {
     event.artifactId = "a1";
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.STATE_DELTA);
+    expect(agUi?.type).toBe(EventType.STATE_DELTA);
   });
 
   it("maps data.source.selected to CUSTOM", () => {
     const event = testEvent("data.source.selected", { provider: "futu" });
     const agUi = projectToAgUi(event);
     expect(agUi).not.toBeNull();
-    expect(agUi!.type).toBe(EventType.CUSTOM);
+    expect(agUi?.type).toBe(EventType.CUSTOM);
   });
 
   it("returns null for transport events", () => {

@@ -39,7 +39,11 @@ export class MockRunner implements RunnerAdapter {
 
     // 2. tool.call.created
     const toolCallId = nanoid();
-    await events.toolCallCreated({ toolCallId, name: "mock_data_fetch", args: { ticker: input.ticker } });
+    await events.toolCallCreated({
+      toolCallId,
+      name: "mock_data_fetch",
+      args: { ticker: input.ticker },
+    });
 
     if (signal.aborted) return { status: "cancelled" };
 

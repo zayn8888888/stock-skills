@@ -4,8 +4,8 @@
  * All mutating operations enter through RuntimeCommandService as typed commands.
  */
 
-import { z } from "zod";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 
 // ─── Command type enumeration ────────────────────────────────────────
 
@@ -53,6 +53,13 @@ export const RuntimeCommandSchema = z.object({
 
 export type RuntimeCommand = z.infer<typeof RuntimeCommandSchema>;
 
+export const RuntimeCommandInputSchema = RuntimeCommandSchema.partial({
+  commandId: true,
+  idempotencyKey: true,
+  schemaVersion: true,
+  createdAt: true,
+});
+
 // ─── Factory ─────────────────────────────────────────────────────────
 
 export interface CreateCommandInput {
@@ -82,7 +89,8 @@ export interface CreateCommandInput {
 export function createCommand(input: CreateCommandInput): RuntimeCommand {
   return {
     commandId: nanoid(),
-    idempotencyKey: input.idempotencyKey ?? `${input.type}:${input.sessionId ?? "none"}:${nanoid()}`,
+    idempotencyKey:
+      input.idempotencyKey ?? `${input.type}:${input.sessionId ?? "none"}:${nanoid()}`,
     schemaVersion: "runtime-command.v1",
     type: input.type,
     actor: input.actor,
@@ -97,4 +105,20 @@ export function createCommand(input: CreateCommandInput): RuntimeCommand {
     evidence: input.evidence,
     artifactId: input.artifactId,
   };
+}
+
+/**
+ * Validate an external command and fill in server-owned envelope fields.
+ */
+export function parseRuntimeCommandInput(input: unknown): RuntimeCommand {
+  const parsed = RuntimeCommandInputSchema.parse(input);
+
+  return RuntimeCommandSchema.parse({
+    ...parsed,
+    commandId: parsed.commandId ?? nanoid(),
+    idempotencyKey:
+      parsed.idempotencyKey ?? `${parsed.type}:${parsed.sessionId ?? "none"}:${nanoid()}`,
+    schemaVersion: "runtime-command.v1",
+    createdAt: parsed.createdAt ?? new Date().toISOString(),
+  });
 }

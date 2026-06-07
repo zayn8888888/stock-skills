@@ -26,34 +26,36 @@ export const commandLog = sqliteTable("command_log", {
   finishedAt: text("finished_at"),
 });
 
-export const runtimeEvents = sqliteTable("runtime_events", {
-  id: text("id").primaryKey(),
-  schemaVersion: text("schema_version").notNull(),
-  sessionSeq: integer("session_seq").notNull(),
-  runSeq: integer("run_seq"),
-  scope: text("scope").notNull(),
-  type: text("type").notNull(),
-  category: text("category").notNull(),
-  sessionId: text("session_id")
-    .notNull()
-    .references(() => sessions.id),
-  runId: text("run_id").references(() => runs.id),
-  messageId: text("message_id").references(() => messages.id),
-  toolCallId: text("tool_call_id"),
-  artifactId: text("artifact_id"),
-  parentEventId: text("parent_event_id"),
-  correlationId: text("correlation_id"),
-  idempotencyKey: text("idempotency_key"),
-  producer: text("producer").notNull(),
-  visibility: text("visibility").notNull(),
-  persist: integer("persist").notNull(),
-  payloadJson: text("payload_json"),
-  createdAt: text("created_at").notNull(),
-},
-(t) => [
-  uniqueIndex("idx_rt_events_session_seq").on(t.sessionId, t.sessionSeq),
-  uniqueIndex("idx_rt_events_run_seq").on(t.runId, t.runSeq),
-],
+export const runtimeEvents = sqliteTable(
+  "runtime_events",
+  {
+    id: text("id").primaryKey(),
+    schemaVersion: text("schema_version").notNull(),
+    sessionSeq: integer("session_seq").notNull(),
+    runSeq: integer("run_seq"),
+    scope: text("scope").notNull(),
+    type: text("type").notNull(),
+    category: text("category").notNull(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => sessions.id),
+    runId: text("run_id").references(() => runs.id),
+    messageId: text("message_id").references(() => messages.id),
+    toolCallId: text("tool_call_id"),
+    artifactId: text("artifact_id"),
+    parentEventId: text("parent_event_id"),
+    correlationId: text("correlation_id"),
+    idempotencyKey: text("idempotency_key"),
+    producer: text("producer").notNull(),
+    visibility: text("visibility").notNull(),
+    persist: integer("persist").notNull(),
+    payloadJson: text("payload_json"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("idx_rt_events_session_seq").on(t.sessionId, t.sessionSeq),
+    uniqueIndex("idx_rt_events_run_seq").on(t.runId, t.runSeq),
+  ],
 );
 
 export const toolCalls = sqliteTable("tool_calls", {
@@ -359,29 +361,3 @@ export const dataSourceRoutes = sqliteTable(
   },
   (t) => [uniqueIndex("idx_route_provider_cap").on(t.providerId, t.capabilityId)],
 );
-
-// ────────────────────────────────────────────────────────────────────
-// LEGACY TABLES — to be removed in Task 11
-// run_events and session_events are kept only until old route handlers
-// are migrated. The vNext runtime uses runtime_events exclusively.
-// ────────────────────────────────────────────────────────────────────
-
-export const runEvents = sqliteTable("run_events", {
-  id: text("id").primaryKey(),
-  runId: text("run_id")
-    .notNull()
-    .references(() => runs.id),
-  timestamp: text("timestamp").notNull(),
-  eventType: text("event_type").notNull(),
-  data: text("data"),
-});
-
-export const sessionEvents = sqliteTable("session_events", {
-  id: text("id").primaryKey(),
-  sessionId: text("session_id")
-    .notNull()
-    .references(() => sessions.id),
-  timestamp: text("timestamp").notNull(),
-  eventType: text("event_type").notNull(),
-  data: text("data"),
-});

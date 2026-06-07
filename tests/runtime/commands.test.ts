@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
 import {
-  createCommand,
-  RuntimeCommandSchema,
   RUNTIME_COMMAND_TYPES,
-  type RuntimeCommand,
+  RuntimeCommandSchema,
+  createCommand,
+  parseRuntimeCommandInput,
 } from "@/lib/runtime/commands";
+import { describe, expect, it } from "vitest";
 
 describe("RuntimeCommand", () => {
   it("creates a valid append_user message command", () => {
@@ -39,9 +39,7 @@ describe("RuntimeCommand", () => {
   });
 
   it("rejects command with missing required fields", () => {
-    expect(() =>
-      RuntimeCommandSchema.parse({ type: "run.start" }),
-    ).toThrow();
+    expect(() => RuntimeCommandSchema.parse({ type: "run.start" })).toThrow();
   });
 
   it("requires source and actor", () => {
@@ -66,6 +64,22 @@ describe("RuntimeCommand", () => {
     });
 
     expect(cmd.idempotencyKey).toBe("custom_key_123");
+  });
+
+  it("normalizes a minimal client command into the canonical envelope", () => {
+    const cmd = parseRuntimeCommandInput({
+      schemaVersion: "runtime-command.v1",
+      type: "session.message.append_user",
+      source: "research_desk",
+      actor: "web_ui",
+      content: "Analyze NVDA",
+      startRun: true,
+    });
+
+    expect(cmd.commandId).toBeTruthy();
+    expect(cmd.idempotencyKey).toBeTruthy();
+    expect(cmd.createdAt).toBeTruthy();
+    expect(RuntimeCommandSchema.parse(cmd)).toEqual(cmd);
   });
 });
 

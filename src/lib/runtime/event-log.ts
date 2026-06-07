@@ -8,8 +8,8 @@
  * - Buffer events for replay.
  */
 
-import type { RuntimeStore } from "./store";
 import type { RuntimeEvent } from "./events";
+import type { RuntimeStore, RuntimeStoreTx } from "./store";
 
 export type EventSubscriber = (event: RuntimeEvent) => void;
 
@@ -75,6 +75,8 @@ export class RuntimeEventLog {
         payloadJson,
         createdAt: event.createdAt,
       });
+
+      await this.projectReadModels(tx, event);
 
       return event;
     });
@@ -166,4 +168,147 @@ export class RuntimeEventLog {
       }
     }
   }
+
+  private async projectReadModels(tx: RuntimeStoreTx, event: RuntimeEvent): Promise<void> {
+    const payload = toRecord(event.payload);
+
+    if (event.type === "model.text.completed" && event.runId) {
+      const text = typeof payload.text === "string" ? payload.text : "";
+      const existing = await tx.messages.findByRun(event.runId);
+      const hasFinalMessage = existing.some(
+        (message) => message.role === "assistant" && message.messageType === "assistant_final",
+      );
+
+      if (!hasFinalMessage) {
+        await tx.messages.create({
+          ...(event.messageId ? { id: event.messageId } : {}),
+          sessionId: event.sessionId,
+          runId: event.runId,
+          role: "assistant",
+          messageType: "assistant_final",
+          content: text,
+          createdAt: event.createdAt,
+          updatedAt: event.createdAt,
+        });
+      }
+    }
+
+    if (event.type === "error.created" || event.type === "run.failed") {
+      const existing = event.runId ? await tx.messages.findByRun(event.runId) : [];
+      const hasProjectedError =
+        existing.some((message) => message.messageType === "error") ||
+        (event.runId == null && (await tx.messages.findById(event.id)) != null);
+
+      if (!hasProjectedError) {
+        const message = stringValue(payload.message, "Unknown error");
+        await tx.messages.create({
+          id: event.id,
+          sessionId: event.sessionId,
+          runId: event.runId ?? null,
+          role: "system",
+          messageType: "error",
+          content: message.startsWith("Error:") ? message : `Error: ${message}`,
+          createdAt: event.createdAt,
+          updatedAt: event.createdAt,
+        });
+      }
+    }
+
+    if (event.type === "tool.call.created" && event.runId && event.toolCallId) {
+      const existing = await tx.tools.findById(event.toolCallId);
+      if (!existing) {
+        await tx.tools.create({
+          id: event.toolCallId,
+          sessionId: event.sessionId,
+          runId: event.runId,
+          name: stringValue(payload.name, "unknown"),
+          status: "running",
+          argsJson: jsonValue(payload.args),
+          createdEventId: event.id,
+          startedAt: event.createdAt,
+          createdAt: event.createdAt,
+          updatedAt: event.createdAt,
+        });
+      }
+    }
+
+    if (
+      (event.type === "tool.call.completed" || event.type === "tool.call.failed") &&
+      event.runId &&
+      event.toolCallId
+    ) {
+      const existing = await tx.tools.findById(event.toolCallId);
+      if (!existing) {
+        await tx.tools.create({
+          id: event.toolCallId,
+          sessionId: event.sessionId,
+          runId: event.runId,
+          name: stringValue(payload.name, "unknown"),
+          status: "running",
+          createdAt: event.createdAt,
+          updatedAt: event.createdAt,
+        });
+      }
+
+      if (event.type === "tool.call.completed") {
+        const result = payload.result;
+        await tx.tools.updateStatus(event.toolCallId, stringValue(payload.status, "succeeded"), {
+          resultJson: jsonValue(result),
+          resultText: typeof result === "string" ? result : undefined,
+          finishedAt: event.createdAt,
+        });
+      } else {
+        await tx.tools.updateStatus(event.toolCallId, "failed", {
+          errorCode: "tool.failed",
+          errorMessage: stringValue(payload.error, "Tool call failed"),
+          finishedAt: event.createdAt,
+        });
+      }
+    }
+
+    if (event.type === "artifact.created" && event.runId && event.artifactId) {
+      const existing = await tx.artifacts.findById(event.artifactId);
+      if (!existing) {
+        const content = typeof payload.content === "string" ? payload.content : undefined;
+        await tx.artifacts.create({
+          id: event.artifactId,
+          sessionId: event.sessionId,
+          runId: event.runId,
+          kind: stringValue(payload.kind, "artifact"),
+          name: stringValue(payload.name, event.artifactId),
+          inlineContent: content,
+          content,
+          producer: event.producer,
+          sourceEventId: event.id,
+          createdAt: event.createdAt,
+        });
+      }
+    }
+
+    if (
+      event.runId &&
+      (event.type === "run.completed" ||
+        event.type === "run.failed" ||
+        event.type === "run.cancelled")
+    ) {
+      const session = await tx.sessions.findById(event.sessionId);
+      if (session?.activeRunId === event.runId) {
+        await tx.sessions.setActiveRun(event.sessionId, null);
+      }
+    }
+  }
+}
+
+function toRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.length > 0 ? value : fallback;
+}
+
+function jsonValue(value: unknown): string | undefined {
+  return value === undefined ? undefined : JSON.stringify(value);
 }

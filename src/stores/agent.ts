@@ -1,11 +1,11 @@
+import type { RuntimeEvent } from "@/lib/runtime/events";
 import { create } from "zustand";
 import {
+  type RuntimeMessage,
+  type RuntimeState,
   applyRuntimeEvent,
   createInitialState,
-  type RuntimeState,
-  type RuntimeMessage,
 } from "./runtime-reducer";
-import type { RuntimeEvent } from "@/lib/runtime/events";
 
 // ---------------------------------------------------------------------------
 // Types (backward-compatible with existing UI components)
@@ -142,9 +142,7 @@ interface SessionTimelineResponse {
 
 /** Convert RuntimeMessage to backward-compatible AgentMessage */
 function toAgentMessage(m: RuntimeMessage, rt: RuntimeState): AgentMessage {
-  const toolCallsForMsg = Object.values(rt.toolCallsById).filter(
-    (tc) => tc.runId === m.runId,
-  );
+  const toolCallsForMsg = Object.values(rt.toolCallsById).filter((tc) => tc.runId === m.runId);
   const artifactsForMsg = m.runId ? (rt.artifactsByRunId[m.runId] ?? []) : [];
 
   return {
@@ -153,24 +151,56 @@ function toAgentMessage(m: RuntimeMessage, rt: RuntimeState): AgentMessage {
     content: m.content,
     timestamp: new Date(m.createdAt).getTime(),
     runId: m.runId ?? undefined,
-    toolCalls: toolCallsForMsg.length > 0
-      ? toolCallsForMsg.map((tc) => ({
-          id: tc.id,
-          name: tc.name,
-          args: tc.args ? JSON.stringify(tc.args) : undefined,
-          result: tc.result ? JSON.stringify(tc.result) : undefined,
-          status: tc.status as ToolCallEntry["status"],
-        }))
-      : undefined,
-    artifacts: artifactsForMsg.length > 0
-      ? artifactsForMsg.map((a) => ({
-          id: a.id,
-          kind: a.kind,
-          name: a.name,
-          path: a.path,
-        }))
-      : undefined,
+    toolCalls:
+      toolCallsForMsg.length > 0
+        ? toolCallsForMsg.map((tc) => ({
+            id: tc.id,
+            name: tc.name,
+            args: tc.args ? JSON.stringify(tc.args) : undefined,
+            result: tc.result ? JSON.stringify(tc.result) : undefined,
+            status: tc.status as ToolCallEntry["status"],
+          }))
+        : undefined,
+    artifacts:
+      artifactsForMsg.length > 0
+        ? artifactsForMsg.map((a) => ({
+            id: a.id,
+            kind: a.kind,
+            name: a.name,
+            path: a.path,
+          }))
+        : undefined,
   };
+}
+
+const messagesCache = new WeakMap<RuntimeState, AgentMessage[]>();
+const toolCallsCache = new WeakMap<RuntimeState, ToolCallEntry[]>();
+
+function deriveMessages(runtime: RuntimeState): AgentMessage[] {
+  const cached = messagesCache.get(runtime);
+  if (cached) return cached;
+
+  const messages = runtime.messageOrder
+    .map((id) => runtime.messagesById[id])
+    .filter(Boolean)
+    .map((message) => toAgentMessage(message, runtime));
+  messagesCache.set(runtime, messages);
+  return messages;
+}
+
+function deriveToolCalls(runtime: RuntimeState): ToolCallEntry[] {
+  const cached = toolCallsCache.get(runtime);
+  if (cached) return cached;
+
+  const toolCalls = Object.values(runtime.toolCallsById).map((toolCall) => ({
+    id: toolCall.id,
+    name: toolCall.name,
+    args: toolCall.args ? JSON.stringify(toolCall.args) : undefined,
+    result: toolCall.result ? JSON.stringify(toolCall.result) : undefined,
+    status: toolCall.status as ToolCallEntry["status"],
+  }));
+  toolCallsCache.set(runtime, toolCalls);
+  return toolCalls;
 }
 
 export const useAgentStore = create<AgentState>((set, get) => ({
@@ -187,6 +217,11 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       cacheSession(state.sessionId, state.runtime);
     }
 
+    if (!sessionId) {
+      set({ sessionId: null, runtime: createInitialState(), sessionLoading: false });
+      return;
+    }
+
     // Load target session
     const cached = getCachedSession(sessionId);
     if (cached) {
@@ -197,7 +232,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   },
 
   loadTimeline: (sessionId: string, timeline: SessionTimelineResponse) => {
-    const state = get();
+    const _state = get();
     let rt = createInitialState();
 
     // Load messages
@@ -297,10 +332,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   // ─── Backward-compatible selectors ──────────────────────────────
   messages: () => {
     const { runtime } = get();
-    return runtime.messageOrder
-      .map((id) => runtime.messagesById[id])
-      .filter(Boolean)
-      .map((m) => toAgentMessage(m, runtime));
+    return deriveMessages(runtime);
   },
 
   streamingText: () => {
@@ -317,13 +349,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
 
   toolCalls: () => {
     const { runtime } = get();
-    return Object.values(runtime.toolCallsById).map((tc) => ({
-      id: tc.id,
-      name: tc.name,
-      args: tc.args ? JSON.stringify(tc.args) : undefined,
-      result: tc.result ? JSON.stringify(tc.result) : undefined,
-      status: tc.status as ToolCallEntry["status"],
-    }));
+    return deriveToolCalls(runtime);
   },
 
   pendingRunId: () => {

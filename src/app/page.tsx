@@ -8,8 +8,8 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useSSE } from "@/hooks/useSSE";
 import { authFetch } from "@/lib/api/auth-fetch";
 import { buildMessageContext } from "@/lib/research/message-context";
-import { useAgentStore } from "@/stores/agent";
 import type { RuntimeEvent } from "@/lib/runtime/events";
+import { useAgentStore } from "@/stores/agent";
 import { FileText, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -50,7 +50,6 @@ export default function Home() {
   const toolCalls = useAgentStore((s) => s.toolCalls());
   const pendingRunId = useAgentStore((s) => s.pendingRunId());
 
-  const runtime = useAgentStore((s) => s.runtime);
   const status = pendingRunId ? "streaming" : "idle";
 
   const { connect, disconnect, onStatusChange } = useSSE();

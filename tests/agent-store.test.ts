@@ -67,6 +67,45 @@ describe("agent store (vNext)", () => {
     expect(msgs[1].role).toBe("assistant");
   });
 
+  it("returns cached derived arrays for an unchanged runtime snapshot", async () => {
+    const { useAgentStore } = await import("@/stores/agent");
+    const state = useAgentStore.getState();
+    const messages = state.messages();
+    const toolCalls = state.toolCalls();
+
+    expect(messages).toBe(state.messages());
+    expect(toolCalls).toBe(state.toolCalls());
+
+    state.loadTimeline("session-cache", {
+      messages: [],
+      runs: [],
+      toolCalls: [],
+      artifacts: [],
+      activeRunId: null,
+    });
+
+    expect(useAgentStore.getState().messages()).not.toBe(messages);
+    expect(useAgentStore.getState().toolCalls()).not.toBe(toolCalls);
+  });
+
+  it("switches to a ready empty workspace for a new session", async () => {
+    const { useAgentStore } = await import("@/stores/agent");
+
+    useAgentStore.getState().loadTimeline("session-existing", {
+      messages: [],
+      runs: [],
+      toolCalls: [],
+      artifacts: [],
+      activeRunId: null,
+    });
+    useAgentStore.getState().switchSession("");
+
+    expect(useAgentStore.getState()).toMatchObject({
+      sessionId: null,
+      sessionLoading: false,
+    });
+  });
+
   it("addRuntimeEvent handles model.text.delta", async () => {
     const { useAgentStore } = await import("@/stores/agent");
     const { createRuntimeEvent } = await import("@/lib/runtime/events");
@@ -74,7 +113,16 @@ describe("agent store (vNext)", () => {
     // First set up a run
     useAgentStore.getState().loadTimeline("session-2", {
       messages: [],
-      runs: [{ id: "run-2", status: "running", skillName: "test", ticker: null, createdAt: "2026-06-03T00:00:00Z", finishedAt: null }],
+      runs: [
+        {
+          id: "run-2",
+          status: "running",
+          skillName: "test",
+          ticker: null,
+          createdAt: "2026-06-03T00:00:00Z",
+          finishedAt: null,
+        },
+      ],
       toolCalls: [],
       artifacts: [],
       activeRunId: "run-2",
@@ -115,7 +163,16 @@ describe("agent store (vNext)", () => {
 
     useAgentStore.getState().loadTimeline("session-3", {
       messages: [],
-      runs: [{ id: "run-3", status: "running", skillName: "test", ticker: null, createdAt: "2026-06-03T00:00:00Z", finishedAt: null }],
+      runs: [
+        {
+          id: "run-3",
+          status: "running",
+          skillName: "test",
+          ticker: null,
+          createdAt: "2026-06-03T00:00:00Z",
+          finishedAt: null,
+        },
+      ],
       toolCalls: [],
       artifacts: [],
       activeRunId: "run-3",

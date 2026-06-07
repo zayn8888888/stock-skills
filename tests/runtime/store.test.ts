@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import * as schema from "@/lib/db/schema";
+import { describe, expect, it } from "vitest";
 import { createTestDB } from "../helpers";
 
 describe("vNext schema", () => {
@@ -38,9 +38,16 @@ describe("vNext schema", () => {
     const table = schema.runtimeEvents;
     const colKeys = Object.keys(table).map((k) => k);
     const requiredCols = [
-      "id", "sessionId", "runId", "type", "category",
-      "producer", "visibility", "schemaVersion",
-      "payloadJson", "createdAt",
+      "id",
+      "sessionId",
+      "runId",
+      "type",
+      "category",
+      "producer",
+      "visibility",
+      "schemaVersion",
+      "payloadJson",
+      "createdAt",
     ];
     for (const col of requiredCols) {
       expect(colKeys).toContain(col);

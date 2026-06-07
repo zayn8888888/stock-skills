@@ -9,9 +9,9 @@ import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { getConfig } from "@/lib/config";
-import type { RuntimeStore } from "@/lib/runtime/store";
 import type { RuntimeEventLog } from "@/lib/runtime/event-log";
 import { createRuntimeEvent } from "@/lib/runtime/events";
+import type { RuntimeStore } from "@/lib/runtime/store";
 
 export interface WriteArtifactOptions {
   runId: string;
@@ -89,7 +89,8 @@ export class ArtifactService {
         type: "artifact.created",
         category: "artifact",
         scope: "artifact",
-        producer: (options.producer as "server" | "runner" | "adapter" | "ui" | "system") ?? "runner",
+        producer:
+          (options.producer as "server" | "runner" | "adapter" | "ui" | "system") ?? "runner",
         payload: {
           artifactId: artifact.id,
           runId,

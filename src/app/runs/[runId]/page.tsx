@@ -22,44 +22,42 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface RunDetail {
-  run_id: string;
-  session_id: string;
-  goal_id: string | null;
-  skill_name: string;
+  runId: string;
+  sessionId: string;
+  skillName: string;
   status: string;
-  workflow_type: string | null;
+  workflowType: string | null;
   ticker: string | null;
   market: string | null;
-  intent: string | null;
-  execution_mode: string | null;
-  caller: string | null;
-  created_at: string;
-  started_at: string | null;
-  finished_at: string | null;
-  duration_ms: number | null;
-  result_summary: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
   artifacts: {
-    artifact_id: string;
+    id: string;
+    runId: string;
     kind: string;
     name: string;
     path: string | null;
     content: string | null;
-    mime_type: string | null;
-    created_at: string;
+    mimeType: string | null;
+    contentType: string | null;
+    createdAt: string;
   }[];
   events: {
-    event_id: string;
-    event_type: string;
-    timestamp: string;
-    data: Record<string, unknown> | null;
+    id: string;
+    type: string;
+    createdAt: string;
+    payloadJson: string | null;
   }[];
 }
 
 const statusConfig: Record<string, { icon: typeof CheckCircle2; color: string; label: string }> = {
-  success: { icon: CheckCircle2, color: "text-green-500", label: "Success" },
+  succeeded: { icon: CheckCircle2, color: "text-green-500", label: "Succeeded" },
   failed: { icon: XCircle, color: "text-destructive", label: "Failed" },
   running: { icon: Loader2, color: "text-blue-500", label: "Running" },
-  pending: { icon: Clock, color: "text-muted-foreground", label: "Pending" },
+  queued: { icon: Clock, color: "text-muted-foreground", label: "Queued" },
+  waiting_for_input: { icon: Clock, color: "text-muted-foreground", label: "Waiting" },
   cancelled: { icon: XCircle, color: "text-muted-foreground", label: "Cancelled" },
 };
 
@@ -83,7 +81,7 @@ export default function RunDetailPage() {
   useEffect(() => {
     if (!runId) return;
     setLoading(true);
-    fetch(`/api/runs/${runId}`)
+    fetch(`/api/runs/${runId}/timeline`)
       .then((r) => {
         if (!r.ok) throw new Error(`Run not found (${r.status})`);
         return r.json();
@@ -124,10 +122,26 @@ export default function RunDetailPage() {
     );
   }
 
-  const st = statusConfig[run.status] ?? statusConfig.pending;
+  const st = statusConfig[run.status] ?? statusConfig.queued;
   const StatusIcon = st.icon;
 
-  const reportArtifact = run.artifacts.find((a) => a.name === "report.md" || a.kind === "report");
+  const artifacts = run.artifacts.map((artifact) => ({
+    artifact_id: artifact.id,
+    kind: artifact.kind,
+    name: artifact.name,
+    path: artifact.path,
+    content: artifact.content,
+    mime_type: artifact.mimeType ?? artifact.contentType,
+    created_at: artifact.createdAt,
+  }));
+  const events = run.events.map((event) => ({
+    event_id: event.id,
+    event_type: event.type,
+    timestamp: event.createdAt,
+    data: parsePayload(event.payloadJson),
+  }));
+
+  const reportArtifact = artifacts.find((a) => a.name === "report.md" || a.kind === "report");
   const resultArtifact = run.artifacts.find((a) => a.name === "result.json");
 
   return (
@@ -143,7 +157,7 @@ export default function RunDetailPage() {
             Research Desk
           </Link>
           <h1 className="text-xl font-semibold text-foreground flex items-center gap-3">
-            {run.skill_name}
+            {run.skillName}
             <span className="flex items-center gap-1.5 text-sm font-normal">
               <StatusIcon
                 className={cn("h-4 w-4", st.color, {
@@ -158,10 +172,10 @@ export default function RunDetailPage() {
         {/* Meta cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: "Run ID", value: run.run_id.slice(0, 8) },
-            { label: "Skill", value: run.skill_name },
+            { label: "Run ID", value: run.runId.slice(0, 8) },
+            { label: "Skill", value: run.skillName },
             { label: "Ticker", value: run.ticker ?? "N/A" },
-            { label: "Duration", value: formatDuration(run.duration_ms) },
+            { label: "Duration", value: formatDuration(run.durationMs) },
           ].map((item) => (
             <div
               key={item.label}
@@ -201,15 +215,24 @@ export default function RunDetailPage() {
             </Tabs.Content>
 
             <Tabs.Content value="data">
-              <DataTab artifacts={run.artifacts} />
+              <DataTab artifacts={artifacts} />
             </Tabs.Content>
 
             <Tabs.Content value="logs">
-              <LogsTab events={run.events} />
+              <LogsTab events={events} />
             </Tabs.Content>
           </div>
         </Tabs.Root>
       </div>
     </ErrorBoundary>
   );
+}
+
+function parsePayload(payloadJson: string | null): Record<string, unknown> | null {
+  if (!payloadJson) return null;
+  try {
+    return JSON.parse(payloadJson) as Record<string, unknown>;
+  } catch {
+    return { raw: payloadJson };
+  }
 }

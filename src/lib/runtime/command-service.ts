@@ -11,11 +11,11 @@
 
 import { nanoid } from "nanoid";
 import type { RuntimeCommand } from "./commands";
-import type { RuntimeStore } from "./store";
 import type { RuntimeEventLog } from "./event-log";
-import type { ResearchRuntime } from "./research-runtime";
 import { createRuntimeEvent } from "./events";
-import { assertRunTransition, type RunStatus } from "./state-machine";
+import type { ResearchRuntime } from "./research-runtime";
+import { type RunStatus, assertRunTransition } from "./state-machine";
+import type { RuntimeStore } from "./store";
 
 export interface CommandResult {
   commandId: string;
@@ -116,10 +116,20 @@ export class RuntimeCommandService {
   }
 
   private async handleCreateSession(cmd: RuntimeCommand): Promise<CommandResult> {
+    const sessionId = await this.createSession(cmd.content);
+
+    return {
+      commandId: cmd.commandId,
+      accepted: true,
+      sessionId,
+    };
+  }
+
+  private async createSession(title?: string, id?: string): Promise<string> {
     const now = new Date().toISOString();
     const session = await this.store.sessions.create({
-      id: nanoid(),
-      title: cmd.content ?? null,
+      id: id ?? nanoid(),
+      title: title ?? null,
       status: "active",
       createdAt: now,
       updatedAt: now,
@@ -137,22 +147,16 @@ export class RuntimeCommandService {
       }),
     );
 
-    return {
-      commandId: cmd.commandId,
-      accepted: true,
-      sessionId: session.id,
-    };
+    return session.id;
   }
 
   private async handleAppendUserMessage(cmd: RuntimeCommand): Promise<CommandResult> {
-    const sessionId = cmd.sessionId;
+    let sessionId = cmd.sessionId;
+    const initialTitle = cmd.content?.trim().slice(0, 80) || undefined;
     if (!sessionId) {
-      return {
-        commandId: cmd.commandId,
-        accepted: false,
-        error: "sessionId is required for session.message.append_user",
-        errorCode: "validation.invalid_request",
-      };
+      sessionId = await this.createSession(initialTitle);
+    } else if (!(await this.store.sessions.findById(sessionId))) {
+      sessionId = await this.createSession(initialTitle, sessionId);
     }
 
     // Create message

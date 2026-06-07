@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, ctx: RouteCtx) {
 
   return NextResponse.json({
     session_id: row.id,
-    title: row.name,
+    title: row.title ?? row.name,
     status: row.status,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
@@ -53,7 +53,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx) {
   const now = new Date().toISOString();
   const updates: Record<string, unknown> = { updatedAt: now };
 
-  if (title !== undefined) updates.name = title;
+  if (title !== undefined) updates.title = title;
   if (status !== undefined) {
     updates.status = status;
     if (status === "completed" || status === "archived") {
@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx) {
 
   return NextResponse.json({
     session_id: updated.id,
-    title: updated.name,
+    title: updated.title ?? updated.name,
     status: updated.status,
     created_at: updated.createdAt,
     updated_at: updated.updatedAt,
@@ -90,7 +90,7 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
   }
 
-  // Cascade delete: messages and runs (artifacts, run_events are FK-cascaded)
+  // Cascade delete: messages and runs.
   await db.delete(messages).where(eq(messages.sessionId, id));
   await db.delete(runs).where(eq(runs.sessionId, id));
   await db.delete(sessions).where(eq(sessions.id, id));

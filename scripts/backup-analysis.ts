@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, cpSync, readdirSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
 export interface BackupOptions {
@@ -59,7 +59,7 @@ export async function backupAnalysis(options: BackupOptions = {}): Promise<Backu
 }
 
 // CLI entrypoint
-if (process.argv[1] && process.argv[1].endsWith("backup-analysis.ts")) {
+if (process.argv[1]?.endsWith("backup-analysis.ts")) {
   const dryRun = process.argv.includes("--dry-run");
   backupAnalysis({ dryRun }).then((result) => {
     console.log(JSON.stringify(result, null, 2));

@@ -1,20 +1,38 @@
-import { describe, expect, it, vi } from "vitest";
+import type { RunnerInput } from "@/lib/runners/base";
 import { MastraWorkflowRunner } from "@/lib/runners/mastra-workflow";
-import type { RuntimeEventSink, RunnerInput } from "@/lib/runners/base";
+import { describe, expect, it, vi } from "vitest";
 
 function createMockSink() {
   const emitted: string[] = [];
   return {
     emitted,
-    async emit(event: { type: string }) { emitted.push(event.type); },
-    async textDelta(_delta: string) { emitted.push("model.text.delta"); },
-    async textCompleted(_text: string) { emitted.push("model.text.completed"); },
-    async reasoningDelta() { emitted.push("model.reasoning.delta"); },
-    async toolCallCreated() { emitted.push("tool.call.created"); },
-    async toolCallCompleted() { emitted.push("tool.call.completed"); },
-    async toolCallFailed() { emitted.push("tool.call.failed"); },
-    async artifactCreated() { emitted.push("artifact.created"); },
-    async errorCreated() { emitted.push("error.created"); },
+    async emit(event: { type: string }) {
+      emitted.push(event.type);
+    },
+    async textDelta(_delta: string) {
+      emitted.push("model.text.delta");
+    },
+    async textCompleted(_text: string) {
+      emitted.push("model.text.completed");
+    },
+    async reasoningDelta() {
+      emitted.push("model.reasoning.delta");
+    },
+    async toolCallCreated() {
+      emitted.push("tool.call.created");
+    },
+    async toolCallCompleted() {
+      emitted.push("tool.call.completed");
+    },
+    async toolCallFailed() {
+      emitted.push("tool.call.failed");
+    },
+    async artifactCreated() {
+      emitted.push("artifact.created");
+    },
+    async errorCreated() {
+      emitted.push("error.created");
+    },
   };
 }
 

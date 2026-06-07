@@ -5,7 +5,14 @@
  * into structured timeline views for the UI.
  */
 
-import type { RuntimeStore, MessageRow, RunRow, ToolCallRow, ArtifactRow, RuntimeEventRow } from "./store";
+import type {
+  ArtifactRow,
+  MessageRow,
+  RunRow,
+  RuntimeEventRow,
+  RuntimeStore,
+  ToolCallRow,
+} from "./store";
 
 export interface SessionTimeline {
   sessionId: string;
@@ -20,10 +27,15 @@ export interface RunTimeline {
   runId: string;
   sessionId: string;
   status: string;
+  skillName: string;
+  workflowType: string | null;
+  ticker: string | null;
+  market: string | null;
   messages: MessageTimelineEntry[];
   events: RuntimeEventRow[];
   toolCalls: ToolCallEntry[];
   artifacts: ArtifactEntry[];
+  createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
   durationMs: number | null;
@@ -54,6 +66,8 @@ export interface ArtifactEntry {
   kind: string;
   name: string;
   path: string | null;
+  content: string | null;
+  mimeType: string | null;
   contentType: string | null;
   createdAt: string;
 }
@@ -74,7 +88,10 @@ export interface ToolCallEntry {
 /**
  * Build a session timeline from the canonical read model.
  */
-export async function buildSessionTimeline(store: RuntimeStore, sessionId: string): Promise<SessionTimeline> {
+export async function buildSessionTimeline(
+  store: RuntimeStore,
+  sessionId: string,
+): Promise<SessionTimeline> {
   const messages = await store.messages.findBySession(sessionId);
   const runs = await store.runs.findBySession(sessionId);
   const session = await store.sessions.findById(sessionId);
@@ -104,7 +121,10 @@ export async function buildSessionTimeline(store: RuntimeStore, sessionId: strin
 /**
  * Build a run timeline from the canonical read model.
  */
-export async function buildRunTimeline(store: RuntimeStore, runId: string): Promise<RunTimeline | null> {
+export async function buildRunTimeline(
+  store: RuntimeStore,
+  runId: string,
+): Promise<RunTimeline | null> {
   const run = await store.runs.findById(runId);
   if (!run) return null;
 
@@ -117,10 +137,15 @@ export async function buildRunTimeline(store: RuntimeStore, runId: string): Prom
     runId,
     sessionId: run.sessionId,
     status: run.status,
+    skillName: run.skillName,
+    workflowType: run.workflowType ?? null,
+    ticker: run.ticker ?? null,
+    market: run.market ?? null,
     messages: messages.map(toMessageEntry),
     events,
     toolCalls: toolCalls.map(toToolCallEntry),
     artifacts: artifacts.map(toArtifactEntry),
+    createdAt: run.createdAt,
     startedAt: run.startedAt ?? null,
     finishedAt: run.finishedAt ?? null,
     durationMs: run.durationMs ?? null,
@@ -174,6 +199,8 @@ function toArtifactEntry(a: ArtifactRow): ArtifactEntry {
     kind: a.kind,
     name: a.name,
     path: a.path ?? null,
+    content: a.inlineContent ?? a.content ?? null,
+    mimeType: a.mimeType ?? null,
     contentType: a.contentType ?? a.mimeType ?? null,
     createdAt: a.createdAt,
   };

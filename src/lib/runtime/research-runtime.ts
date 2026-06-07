@@ -10,14 +10,14 @@
  * - Never write Drizzle directly
  */
 
-import { nanoid } from "nanoid";
-import type { RuntimeStore } from "./store";
-import type { RuntimeEventLog } from "./event-log";
-import { createRuntimeEvent, type RuntimeEvent } from "./events";
-import { assertRunTransition, type RunStatus } from "./state-machine";
-import { selectRunner, getRunner } from "@/lib/runners/registry";
 import type { RunnerAdapter, RunnerKind, RuntimeLogger } from "@/lib/runners/base";
+import { getRunner, selectRunner } from "@/lib/runners/registry";
+import { nanoid } from "nanoid";
+import type { RuntimeEventLog } from "./event-log";
 import { RuntimeEventSinkAdapter } from "./event-sink-adapter";
+import { createRuntimeEvent } from "./events";
+import type { RunStatus } from "./state-machine";
+import type { RuntimeStore } from "./store";
 
 export interface ResearchRuntimeConfig {
   /** Run timeout in ms (default: 5 minutes) */
@@ -54,6 +54,9 @@ export class ResearchRuntime {
     try {
       const run = await this.store.runs.findById(runId);
       if (!run) return;
+      if (run.status === "succeeded" || run.status === "failed" || run.status === "cancelled") {
+        return;
+      }
 
       // Transition to running if still queued
       if (run.status === "queued") {
@@ -168,7 +171,11 @@ export class ResearchRuntime {
             category: "error",
             scope: "run",
             producer: "runner",
-            payload: { code: "runner.failed", message: result.error ?? "Unknown error", retriable: false },
+            payload: {
+              code: "runner.failed",
+              message: result.error ?? "Unknown error",
+              retriable: false,
+            },
           }),
         );
       }
@@ -213,13 +220,19 @@ export class ResearchRuntime {
    * Select the best runner for a given run based on its metadata.
    * Falls back to the stub runner if the selected runner is not available.
    */
-  private selectRunnerForRun(run: { skillName?: string | null; workflowType?: string | null; runnerId?: string | null }): RunnerAdapter {
+  private selectRunnerForRun(run: {
+    skillName?: string | null;
+    workflowType?: string | null;
+    runnerId?: string | null;
+  }): RunnerAdapter {
     // If a specific runner is pinned to the run, use it
     if (run.runnerId) {
       try {
         return getRunner(run.runnerId as RunnerKind);
       } catch {
-        console.warn(`[ResearchRuntime] Pinned runner "${run.runnerId}" not found, selecting default`);
+        console.warn(
+          `[ResearchRuntime] Pinned runner "${run.runnerId}" not found, selecting default`,
+        );
       }
     }
 
@@ -229,4 +242,3 @@ export class ResearchRuntime {
     });
   }
 }
-

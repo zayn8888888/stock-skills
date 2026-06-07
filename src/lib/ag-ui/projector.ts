@@ -5,8 +5,8 @@
  * for external agent UIs and clients.
  */
 
-import { EventType } from "@ag-ui/core";
 import type { RuntimeEvent } from "@/lib/runtime/events";
+import { EventType } from "@ag-ui/core";
 
 export interface AgUiEvent {
   type: EventType;

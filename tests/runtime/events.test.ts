@@ -1,11 +1,10 @@
-import { describe, expect, it } from "vitest";
 import {
-  createRuntimeEvent,
-  RuntimeEventSchema,
   RUNTIME_EVENT_TYPES,
+  RuntimeEventSchema,
+  createRuntimeEvent,
   isValidRuntimeEventType,
-  type RuntimeEvent,
 } from "@/lib/runtime/events";
+import { describe, expect, it } from "vitest";
 
 describe("RuntimeEvent", () => {
   it("creates an event with required fields", () => {
@@ -40,9 +39,7 @@ describe("RuntimeEvent", () => {
   });
 
   it("rejects event with missing required fields", () => {
-    expect(() =>
-      RuntimeEventSchema.parse({ type: "run.started" }),
-    ).toThrow();
+    expect(() => RuntimeEventSchema.parse({ type: "run.started" })).toThrow();
   });
 
   it("sets default values for optional fields", () => {

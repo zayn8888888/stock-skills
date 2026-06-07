@@ -1,9 +1,9 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createRuntimeEvent } from "@/lib/runtime/events";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createRuntimeEvent } from "@/lib/runtime/events";
 
 const AUTH_TOKEN = "test-token";
 const ORIGIN = "http://localhost:3000";
@@ -96,9 +96,16 @@ describe("session SSE (vNext)", () => {
     const sessionId = "session-active-replay";
     const ev1 = testEvent(sessionId, "run.created", { runId: "run-1" });
     ev1.sessionSeq = 1;
-    const ev2 = testEvent(sessionId, "model.text.delta", { delta: "partial answer" }, {
-      category: "model", runId: "run-1", scope: "run",
-    });
+    const ev2 = testEvent(
+      sessionId,
+      "model.text.delta",
+      { delta: "partial answer" },
+      {
+        category: "model",
+        runId: "run-1",
+        scope: "run",
+      },
+    );
     ev2.sessionSeq = 2;
 
     eventBus.emit(sessionId, ev1);
@@ -127,13 +134,27 @@ describe("session SSE (vNext)", () => {
     const sessionId = "session-terminal-no-replay";
     const ev1 = testEvent(sessionId, "run.created", { runId: "run-1" });
     ev1.sessionSeq = 1;
-    const ev2 = testEvent(sessionId, "model.text.delta", { delta: "completed answer" }, {
-      category: "model", runId: "run-1", scope: "run",
-    });
+    const ev2 = testEvent(
+      sessionId,
+      "model.text.delta",
+      { delta: "completed answer" },
+      {
+        category: "model",
+        runId: "run-1",
+        scope: "run",
+      },
+    );
     ev2.sessionSeq = 2;
-    const ev3 = testEvent(sessionId, "run.completed", { status: "succeeded" }, {
-      category: "lifecycle", runId: "run-1", scope: "run",
-    });
+    const ev3 = testEvent(
+      sessionId,
+      "run.completed",
+      { status: "succeeded" },
+      {
+        category: "lifecycle",
+        runId: "run-1",
+        scope: "run",
+      },
+    );
     ev3.sessionSeq = 3;
 
     eventBus.emit(sessionId, ev1);

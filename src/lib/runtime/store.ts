@@ -6,16 +6,16 @@
  */
 
 import type {
-  sessions,
-  messages,
-  runs,
-  runtimeEvents,
-  toolCalls,
   artifacts,
+  commandLog,
+  messages,
+  researchGoals,
   runnerProviders,
   runnerRuns,
-  researchGoals,
-  commandLog,
+  runs,
+  runtimeEvents,
+  sessions,
+  toolCalls,
 } from "@/lib/db/schema";
 
 // ─── RuntimeStore interface ──────────────────────────────────────────
@@ -41,24 +41,32 @@ export type RuntimeStoreTx = Omit<RuntimeStore, "transaction">;
 // ─── Repository interfaces ───────────────────────────────────────────
 
 export interface SessionRepository {
-  create(data: Partial<InsertSession> & Pick<InsertSession, 'id' | 'status'>): Promise<SessionRow>;
+  create(data: Partial<InsertSession> & Pick<InsertSession, "id" | "status">): Promise<SessionRow>;
   findById(id: string): Promise<SessionRow | undefined>;
+  listAll(): Promise<SessionRow[]>;
   update(id: string, data: Partial<InsertSession>): Promise<void>;
   setActiveRun(sessionId: string, runId: string | null): Promise<void>;
 }
 
 export interface MessageRepository {
-  create(data: Partial<InsertMessage> & Pick<InsertMessage, 'sessionId' | 'role' | 'content'>): Promise<MessageRow>;
+  create(
+    data: Partial<InsertMessage> & Pick<InsertMessage, "sessionId" | "role" | "content">,
+  ): Promise<MessageRow>;
   findById(id: string): Promise<MessageRow | undefined>;
-  findBySession(sessionId: string, opts?: { limit?: number; offset?: number }): Promise<MessageRow[]>;
+  findBySession(
+    sessionId: string,
+    opts?: { limit?: number; offset?: number },
+  ): Promise<MessageRow[]>;
   findByRun(runId: string): Promise<MessageRow[]>;
+  listAll(): Promise<MessageRow[]>;
 }
 
 export interface RunRepository {
-  create(data: Partial<InsertRun> & Pick<InsertRun, 'sessionId' | 'skillName'>): Promise<RunRow>;
+  create(data: Partial<InsertRun> & Pick<InsertRun, "sessionId" | "skillName">): Promise<RunRow>;
   findById(id: string): Promise<RunRow | undefined>;
   findBySession(sessionId: string, opts?: { limit?: number }): Promise<RunRow[]>;
   findActiveBySession(sessionId: string): Promise<RunRow | undefined>;
+  listAll(): Promise<RunRow[]>;
   updateStatus(
     id: string,
     status: string,
@@ -69,8 +77,14 @@ export interface RunRepository {
 
 export interface RuntimeEventRepository {
   append(event: InsertRuntimeEvent): Promise<RuntimeEventRow>;
-  findBySession(sessionId: string, opts?: { afterSeq?: number; limit?: number }): Promise<RuntimeEventRow[]>;
-  findByRun(runId: string, opts?: { afterSeq?: number; limit?: number }): Promise<RuntimeEventRow[]>;
+  findBySession(
+    sessionId: string,
+    opts?: { afterSeq?: number; limit?: number },
+  ): Promise<RuntimeEventRow[]>;
+  findByRun(
+    runId: string,
+    opts?: { afterSeq?: number; limit?: number },
+  ): Promise<RuntimeEventRow[]>;
   nextSessionSeq(sessionId: string): Promise<number>;
   nextRunSeq(runId: string): Promise<number>;
 }
@@ -94,10 +108,13 @@ export interface ToolCallRepository {
 }
 
 export interface ArtifactRepository {
-  create(data: Partial<InsertArtifact> & Pick<InsertArtifact, 'runId' | 'kind' | 'name'>): Promise<ArtifactRow>;
+  create(
+    data: Partial<InsertArtifact> & Pick<InsertArtifact, "runId" | "kind" | "name">,
+  ): Promise<ArtifactRow>;
   findById(id: string): Promise<ArtifactRow | undefined>;
   findByRun(runId: string): Promise<ArtifactRow[]>;
   findBySession(sessionId: string): Promise<ArtifactRow[]>;
+  listAll(): Promise<ArtifactRow[]>;
 }
 
 export interface RunnerRepository {
@@ -118,7 +135,13 @@ export interface CommandLogRepository {
   findByIdempotencyKey(key: string): Promise<CommandLogRow | undefined>;
   updateResult(
     id: string,
-    data: { status: string; responseJson?: string; errorCode?: string; errorMessage?: string; finishedAt?: string },
+    data: {
+      status: string;
+      responseJson?: string;
+      errorCode?: string;
+      errorMessage?: string;
+      finishedAt?: string;
+    },
   ): Promise<void>;
 }
 

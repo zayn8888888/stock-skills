@@ -1,10 +1,10 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { createTestDB } from "../helpers";
-import { createRuntimeStore } from "@/lib/runtime/repositories";
+import type * as schema from "@/lib/db/schema";
 import { RuntimeEventLog } from "@/lib/runtime/event-log";
 import { createRuntimeEvent } from "@/lib/runtime/events";
-import type * as schema from "@/lib/db/schema";
+import { createRuntimeStore } from "@/lib/runtime/repositories";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { beforeEach, describe, expect, it } from "vitest";
+import { createTestDB } from "../helpers";
 
 describe("RuntimeEventLog", () => {
   let db: ReturnType<typeof createTestDB>;
@@ -114,5 +114,121 @@ describe("RuntimeEventLog", () => {
 
     expect(received.length).toBe(1);
     expect((received[0] as { type: string }).type).toBe("run.created");
+  });
+
+  it("projects completed model text into an assistant message", async () => {
+    await log.append(
+      createRuntimeEvent({
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        type: "model.text.completed",
+        category: "model",
+        payload: { text: "Completed research report" },
+      }),
+    );
+
+    expect(await store.messages.findByRun("test_run_1")).toMatchObject([
+      {
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        role: "assistant",
+        messageType: "assistant_final",
+        content: "Completed research report",
+      },
+    ]);
+  });
+
+  it("projects run errors into one durable system message", async () => {
+    await log.append(
+      createRuntimeEvent({
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        type: "error.created",
+        category: "error",
+        payload: { code: "runner.failed", message: "Missing credentials" },
+      }),
+    );
+    await log.append(
+      createRuntimeEvent({
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        type: "run.failed",
+        category: "error",
+        payload: { code: "runner.failed", message: "Missing credentials" },
+      }),
+    );
+
+    expect(await store.messages.findByRun("test_run_1")).toMatchObject([
+      {
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        role: "system",
+        messageType: "error",
+        content: "Error: Missing credentials",
+      },
+    ]);
+  });
+
+  it("projects tool call lifecycle into the tool call read model", async () => {
+    await log.append(
+      createRuntimeEvent({
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        toolCallId: "tool_1",
+        type: "tool.call.created",
+        category: "tool",
+        payload: { toolCallId: "tool_1", name: "get_quote", args: { ticker: "NVDA" } },
+      }),
+    );
+    await log.append(
+      createRuntimeEvent({
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        toolCallId: "tool_1",
+        type: "tool.call.completed",
+        category: "tool",
+        payload: {
+          toolCallId: "tool_1",
+          name: "get_quote",
+          status: "succeeded",
+          result: { price: 123 },
+        },
+      }),
+    );
+
+    expect(await store.tools.findById("tool_1")).toMatchObject({
+      sessionId: "test_session_1",
+      runId: "test_run_1",
+      name: "get_quote",
+      status: "succeeded",
+      argsJson: JSON.stringify({ ticker: "NVDA" }),
+      resultJson: JSON.stringify({ price: 123 }),
+    });
+  });
+
+  it("projects artifact events into the artifact read model", async () => {
+    await log.append(
+      createRuntimeEvent({
+        sessionId: "test_session_1",
+        runId: "test_run_1",
+        artifactId: "artifact_1",
+        type: "artifact.created",
+        category: "artifact",
+        payload: {
+          artifactId: "artifact_1",
+          kind: "report",
+          name: "report.md",
+          content: "# Report",
+        },
+      }),
+    );
+
+    expect(await store.artifacts.findById("artifact_1")).toMatchObject({
+      sessionId: "test_session_1",
+      runId: "test_run_1",
+      kind: "report",
+      name: "report.md",
+      inlineContent: "# Report",
+    });
   });
 });

@@ -4,10 +4,10 @@
  * Applies SQL migrations, seeds data sources, and seeds vNext runner providers.
  */
 
-import { runMigrations, getDb } from "./index";
+import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { getDb, runMigrations } from "./index";
 import { runnerProviders } from "./schema";
 import type * as schema from "./schema";
-import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 
 type DB = BetterSQLite3Database<typeof schema>;
 

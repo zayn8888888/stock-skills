@@ -72,8 +72,16 @@ export class MastraWorkflowRunner implements RunnerAdapter {
     // Step 1: Fetch data
     if (signal.aborted) return { status: "cancelled" };
     const fetchToolId = nanoid();
-    await events.toolCallCreated({ toolCallId: fetchToolId, name: "fetch_market_data", args: { ticker: input.ticker } });
-    await events.toolCallCompleted({ toolCallId: fetchToolId, name: "fetch_market_data", status: "succeeded" });
+    await events.toolCallCreated({
+      toolCallId: fetchToolId,
+      name: "fetch_market_data",
+      args: { ticker: input.ticker },
+    });
+    await events.toolCallCompleted({
+      toolCallId: fetchToolId,
+      name: "fetch_market_data",
+      status: "succeeded",
+    });
 
     // Step 2: Analysis
     if (signal.aborted) return { status: "cancelled" };
@@ -98,7 +106,9 @@ export class MastraWorkflowRunner implements RunnerAdapter {
     return {
       status: "succeeded",
       text: summary,
-      artifacts: [{ kind: "report", name: "workflow-report.md", content: `# Workflow Report\n\n${summary}` }],
+      artifacts: [
+        { kind: "report", name: "workflow-report.md", content: `# Workflow Report\n\n${summary}` },
+      ],
     };
   }
 }

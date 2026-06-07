@@ -1,20 +1,38 @@
-import { describe, expect, it, vi } from "vitest";
+import type { RunnerInput, RuntimeEventSink } from "@/lib/runners/base";
 import { MockRunner } from "@/lib/runners/mock";
-import type { RuntimeEventSink, RunnerContext, RunnerInput } from "@/lib/runners/base";
+import { describe, expect, it, vi } from "vitest";
 
 function createMockSink(): RuntimeEventSink & { events: string[] } {
   const events: string[] = [];
   return {
     events,
-    async emit(event) { events.push(event.type); },
-    async textDelta(delta) { events.push("model.text.delta"); },
-    async textCompleted(text) { events.push("model.text.completed"); },
-    async reasoningDelta() { events.push("model.reasoning.delta"); },
-    async toolCallCreated() { events.push("tool.call.created"); },
-    async toolCallCompleted() { events.push("tool.call.completed"); },
-    async toolCallFailed() { events.push("tool.call.failed"); },
-    async artifactCreated() { events.push("artifact.created"); },
-    async errorCreated() { events.push("error.created"); },
+    async emit(event) {
+      events.push(event.type);
+    },
+    async textDelta(_delta) {
+      events.push("model.text.delta");
+    },
+    async textCompleted(_text) {
+      events.push("model.text.completed");
+    },
+    async reasoningDelta() {
+      events.push("model.reasoning.delta");
+    },
+    async toolCallCreated() {
+      events.push("tool.call.created");
+    },
+    async toolCallCompleted() {
+      events.push("tool.call.completed");
+    },
+    async toolCallFailed() {
+      events.push("tool.call.failed");
+    },
+    async artifactCreated() {
+      events.push("artifact.created");
+    },
+    async errorCreated() {
+      events.push("error.created");
+    },
   };
 }
 

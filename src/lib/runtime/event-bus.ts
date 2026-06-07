@@ -12,11 +12,7 @@ import type { RuntimeEvent } from "./events";
 
 // ─── Terminal run event types ─────────────────────────────────────────
 
-const TERMINAL_RUN_TYPES = new Set([
-  "run.completed",
-  "run.failed",
-  "run.cancelled",
-]);
+const TERMINAL_RUN_TYPES = new Set(["run.completed", "run.failed", "run.cancelled"]);
 
 /** Maximum number of events kept per session in the replay buffer. */
 const REPLAY_BUFFER_SIZE = 500;
@@ -76,7 +72,7 @@ export class EventBus {
   emit(sessionId: string, event: RuntimeEvent): void {
     const channel = this.getOrCreateChannel(sessionId);
     // Assign bus-level id for SSE id field
-    const busEvent = { ...event, _busId: channel.nextId++ };
+    const _busEvent = { ...event, _busId: channel.nextId++ };
 
     console.log(
       `[EventBus] emit ${event.type} session=${sessionId} seq=${event.sessionSeq} subs=${channel.subscribers.size}`,

@@ -4,14 +4,26 @@ import { MarkdownContent } from "@/components/common/MarkdownContent";
 import { useLanguage } from "@/hooks/useLanguage";
 import { cn } from "@/lib/utils";
 import type { AgentMessage } from "@/stores/agent";
-import { Bot, ChevronDown, ChevronRight, Brain, Loader2 } from "lucide-react";
+import { Bot, Brain, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { MessageBubble } from "./MessageBubble";
 import { ThinkingTimeline } from "./ThinkingTimeline";
 
 const LABELS = {
-  en: { turn: "Turn", runs: "run", runsPlural: "runs", thinking: "Thinking...", reasoning: "Reasoning" },
-  zh: { turn: "回合", runs: "次运行", runsPlural: "次运行", thinking: "思考中...", reasoning: "推理过程" },
+  en: {
+    turn: "Turn",
+    runs: "run",
+    runsPlural: "runs",
+    thinking: "Thinking...",
+    reasoning: "Reasoning",
+  },
+  zh: {
+    turn: "回合",
+    runs: "次运行",
+    runsPlural: "次运行",
+    thinking: "思考中...",
+    reasoning: "推理过程",
+  },
 } as const;
 
 // ---------------------------------------------------------------------------

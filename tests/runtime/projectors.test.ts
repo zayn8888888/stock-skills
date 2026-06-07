@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { formatSse, formatHeartbeat, formatConnected } from "@/lib/runtime/projectors";
 import { createRuntimeEvent } from "@/lib/runtime/events";
+import { formatConnected, formatHeartbeat, formatSse } from "@/lib/runtime/projectors";
+import { describe, expect, it } from "vitest";
 
 describe("formatSse", () => {
   it("emits event: runtime.event for all event types", () => {

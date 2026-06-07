@@ -7,10 +7,10 @@
  * - Otherwise: openai-agents (default code-first agent)
  */
 
+import type { RunnerAdapter, RunnerKind } from "./base";
+import { MastraWorkflowRunner } from "./mastra-workflow";
 import { MockRunner } from "./mock";
 import { ModernOpenAIAgentsRunner } from "./openai-agents";
-import { MastraWorkflowRunner } from "./mastra-workflow";
-import type { RunnerAdapter, RunnerKind } from "./base";
 
 const runners = new Map<RunnerKind, RunnerAdapter>();
 

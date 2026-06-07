@@ -1,12 +1,5 @@
+import { assertRunTransition, assertToolTransition } from "@/lib/runtime/state-machine";
 import { describe, expect, it } from "vitest";
-import {
-  assertRunTransition,
-  assertToolTransition,
-  RUN_TRANSITIONS,
-  TOOL_TRANSITIONS,
-  type RunStatus,
-  type ToolStatus,
-} from "@/lib/runtime/state-machine";
 
 describe("Run state machine", () => {
   it("allows queued -> running", () => {

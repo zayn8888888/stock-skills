@@ -12,7 +12,7 @@
  */
 
 import { eventBus } from "@/lib/runtime/event-bus";
-import { formatSse, formatHeartbeat, formatConnected } from "@/lib/runtime/projectors";
+import { formatConnected, formatHeartbeat, formatSse } from "@/lib/runtime/projectors";
 import type { NextRequest } from "next/server";
 
 export const runtime = "nodejs";

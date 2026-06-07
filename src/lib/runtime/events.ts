@@ -5,8 +5,8 @@
  * These events are persisted to runtime_events and published via EventBus.
  */
 
-import { z } from "zod";
 import { nanoid } from "nanoid";
+import { z } from "zod";
 
 // ─── Event type enumeration ──────────────────────────────────────────
 
@@ -61,20 +61,29 @@ export function isValidRuntimeEventType(type: string): type is RuntimeEventType 
 // ─── Scope / category enums ──────────────────────────────────────────
 
 export const RUNTIME_EVENT_SCOPES = [
-  "session", "run", "tool", "artifact", "goal", "system",
+  "session",
+  "run",
+  "tool",
+  "artifact",
+  "goal",
+  "system",
 ] as const;
 
 export const RUNTIME_EVENT_CATEGORIES = [
-  "lifecycle", "message", "model", "tool", "artifact", "goal", "data", "error", "transport",
+  "lifecycle",
+  "message",
+  "model",
+  "tool",
+  "artifact",
+  "goal",
+  "data",
+  "error",
+  "transport",
 ] as const;
 
-export const RUNTIME_EVENT_PRODUCERS = [
-  "server", "runner", "adapter", "ui", "system",
-] as const;
+export const RUNTIME_EVENT_PRODUCERS = ["server", "runner", "adapter", "ui", "system"] as const;
 
-export const RUNTIME_EVENT_VISIBILITIES = [
-  "ui", "internal", "audit",
-] as const;
+export const RUNTIME_EVENT_VISIBILITIES = ["ui", "internal", "audit"] as const;
 
 // ─── Zod schema ──────────────────────────────────────────────────────
 
@@ -151,7 +160,9 @@ export interface CreateRuntimeEventInput<T = unknown> {
  * Create a RuntimeEvent with sensible defaults.
  * sessionSeq and runSeq are assigned by RuntimeEventLog.append() when persisted.
  */
-export function createRuntimeEvent<T = unknown>(input: CreateRuntimeEventInput<T>): RuntimeEvent<T> {
+export function createRuntimeEvent<T = unknown>(
+  input: CreateRuntimeEventInput<T>,
+): RuntimeEvent<T> {
   return {
     id: nanoid(),
     schemaVersion: "runtime-event.v1",

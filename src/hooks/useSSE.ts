@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
 import type { RuntimeEvent } from "@/lib/runtime/events";
+import { useCallback, useEffect, useRef } from "react";
 
 type SSEStatus = "disconnected" | "connected" | "reconnecting";
 

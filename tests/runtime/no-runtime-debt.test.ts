@@ -16,8 +16,6 @@ describe("runtime no-debt guard", () => {
 
   it("strict mode only allows migration fixtures and docs", async () => {
     const result = await checkNoRuntimeDebt({ strict: true });
-    // We expect some violations in strict mode since old files still exist.
-    // This test verifies the scan completes and reports correctly.
-    expect(result.filesScanned).toBeGreaterThan(0);
+    expect(result.violations).toEqual([]);
   });
 });

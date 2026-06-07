@@ -47,10 +47,12 @@ export async function runConsistencyChecks(store: RuntimeStore): Promise<Consist
 
 async function checkMessageSessions(store: RuntimeStore): Promise<ConsistencyCheck> {
   try {
-    // In a real implementation this would verify every message.session_id
-    // has a corresponding sessions row. For now, return pass as we trust
-    // foreign key constraints enforced by SQLite.
-    return { name: "message_sessions", passed: true };
+    const messages = await store.messages.listAll();
+    const missing: string[] = [];
+    for (const message of messages) {
+      if (!(await store.sessions.findById(message.sessionId))) missing.push(message.id);
+    }
+    return checkResult("message_sessions", missing);
   } catch (err) {
     return {
       name: "message_sessions",
@@ -62,8 +64,12 @@ async function checkMessageSessions(store: RuntimeStore): Promise<ConsistencyChe
 
 async function checkRunSessions(store: RuntimeStore): Promise<ConsistencyCheck> {
   try {
-    // Foreign key constraint ensures run.session_id references sessions
-    return { name: "run_sessions", passed: true };
+    const runs = await store.runs.listAll();
+    const missing: string[] = [];
+    for (const run of runs) {
+      if (!(await store.sessions.findById(run.sessionId))) missing.push(run.id);
+    }
+    return checkResult("run_sessions", missing);
   } catch (err) {
     return {
       name: "run_sessions",
@@ -75,9 +81,16 @@ async function checkRunSessions(store: RuntimeStore): Promise<ConsistencyCheck> 
 
 async function checkTerminalRuns(store: RuntimeStore): Promise<ConsistencyCheck> {
   try {
-    // Verify that runs in terminal states have at least one terminal runtime event
-    // This is a placeholder; full implementation would query runtime_events
-    return { name: "terminal_runs_have_events", passed: true };
+    const terminalStatuses = new Set(["succeeded", "failed", "cancelled"]);
+    const terminalEventTypes = new Set(["run.completed", "run.failed", "run.cancelled"]);
+    const missing: string[] = [];
+
+    for (const run of await store.runs.listAll()) {
+      if (!terminalStatuses.has(run.status)) continue;
+      const events = await store.events.findByRun(run.id);
+      if (!events.some((event) => terminalEventTypes.has(event.type))) missing.push(run.id);
+    }
+    return checkResult("terminal_runs_have_events", missing);
   } catch (err) {
     return {
       name: "terminal_runs_have_events",
@@ -89,8 +102,15 @@ async function checkTerminalRuns(store: RuntimeStore): Promise<ConsistencyCheck>
 
 async function checkArtifactRefs(store: RuntimeStore): Promise<ConsistencyCheck> {
   try {
-    // Foreign key constraint ensures artifact.run_id references runs
-    return { name: "artifact_refs", passed: true };
+    const missing: string[] = [];
+    for (const artifact of await store.artifacts.listAll()) {
+      const run = await store.runs.findById(artifact.runId);
+      const session = artifact.sessionId
+        ? await store.sessions.findById(artifact.sessionId)
+        : undefined;
+      if (!run || (artifact.sessionId && !session)) missing.push(artifact.id);
+    }
+    return checkResult("artifact_refs", missing);
   } catch (err) {
     return {
       name: "artifact_refs",
@@ -98,4 +118,10 @@ async function checkArtifactRefs(store: RuntimeStore): Promise<ConsistencyCheck>
       details: String(err),
     };
   }
+}
+
+function checkResult(name: string, missing: string[]): ConsistencyCheck {
+  return missing.length === 0
+    ? { name, passed: true }
+    : { name, passed: false, details: `Missing references/events for: ${missing.join(", ")}` };
 }

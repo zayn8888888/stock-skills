@@ -1,7 +1,7 @@
 "use client";
 
 import { useTheme } from "@/hooks/useTheme";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { Sidebar } from "./Sidebar";
 
@@ -11,13 +11,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Initialize theme on mount
   useTheme();
 
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    // Default collapsed on mobile viewports
-    if (window.innerWidth < 768) return true;
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
     const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-    return stored === "true";
-  });
+    setCollapsed(window.innerWidth < 768 || stored === "true");
+  }, []);
 
   const toggleCollapse = useCallback(() => {
     setCollapsed((prev) => {

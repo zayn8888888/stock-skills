@@ -6,7 +6,7 @@
 
 import type { RuntimeEventSink } from "@/lib/runners/base";
 import type { RuntimeEventLog } from "./event-log";
-import { createRuntimeEvent, type RuntimeEvent } from "./events";
+import { type RuntimeEvent, createRuntimeEvent } from "./events";
 
 export class RuntimeEventSinkAdapter implements RuntimeEventSink {
   constructor(
@@ -93,7 +93,12 @@ export class RuntimeEventSinkAdapter implements RuntimeEventSink {
         category: "tool",
         scope: "tool",
         producer: "runner",
-        payload: { toolCallId: data.toolCallId, name: data.name, status: data.status, result: data.result },
+        payload: {
+          toolCallId: data.toolCallId,
+          name: data.name,
+          status: data.status,
+          result: data.result,
+        },
       }),
     );
   }
@@ -128,7 +133,12 @@ export class RuntimeEventSinkAdapter implements RuntimeEventSink {
         category: "artifact",
         scope: "artifact",
         producer: "runner",
-        payload: { artifactId: data.artifactId, kind: data.kind, name: data.name, content: data.content },
+        payload: {
+          artifactId: data.artifactId,
+          kind: data.kind,
+          name: data.name,
+          content: data.content,
+        },
       }),
     );
   }

@@ -1,11 +1,11 @@
 import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
-import { createRuntimeStore } from "@/lib/runtime/repositories";
-import { RuntimeEventLog } from "@/lib/runtime/event-log";
 import { RuntimeCommandService } from "@/lib/runtime/command-service";
-import { ResearchRuntime } from "@/lib/runtime/research-runtime";
-import { RuntimeCommandSchema } from "@/lib/runtime/commands";
+import { RuntimeCommandInputSchema, parseRuntimeCommandInput } from "@/lib/runtime/commands";
 import { eventBus } from "@/lib/runtime/event-bus";
+import { RuntimeEventLog } from "@/lib/runtime/event-log";
+import { createRuntimeStore } from "@/lib/runtime/repositories";
+import { ResearchRuntime } from "@/lib/runtime/research-runtime";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Validate command shape
-  const parsed = RuntimeCommandSchema.safeParse(body);
+  const parsed = RuntimeCommandInputSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid command", details: parsed.error.issues },
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const cmd = parsed.data;
+  const cmd = parseRuntimeCommandInput(parsed.data);
 
   // Wire up store + event log + runtime + command service
   const db = getDb();
@@ -49,9 +49,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     console.error("[commands] Error handling command:", err);
-    return NextResponse.json(
-      { error: "Internal error", message: String(err) },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: "Internal error", message: String(err) }, { status: 500 });
   }
 }

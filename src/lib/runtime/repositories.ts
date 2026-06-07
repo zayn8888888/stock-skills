@@ -66,7 +66,9 @@ export function createRuntimeStore(db: DrizzleDb): RuntimeStore {
       // callback returns a Promise.  We use SAVEPOINT-based transactions
       // instead, which allow the Drizzle async API to work correctly
       // because savepoints scope at the connection level.
-      const rawDb = (db as unknown as Record<string, unknown>).$client as { exec(sql: string): void };
+      const rawDb = (db as unknown as Record<string, unknown>).$client as {
+        exec(sql: string): void;
+      };
       const sp = `_tx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       rawDb.exec(`SAVEPOINT "${sp}"`);
 
@@ -125,6 +127,10 @@ class DrizzleSessionRepo implements SessionRepository {
       .where(eq(schema.sessions.id, id))
       .limit(1);
     return rows[0];
+  }
+
+  async listAll(): Promise<SessionRow[]> {
+    return await this.db.select().from(schema.sessions);
   }
 
   async update(id: string, data: Partial<InsertSession>): Promise<void> {
@@ -195,6 +201,10 @@ class DrizzleMessageRepo implements MessageRepository {
       .where(eq(schema.messages.runId, runId))
       .orderBy(asc(schema.messages.createdAt));
   }
+
+  async listAll(): Promise<MessageRow[]> {
+    return await this.db.select().from(schema.messages);
+  }
 }
 
 // ─── Runs ────────────────────────────────────────────────────────────
@@ -247,6 +257,10 @@ class DrizzleRunRepo implements RunRepository {
       .orderBy(desc(schema.runs.createdAt))
       .limit(1);
     return rows[0];
+  }
+
+  async listAll(): Promise<RunRow[]> {
+    return await this.db.select().from(schema.runs);
   }
 
   async updateStatus(
@@ -445,6 +459,10 @@ class DrizzleArtifactRepo implements ArtifactRepository {
       // biome-ignore lint/style/noNonNullAssertion: sessionId is always set for session artifacts
       .where(eq(schema.artifacts.sessionId!, sessionId))
       .orderBy(asc(schema.artifacts.createdAt));
+  }
+
+  async listAll(): Promise<ArtifactRow[]> {
+    return await this.db.select().from(schema.artifacts);
   }
 }
 

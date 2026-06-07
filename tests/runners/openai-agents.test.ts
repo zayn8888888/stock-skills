@@ -1,20 +1,38 @@
-import { describe, expect, it, vi } from "vitest";
+import type { RunnerInput } from "@/lib/runners/base";
 import { ModernOpenAIAgentsRunner } from "@/lib/runners/openai-agents";
-import type { RuntimeEventSink, RunnerInput } from "@/lib/runners/base";
+import { describe, expect, it, vi } from "vitest";
 
 function createMockSink() {
   const emitted: string[] = [];
   return {
     emitted,
-    async emit(event: { type: string }) { emitted.push(event.type); },
-    async textDelta(_delta: string) { emitted.push("model.text.delta"); },
-    async textCompleted(_text: string) { emitted.push("model.text.completed"); },
-    async reasoningDelta() { emitted.push("model.reasoning.delta"); },
-    async toolCallCreated() { emitted.push("tool.call.created"); },
-    async toolCallCompleted() { emitted.push("tool.call.completed"); },
-    async toolCallFailed() { emitted.push("tool.call.failed"); },
-    async artifactCreated() { emitted.push("artifact.created"); },
-    async errorCreated() { emitted.push("error.created"); },
+    async emit(event: { type: string }) {
+      emitted.push(event.type);
+    },
+    async textDelta(_delta: string) {
+      emitted.push("model.text.delta");
+    },
+    async textCompleted(_text: string) {
+      emitted.push("model.text.completed");
+    },
+    async reasoningDelta() {
+      emitted.push("model.reasoning.delta");
+    },
+    async toolCallCreated() {
+      emitted.push("tool.call.created");
+    },
+    async toolCallCompleted() {
+      emitted.push("tool.call.completed");
+    },
+    async toolCallFailed() {
+      emitted.push("tool.call.failed");
+    },
+    async artifactCreated() {
+      emitted.push("artifact.created");
+    },
+    async errorCreated() {
+      emitted.push("error.created");
+    },
   };
 }
 
@@ -37,10 +55,19 @@ function makeInput(): RunnerInput {
 }
 
 describe("ModernOpenAIAgentsRunner", () => {
-  it("falls back to stub when @openai/agents is not importable", async () => {
-    // In test env, @openai/agents might not have the expected exports
-    // The runner handles this gracefully with a stub
-    const runner = new ModernOpenAIAgentsRunner();
+  it("loads the installed OpenAI Agents SDK", async () => {
+    const sdk = await import("@openai/agents");
+
+    expect(typeof sdk.Agent).toBe("function");
+    expect(typeof sdk.Runner).toBe("function");
+  });
+
+  it("fails instead of returning stub output when the SDK cannot load", async () => {
+    const runner = new ModernOpenAIAgentsRunner({
+      loadSdk: async () => {
+        throw new Error("SDK unavailable");
+      },
+    });
     const sink = createMockSink();
     const controller = new AbortController();
 
@@ -50,8 +77,10 @@ describe("ModernOpenAIAgentsRunner", () => {
       logger,
     });
 
-    // Should either succeed with stub or succeed with real SDK
-    expect(["succeeded", "failed"]).toContain(result.status);
+    expect(result.status).toBe("failed");
+    expect(result.text).toBeUndefined();
+    expect(result.error).toContain("SDK unavailable");
+    expect(sink.emitted).toContain("error.created");
   });
 
   it("accepts custom model config", () => {

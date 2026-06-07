@@ -1,13 +1,14 @@
 import { validateAuth } from "@/lib/auth/middleware";
 import { getDb } from "@/lib/db";
 import { sessions } from "@/lib/db/schema";
+import { RuntimeCommandService } from "@/lib/runtime/command-service";
+import { createCommand } from "@/lib/runtime/commands";
 import { eventBus } from "@/lib/runtime/event-bus";
-import { createRuntimeEvent } from "@/lib/runtime/events";
+import { RuntimeEventLog } from "@/lib/runtime/event-log";
+import { createRuntimeStore } from "@/lib/runtime/repositories";
+import { ResearchRuntime } from "@/lib/runtime/research-runtime";
 import { desc } from "drizzle-orm";
-import { customAlphabet } from "nanoid";
 import { type NextRequest, NextResponse } from "next/server";
-
-const genId = customAlphabet("abcdefghjkmnpqrstuvwxyz23456789", 12);
 
 /** POST /api/sessions - create a new session */
 export async function POST(req: NextRequest) {
@@ -18,35 +19,30 @@ export async function POST(req: NextRequest) {
   const title: string | undefined = body.title;
 
   const db = getDb();
-  const now = new Date().toISOString();
-  const sessionId = genId();
-
-  await db.insert(sessions).values({
-    id: sessionId,
-    name: title ?? null,
-    createdAt: now,
-    updatedAt: now,
-    status: "active",
+  const store = createRuntimeStore(db);
+  const eventLog = new RuntimeEventLog(store, {
+    onAppend: (event) => eventBus.emit(event.sessionId, event),
   });
-
-  eventBus.emit(
-    sessionId,
-    createRuntimeEvent({
-      sessionId,
-      type: "session.created",
-      category: "lifecycle",
-      scope: "session",
-      producer: "server",
-      payload: { sessionId, title },
+  const service = new RuntimeCommandService(store, eventLog, new ResearchRuntime(store, eventLog));
+  const result = await service.handle(
+    createCommand({
+      type: "session.create",
+      content: title,
+      source: "sessions_api",
+      actor: "web_ui",
     }),
   );
+  if (!result.accepted || !result.sessionId) {
+    return NextResponse.json({ error: result.error ?? "Session creation failed" }, { status: 400 });
+  }
+  const session = await store.sessions.findById(result.sessionId);
 
   return NextResponse.json(
     {
-      session_id: sessionId,
+      session_id: result.sessionId,
       title: title ?? null,
       status: "active",
-      created_at: now,
+      created_at: session?.createdAt,
     },
     { status: 201 },
   );
@@ -62,7 +58,7 @@ export async function GET(req: NextRequest) {
 
   const items = rows.map((row) => ({
     session_id: row.id,
-    title: row.name,
+    title: row.title ?? row.name,
     status: row.status,
     created_at: row.createdAt,
     updated_at: row.updatedAt,

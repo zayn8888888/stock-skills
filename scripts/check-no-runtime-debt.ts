@@ -28,7 +28,9 @@ const SKIP_DIRS = ["src/lib/db/migrations", "node_modules"];
  * - Default mode: allows TEMPORARY_OLD_FILE_ALLOWLIST + MIGRATION_ONLY_ALLOWLIST.
  * - Strict mode: only MIGRATION_ONLY_ALLOWLIST is allowed.
  */
-export async function checkNoRuntimeDebt(options: { strict?: boolean } = {}): Promise<DebtCheckResult> {
+export async function checkNoRuntimeDebt(
+  options: { strict?: boolean } = {},
+): Promise<DebtCheckResult> {
   const strict = options.strict ?? false;
   const violations: DebtViolation[] = [];
   let filesScanned = 0;
@@ -101,17 +103,6 @@ function scanDir(
         break;
       }
     }
-    // Also match relative-path patterns (for glob-style patterns like "src/app/api/sessions/[id]/messages/route.ts")
-    if (!allowed) {
-      for (const pattern of TEMPORARY_OLD_FILE_ALLOWLIST) {
-        const patternResolved = path.resolve(pattern);
-        if (fullPath === patternResolved) {
-          allowed = true;
-          break;
-        }
-      }
-    }
-
     if (allowed) continue;
 
     onFile();
@@ -141,7 +132,7 @@ function scanDir(
 }
 
 // CLI entrypoint
-if (process.argv[1] && process.argv[1].endsWith("check-no-runtime-debt.ts")) {
+if (process.argv[1]?.endsWith("check-no-runtime-debt.ts")) {
   const strict = process.argv.includes("--strict");
   checkNoRuntimeDebt({ strict }).then((result) => {
     console.log(`Scanned ${result.filesScanned} files (strict=${result.strict})`);

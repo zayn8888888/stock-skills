@@ -8,8 +8,8 @@
  * so it can operate independently of the current schema.
  */
 
-import { nanoid } from "nanoid";
 import type { RuntimeStore } from "@/lib/runtime/store";
+import { nanoid } from "nanoid";
 
 // ─── Status / event type mapping ─────────────────────────────────────
 
@@ -154,6 +154,8 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
   };
 
   const query = (sql: string) => sqlite.prepare(sql).all() as Record<string, unknown>[];
+  let oldRuns: OldRun[] = [];
+  const runSessionById = new Map<string, string>();
 
   // Import sessions
   const oldSessions = query("SELECT * FROM sessions") as unknown as OldSession[];
@@ -193,14 +195,17 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
         });
       }
     }
-  } catch {
-    // Table may not exist
+  } catch (error) {
+    rethrowUnlessMissingTable(error);
   }
 
   // Import runs
   try {
-    const oldRuns = query("SELECT * FROM runs") as unknown as OldRun[];
+    oldRuns = query("SELECT * FROM runs") as unknown as OldRun[];
     result.runs = oldRuns.length;
+    for (const run of oldRuns) {
+      runSessionById.set(run.id, run.session_id);
+    }
 
     if (!dryRun) {
       for (const r of oldRuns) {
@@ -225,29 +230,34 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
         });
       }
     }
-  } catch {
-    // Table may not exist
+  } catch (error) {
+    rethrowUnlessMissingTable(error);
   }
 
   // Import run_events → runtime_events
   try {
-    const oldRunEvents = query("SELECT * FROM run_events") as unknown as OldRunEvent[];
+    const oldRunEvents = query(
+      "SELECT * FROM run_events ORDER BY timestamp, id",
+    ) as unknown as OldRunEvent[];
     result.runEvents = oldRunEvents.length;
 
     if (!dryRun) {
       for (const re of oldRunEvents) {
         const data = re.data ? JSON.parse(re.data) : {};
         const eventType = mapOldRunEventType(re.event_type, data.status);
-        const runRow = query(`SELECT session_id FROM runs WHERE id = '${re.run_id}'`)[0] as { session_id?: string } | undefined;
-        const sessionId = runRow?.session_id ?? "";
+        const sessionId = runSessionById.get(re.run_id);
+        if (!sessionId) {
+          throw new Error(`Cannot import event ${re.id}: run ${re.run_id} has no session`);
+        }
 
         await store.events.append({
           id: re.id ?? nanoid(),
           schemaVersion: "runtime-event.v1",
-          sessionSeq: 0,
+          sessionSeq: await store.events.nextSessionSeq(sessionId),
+          runSeq: await store.events.nextRunSeq(re.run_id),
           scope: "run",
           type: eventType,
-          category: "tool",
+          category: categoryForEvent(eventType),
           sessionId,
           runId: re.run_id,
           producer: "server",
@@ -258,13 +268,15 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
         });
       }
     }
-  } catch {
-    // Table may not exist
+  } catch (error) {
+    rethrowUnlessMissingTable(error);
   }
 
   // Import session_events → runtime_events
   try {
-    const oldSessionEvents = query("SELECT * FROM session_events") as unknown as OldSessionEvent[];
+    const oldSessionEvents = query(
+      "SELECT * FROM session_events ORDER BY timestamp, id",
+    ) as unknown as OldSessionEvent[];
     result.sessionEvents = oldSessionEvents.length;
 
     if (!dryRun) {
@@ -272,7 +284,7 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
         await store.events.append({
           id: se.id ?? nanoid(),
           schemaVersion: "runtime-event.v1",
-          sessionSeq: 0,
+          sessionSeq: await store.events.nextSessionSeq(se.session_id),
           scope: "session",
           type: se.event_type ?? "system.info",
           category: "lifecycle",
@@ -285,8 +297,42 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
         });
       }
     }
-  } catch {
-    // Table may not exist
+  } catch (error) {
+    rethrowUnlessMissingTable(error);
+  }
+
+  // Ensure terminal runs have a canonical terminal event even if the old
+  // runtime only persisted the terminal status on the run row.
+  if (!dryRun) {
+    const terminalTypes: Record<string, string> = {
+      succeeded: "run.completed",
+      failed: "run.failed",
+      cancelled: "run.cancelled",
+    };
+    for (const run of oldRuns) {
+      const terminalType = terminalTypes[mapOldRunStatus(run.status)];
+      if (!terminalType) continue;
+
+      const events = await store.events.findByRun(run.id);
+      if (events.some((event) => Object.values(terminalTypes).includes(event.type))) continue;
+
+      await store.events.append({
+        id: nanoid(),
+        schemaVersion: "runtime-event.v1",
+        sessionSeq: await store.events.nextSessionSeq(run.session_id),
+        runSeq: await store.events.nextRunSeq(run.id),
+        scope: "run",
+        type: terminalType,
+        category: terminalType === "run.failed" ? "error" : "lifecycle",
+        sessionId: run.session_id,
+        runId: run.id,
+        producer: "system",
+        visibility: "audit",
+        persist: 1,
+        payloadJson: JSON.stringify({ status: mapOldRunStatus(run.status), imported: true }),
+        createdAt: run.finished_at ?? run.created_at ?? new Date().toISOString(),
+      });
+    }
   }
 
   // Import artifacts
@@ -296,8 +342,10 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
 
     if (!dryRun) {
       for (const a of oldArtifacts) {
-        const runRow = query(`SELECT session_id FROM runs WHERE id = '${a.run_id}'`)[0] as { session_id?: string } | undefined;
-        const runSessionId = runRow?.session_id ?? "";
+        const runSessionId = runSessionById.get(a.run_id);
+        if (!runSessionId) {
+          throw new Error(`Cannot import artifact ${a.id}: run ${a.run_id} has no session`);
+        }
 
         await store.artifacts.create({
           id: a.id,
@@ -314,21 +362,31 @@ export async function importToVNext(options: ImportOptions): Promise<ImportResul
         });
       }
     }
-  } catch {
-    // Table may not exist
+  } catch (error) {
+    rethrowUnlessMissingTable(error);
   }
 
   // Import observations
   try {
     const oldObs = query("SELECT * FROM observations") as unknown as OldObservation[];
     result.observations = oldObs.length;
-  } catch {
-    // Table may not exist
+  } catch (error) {
+    rethrowUnlessMissingTable(error);
   }
 
   return result;
 }
 
-function findSessionForRun(runs: OldRun[], runId: string): string | undefined {
-  return runs.find((r) => r.id === runId)?.session_id;
+function categoryForEvent(eventType: string): string {
+  if (eventType.startsWith("tool.")) return "tool";
+  if (eventType.startsWith("model.")) return "model";
+  if (eventType.startsWith("run.")) return "lifecycle";
+  if (eventType.startsWith("error.")) return "error";
+  return "lifecycle";
+}
+
+function rethrowUnlessMissingTable(error: unknown): void {
+  if (!(error instanceof Error) || !error.message.includes("no such table")) {
+    throw error;
+  }
 }
