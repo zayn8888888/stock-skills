@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Ticker Journal 本地服务器。
-用法：python3 ~/.stock-skills/journals/serve.py
+用法：python3 ${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/serve.py
 访问：http://localhost:7788
 每次刷新页面都会重新读取 journals 目录，无需手动 generate。
 """
@@ -11,9 +11,9 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 from pathlib import Path
 
-# 把 journals 目录加入 path，直接复用 generate.py 的解析逻辑
-JOURNALS_DIR = Path(__file__).parent
-sys.path.insert(0, str(JOURNALS_DIR))
+# 数据目录由 generate.py 的 JOURNALS_DIR 决定（~/.stock-skills/journals/），
+# load_all() 和 generate_html() 均来自 generate.py，本文件不直接读数据。
+sys.path.insert(0, str(Path(__file__).parent))
 from generate import load_all, generate_html
 
 PORT = 7788

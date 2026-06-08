@@ -191,7 +191,7 @@ INDEX.md 每行格式：
 
 1. 先执行 **load**（同上，加载历史档案）
 2. 并行拉实时数据（两批同时发出）：
-   - **批次 A（futuapi）**：`Bash: python3 ${CLAUDE_SKILLS_DIR}/futuapi/scripts/get_market_snapshot.py --code {market}.{TICKER} --json`（market = US/HK/SH/SZ，根据标的判断）
+   - **批次 A（futuapi）**：`Bash: python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_snapshot.py {market}.{TICKER} --json`（market = US/HK/SH/SZ，根据标的判断）
    - **批次 B（新闻）**：`Skill(skill="futu-news-search")` 最近 7 天；或 Tavily `{TICKER} 最新消息 news` days=7（futu-news-search 不可用时降级）
 3. 两批返回后，基于历史快照 vs 当前数据做 diff 分析并输出：
 
@@ -247,7 +247,7 @@ INDEX.md 每行格式：
    `Bash: curl -s --max-time 1 http://localhost:7788/ > /dev/null && echo "RUNNING" || echo "STOPPED"`
 2. **已运行** → 直接告知用户访问 `http://localhost:7788`，无需重复启动
 3. **未运行** → 启动服务器（后台运行）：
-   `Bash: python3 ~/.stock-skills/journals/serve.py &`
+   `Bash: python3 ${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/serve.py &`
    然后告知用户访问 `http://localhost:7788`
 
 ### 仪表盘说明
