@@ -73,6 +73,18 @@ CLAUDE_SKILLS_DIR=/path/to/skills ./scripts/install.sh --link
 
 ## 更新
 
+### Plugin 方式（推荐）
+
+在 Claude Code 中直接执行：
+
+```
+/plugins update
+```
+
+会自动从 GitHub 拉取最新代码并更新所有 skill，无需手动操作。
+
+### 脚本方式（仅适用于脚本安装的用户）
+
 ```bash
 cd ~/stock-skills
 ./scripts/update.sh
