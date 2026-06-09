@@ -3,8 +3,9 @@
 确定性技术分析：支撑位与压力位计算器
 
 用法:
+    python ta_levels.py --code US.AAPL --method all
+    python ta_levels.py --code HK.00700 --ktype 1d --num 100 --method pivot
     python ta_levels.py --file data.csv --method all
-    python ta_levels.py --file data.csv --method pivot --output json
     python ta_levels.py --file data.csv --method swing --lookback 5
 
 CSV 格式（列名大小写不敏感）:
@@ -20,7 +21,6 @@ import json
 import sys
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 
@@ -90,7 +90,7 @@ def swing_highs_lows(df: pd.DataFrame, lookback: int = 5) -> dict[str, Any]:
     highs: list[dict[str, Any]] = []
     lows:  list[dict[str, Any]] = []
     n = len(df)
-    dates = df.index.astype(str).tolist() if not isinstance(df.index, pd.RangeIndex) else [str(i) for i in df.index]
+    dates = df["date"].astype(str).tolist() if "date" in df.columns else [str(i) for i in range(n)]
 
     for i in range(lookback, n - lookback):
         window_h = df["high"].iloc[i - lookback: i + lookback + 1]
@@ -105,11 +105,14 @@ def swing_highs_lows(df: pd.DataFrame, lookback: int = 5) -> dict[str, Any]:
 
     recent_h = highs[-5:]
     recent_l = lows[-5:]
+    current = float(df["close"].iloc[-1])
+    resistance = sorted([x["price"] for x in recent_h if x["price"] > current])
+    support    = sorted([x["price"] for x in recent_l if x["price"] <= current], reverse=True)
     return {
         "method": "swing_highs_lows",
         "params": {"lookback": lookback},
-        "resistance": [x["price"] for x in recent_h],
-        "support":    [x["price"] for x in recent_l],
+        "resistance": resistance,
+        "support":    support,
         "detail": recent_h + recent_l,
     }
 
@@ -120,6 +123,7 @@ def fibonacci_retracement(df: pd.DataFrame, lookback: int = 50) -> dict[str, Any
     从高点向低点展开 0%/23.6%/38.2%/50%/61.8%/78.6%/100% 等位。
     """
     recent = df.iloc[-lookback:]
+    actual_lookback = len(recent)
     swing_high = float(recent["high"].max())
     swing_low  = float(recent["low"].min())
     diff = swing_high - swing_low
@@ -138,7 +142,7 @@ def fibonacci_retracement(df: pd.DataFrame, lookback: int = 50) -> dict[str, Any
     support    = sorted([v for v in levels.values() if v <= current], reverse=True)
     return {
         "method": "fibonacci_retracement",
-        "params": {"lookback": lookback},
+        "params": {"lookback": lookback, "actual_lookback": actual_lookback},
         "swing_high": swing_high,
         "swing_low":  swing_low,
         "resistance": resistance[:3],
@@ -276,7 +280,17 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--file",       required=True, help="OHLCV CSV 文件路径")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--code",        help="股票代码，富途格式（US.AAPL / HK.00700 / SH.600519）")
+    group.add_argument("--file",        help="OHLCV CSV 文件路径")
+    parser.add_argument("--ktype",      default="1d",
+                        choices=["1m", "3m", "5m", "15m", "30m", "60m", "1d", "1w", "1M"],
+                        help="K 线类型（默认 1d，仅 --code 模式）")
+    parser.add_argument("--num",        type=int, default=100,
+                        help="K 线根数（默认 100，仅 --code 模式）")
+    parser.add_argument("--rehab",      default="forward",
+                        choices=["none", "forward", "backward"],
+                        help="复权类型（默认 forward，仅 --code 模式）")
     parser.add_argument("--method",     default="all",
                         choices=ALL_METHODS + ["all", "pivot"],
                         help="计算方法（默认 all）")
@@ -290,11 +304,19 @@ def main() -> None:
     args = parser.parse_args()
 
     # 读取数据
-    try:
-        df = pd.read_csv(args.file)
-    except Exception as e:
-        print(json.dumps({"error": f"读取文件失败: {e}"}))
-        sys.exit(2)
+    if args.code:
+        from futu_data import fetch_kline
+        df = fetch_kline(args.code, ktype=args.ktype, num=args.num, rehab=args.rehab)
+        source = f"{args.code} ({args.ktype}, {args.num}根, 复权={args.rehab})"
+    elif args.file:
+        try:
+            df = pd.read_csv(args.file)
+        except Exception as e:
+            print(json.dumps({"error": f"读取文件失败: {e}"}))
+            sys.exit(2)
+        source = args.file
+    else:
+        parser.error("必须提供 --code 或 --file")
 
     df.columns = [c.strip().lower() for c in df.columns]
     required = {"open", "high", "low", "close"}
@@ -325,13 +347,13 @@ def main() -> None:
 
     if args.output == "json":
         payload = {
-            "source": args.file,
+            "source": source,
             "bars":   len(df),
             "results": results,
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
-        _text_output(results, df, args.file)
+        _text_output(results, df, source)
 
 
 if __name__ == "__main__":

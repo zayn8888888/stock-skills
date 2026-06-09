@@ -22,9 +22,26 @@ Read references/methods.md          # 各方法公式说明（使用前必读）
 Read references/csv-format.md       # 输入格式规范
 ```
 
-### Step 1 — 确认数据
+### Step 1 — 数据获取（二选一）
 
-用户需提供（粘贴 CSV 或文件路径）：
+**模式 A：直接指定代码**（推荐，需 OpenD 运行）
+
+```bash
+python scripts/ta_levels.py --code HK.00700 --ktype 1d --num 100 --method all
+```
+
+| 参数 | 说明 |
+|------|------|
+| `--code` | 富途格式股票代码（US.AAPL / HK.00700 / SH.600519） |
+| `--ktype` | K 线类型，默认 1d（可选: 1m/3m/5m/15m/30m/60m/1d/1w/1M） |
+| `--num` | K 线根数，默认 100 |
+| `--rehab` | 复权类型，默认 forward（可选: none/forward/backward） |
+
+**模式 B：提供 CSV 文件**（离线模式）
+
+```bash
+python scripts/ta_levels.py --file /tmp/ohlcv.csv --method all
+```
 
 | 列名 | 必须 | 说明 |
 |------|------|------|
@@ -67,6 +84,11 @@ python scripts/ta_levels.py --file /tmp/ohlcv.csv --method all --output json
 ## 快速示例
 
 ```bash
+# 模式 A：直接拉取
+python scripts/ta_levels.py --code US.AAPL --method all --output text
+python scripts/ta_levels.py --code HK.00700 --ktype 1w --num 200 --method pivot
+
+# 模式 B：CSV 文件
 python scripts/ta_levels.py --file /tmp/ohlcv.csv --method pivot --output text
 python scripts/ta_levels.py --file /tmp/ohlcv.csv --method swing --lookback 3 --output text
 python scripts/ta_levels.py --file /tmp/ohlcv.csv --method all --output json
