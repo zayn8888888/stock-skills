@@ -4,30 +4,18 @@
 
 ## 包含的 Skill
 
-### 主力 Skill
-
 | Skill | 解决什么问题 | 触发举例 |
 |-------|------------|---------|
-| [`market-scanner/`](stock/market-scanner/) | 大A / HK / US 市场热点板块扫描 + 板块内"尚未过度拉升"候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" / "XX 板块里有没有还没涨透的票" |
-| [`stock-analyzer/`](stock/stock-analyzer/) | 单只股票九维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 公告与事件 / 期权链 / 前瞻日历） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
-| [`stock-fundamentals/`](stock/stock-fundamentals/) | 自下而上基本面（商业模式 → 护城河 → 财务 → 估值视角） | "XXX 适不适合长期持有" / "护城河在哪" / "盈利质量怎么样" |
-| [`stock-valuation/`](stock/stock-valuation/) | DCF + 历史 P/E + PEG 定量估值与安全边际区间 | "帮我估一下 XXX 合理价" / "三种方法算算估值区间" |
-| [`event-calendar/`](core/event-calendar/) | 未来 14 天前瞻事件日历（Finnhub 美国经济+美股财报 / Polymarket 押注 / Tavily 中港政策） | "未来一周有什么大事" / "FOMC 降息概率" / "NVDA 什么时候出财报" |
-| [`hyperliquid-perps/`](core/hyperliquid-perps/) | Hyperliquid 链上永续镜像（HIP-3 七大子 dex：美股/SPX/VIX/商品/FX/Pre-IPO 全覆盖），24/7 隐含价 + funding rate + OI + premium | "NVDA 周末链上多少" / "TSLA funding 拥不拥挤" / "SPX 现在永续在哪" / "OPENAI 链上估值" |
-| [`trading-debate/`](core/trading-debate/) | 多 agent 辩论决策（TradingAgents 七阶段 + ai-hedge-fund 7 大师 + Reflection + 组合层 + 跨标的教训 + 跨市场基准） | "NVDA 给我一次多空辩论" / "用 Buffett+Burry 视角看 700" / "复盘我对 X 的决策" / "NVDA/AAPL/TSLA 哪个该加仓" / "我对半导体股有什么模式问题" |
-| [`crypto-scanner/`](crypto/crypto-scanner/) | 加密市场热点赛道扫描（CoinGecko + 热搜 trending + Tavily 叙事 + Hyperliquid 拥挤度），4 阶段筛出候选 | "加密最近什么赛道在涨" / "山寨季开了吗" / "BTC 主导率高吗" / "DeFi/RWA/AI 哪个方向强" |
-| [`crypto-analyzer/`](crypto/crypto-analyzer/) | 单只加密资产七维度分析（行情 / 技术 / 链上 / 叙事 / 同类 / 新闻 / 事件日历） | "分析 SOL" / "HYPE 链上 funding 怎样" / "ETH 值不值得买" |
-
-### 辅助 Skill（被主力 Skill 自动调用，无需手动触发）
-
-| Skill | 用途 | 调用方 |
-|-------|------|--------|
-| [`futu-news-search/`](futu/futu-news-search/) | 富途官方新闻/公告/研报原始列表（HTTP API，无需 OpenD） | stock-analyzer 维度 7c |
-| [`futu-stock-digest/`](futu/futu-stock-digest/) | AI 结构化解读单股新闻，输出 bullish/bearish/neutral 方向判断（HTTP API，无需 OpenD） | stock-analyzer 维度 7b |
-| [`futu-comment-sentiment/`](futu/futu-comment-sentiment/) | 富途牛牛社区情绪聚合（HTTP API，无需 OpenD；注意已知 keyword bug） | stock-analyzer 维度 7e |
-| [`futu-capital-anomaly/`](futu/futu-capital-anomaly/) | 资金流向异动检测（`get_financial_unusual`，需 OpenD） | stock-analyzer 维度 4 |
-| [`futu-derivatives-anomaly/`](futu/futu-derivatives-anomaly/) | 期权/牛熊证衍生品异动（`get_derivative_unusual`，需 OpenD + AI行情权限） | stock-analyzer 维度 8 快通道 |
-| [`futu-technical-anomaly/`](futu/futu-technical-anomaly/) | 技术面量化异动信号（`get_technical_unusual`，需 OpenD） | stock-analyzer 维度 2 |
+| [`market-scanner/`](market-scanner/) | 大A / HK / US 市场热点板块扫描 + 板块内"尚未过度拉升"候选股挖掘 | "市场最近啥热点" / "帮我找下一个热点" / "XX 板块里有没有还没涨透的票" |
+| [`stock-analyzer/`](stock-analyzer/) | 单只股票九维度综合分析（行情 / 技术 / 估值 / 资金 / 盘口 / 同行 / 新闻 / 期权链 / 事件） | "分析 NVDA" / "腾讯能不能抄底" / "机构在赌什么方向" |
+| [`stock-fundamentals/`](stock-fundamentals/) | 自下而上基本面（商业模式 → 护城河 → 财务 → 估值视角） | "XXX 适不适合长期持有" / "护城河在哪" / "盈利质量怎么样" |
+| [`stock-valuation/`](stock-valuation/) | DCF + 历史 P/E + PEG 定量估值与安全边际区间 | "帮我估一下 XXX 合理价" / "三种方法算算估值区间" |
+| [`event-calendar/`](event-calendar/) | 未来 14 天前瞻事件日历（Finnhub 美国经济+美股财报 / Polymarket 押注 / Tavily 中港政策） | "未来一周有什么大事" / "FOMC 降息概率" / "NVDA 什么时候出财报" |
+| [`hyperliquid-perps/`](hyperliquid-perps/) | Hyperliquid 链上永续镜像（HIP-3 七大子 dex：美股/SPX/VIX/商品/FX/Pre-IPO 全覆盖），24/7 隐含价 + funding rate + OI + premium | "NVDA 周末链上多少" / "TSLA funding 拥不拥挤" / "SPX 现在永续在哪" / "OPENAI 链上估值" |
+| [`trading-debate/`](trading-debate/) | 多 agent 辩论决策（TradingAgents 七阶段 + ai-hedge-fund 7 大师 + Reflection + 组合层 + 跨标的教训 + 跨市场基准） | "NVDA 给我一次多空辩论" / "用 Buffett+Burry 视角看 700" / "复盘我对 X 的决策" / "NVDA/AAPL/TSLA 哪个该加仓" / "我对半导体股有什么模式问题" |
+| [`crypto-scanner/`](crypto-scanner/) | 加密市场热点赛道扫描（CoinGecko + 热搜 trending + Tavily 叙事 + Hyperliquid 拥挤度），4 阶段筛出候选 | "加密最近什么赛道在涨" / "山寨季开了吗" / "BTC 主导率高吗" / "DeFi/RWA/AI 哪个方向强" |
+| [`crypto-analyzer/`](crypto-analyzer/) | 单只加密资产七维度分析（行情 / 技术 / 链上 / 叙事 / 同类 / 新闻 / 事件日历） | "分析 SOL" / "HYPE 链上 funding 怎样" / "ETH 值不值得买" |
+| [`ta-levels/`](stock/ta-levels/) | 确定性技术分析：基于 OHLCV 数据计算 7 种支撑/压力位（枢轴点三种 / 摆动高低点 / 斐波那契回调 / 均线 / 成交量剖面），相同输入保证相同输出 | "给我算支撑位和压力位" / "pivot point 在哪" / "斐波那契位" / "均线支撑" / "Volume Profile" |
 
 **链式协作建议**：
 - scanner 扫出候选 → **analyzer** 多维扫一遍
@@ -37,37 +25,7 @@
 - **hyperliquid-perps** 横向辅助：被 analyzer 的「资金」维度引用 funding rate + 拥挤度，被 trading-debate 的 Risk 风险辩论引用作为"拥挤交易硬约束"，被 event-calendar 用于"事件后链上即时反应"
 - **crypto-scanner** 扫出加密候选 → **crypto-analyzer** 七维度深挖 → 可选接 **trading-debate**
 
-## 安装（Plugin 方式 · 推荐）
-
-仓库内置 Claude Code Plugin 配置，整套 17 个 skill 作为单个 plugin 一起 enable / disable，最少手工管理。
-
-```bash
-# 1. 克隆仓库（私有 repo 需要你的 git 凭据，git clone 能成功就够了）
-git clone git@github.com:zayn8888888/stock-skills.git ~/stock-skills
-
-# 2. 在 Claude Code 内执行（注意 marketplace 路径用你 clone 的位置）
-/plugin marketplace add ~/stock-skills
-/plugin install stock-skills@stock-skills
-```
-
-> 安装后 plugin 内置的 `SessionStart` hook 会自动注入 `CLAUDE_SKILLS_DIR`，futuapi 相关 skill 开箱即用，无需手动配置。
-
-之后管理：
-
-```bash
-/plugin disable stock-skills          # 全套 17 skill 一起下线
-/plugin enable stock-skills           # 全套恢复
-/plugin uninstall stock-skills        # 卸载
-cd ~/stock-skills && git pull                  # 1. 拉最新代码
-claude plugin uninstall stock-skills@stock-skills  # 2. 清除旧 cache
-claude plugin install stock-skills@stock-skills   # 3. 重新安装
-```
-
-> 私有 repo 不能让陌生人通过 `/plugin marketplace add owner/repo` 直接拉，必须先 `git clone`，再 `/plugin marketplace add <本地路径>`。
-
-## 安装（手动 · 不用 plugin）
-
-如果不想走 plugin 系统，仓库自带 `scripts/install.sh` 把 skill 直接装到 `~/.claude/skills/<skill>/`。
+## 安装
 
 ```bash
 git clone https://github.com/zayn8888888/stock-skills.git ~/stock-skills
@@ -103,25 +61,15 @@ cd ~/stock-skills
 ./scripts/install.sh stock-valuation
 ```
 
-**主力 skill**：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `hyperliquid-perps` / `trading-debate` / `crypto-scanner` / `crypto-analyzer`
+可选 skill：`market-scanner` / `stock-analyzer` / `stock-fundamentals` / `stock-valuation` / `event-calendar` / `hyperliquid-perps` / `trading-debate` / `crypto-scanner` / `crypto-analyzer`。
 
-**辅助 skill**（stock-analyzer 子模块）：`futu-news-search` / `futu-stock-digest` / `futu-comment-sentiment` / `futu-capital-anomaly` / `futu-derivatives-anomaly` / `futu-technical-anomaly`
+### 自定义安装目录
 
-### 安装到指定 scope
+设置 `CLAUDE_SKILLS_DIR` 环境变量即可（默认 `~/.claude/skills`）：
 
 ```bash
-./scripts/install.sh                              # user scope (默认): ~/.claude/skills/
-./scripts/install.sh --scope project --link       # project scope: $PWD/.claude/skills/
-
-# update / uninstall 同样支持 --scope
-./scripts/update.sh    --scope project
-./scripts/uninstall.sh --scope project --dry-run
+CLAUDE_SKILLS_DIR=/path/to/skills ./scripts/install.sh --link
 ```
-
-- **user**：所有项目都能用（全局）
-- **project**：只在当前目录（脚本运行处）的项目可用，把 skill 装到 `$PWD/.claude/skills/`
-
-也可以用 `CLAUDE_SKILLS_DIR=/任意路径` 环境变量直接覆盖（优先级高于 `--scope`）。
 
 ## 更新
 
@@ -137,22 +85,6 @@ cd ~/stock-skills
 - 未安装的 skill：跳过（不会主动新增，需要装请用 `install.sh`）
 
 加 `--no-pull` 可跳过 `git pull` 只做本地同步。
-
-## 卸载
-
-```bash
-cd ~/stock-skills
-./scripts/uninstall.sh                 # 全量卸载（有确认提示）
-./scripts/uninstall.sh stock-analyzer  # 只卸指定 skill
-./scripts/uninstall.sh --link-only     # 只卸软链，拷贝模式装的不动
-./scripts/uninstall.sh --dry-run       # 干跑只列要删的
-./scripts/uninstall.sh -y              # 跳过确认
-```
-
-安全策略：
-
-- 只动"目录名在本仓库 skill 列表"内的目标，不会误删其他来源的 skill
-- 软链额外校验 `readlink` 指向本仓库内才删
 
 ## 共同依赖
 
@@ -175,7 +107,7 @@ SKILL.md 中引用的脚本名（`get_snapshot.py` / `get_kline.py` / `get_capit
 
 ### stock-fundamentals 额外依赖
 
-- 近 7 天新闻快扫依赖 **`futu-stock-digest`** skill（已内置于本仓库；无需 OpenD）。
+- 近 7 天新闻快扫依赖社区 **`futu-stock-digest`** skill（SKILL 内约定；无需 OpenD）。
 
 ### event-calendar 额外依赖（可选但推荐）
 
@@ -240,23 +172,22 @@ NVDA + 700 + 茅台 该怎么排            # v0.5 跨市场：市值加权基�
 
 ## 文档
 
-- [`stock-analyzer/SKILL.md`](stock/stock-analyzer/SKILL.md) — 个股九维度分析流程
-- [`stock-analyzer/references/`](stock/stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
-- [`stock-fundamentals/SKILL.md`](stock/stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架
-- [`market-scanner/SKILL.md`](stock/market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
-- [`market-scanner/references/`](stock/market-scanner/references/) — 扫描报告模板
-- [`stock-fundamentals/SKILL.md`](stock/stock-fundamentals/SKILL.md) — 基本面研究四步流程
-- [`stock-valuation/SKILL.md`](stock/stock-valuation/SKILL.md) — DCF / P/E / PEG 估值与安全边际模板
-- [`event-calendar/SKILL.md`](core/event-calendar/SKILL.md) — 前瞻事件日历（Finnhub + Polymarket + Tavily 三源整合）
-- [`event-calendar/references/`](core/event-calendar/references/) — 三源端点详解 / 中港政策 Tavily 关键词模板 / 输出格式
-- [`trading-debate/SKILL.md`](core/trading-debate/SKILL.md) — 多 agent 辩论决策七阶段（v0.4：单标的 + 大师 + Reflection + 组合层）
-- [`trading-debate/references/framework-reference.md`](core/trading-debate/references/framework-reference.md) — TradingAgents + ai-hedge-fund 架构对照
-- [`trading-debate/references/role-prompts.md`](core/trading-debate/references/role-prompts.md) — 8 个角色完整 prompt 模板
-- [`trading-debate/references/master-styles.md`](core/trading-debate/references/master-styles.md) — 7 个大师风格 agent（Buffett/Munger/Lynch/Burry/Druckenmiller/Damodaran/Ackman）
-- [`trading-debate/references/reflection.md`](core/trading-debate/references/reflection.md) — v0.3 跨会话反思机制（基于 Claude Code memory）
-- [`trading-debate/references/portfolio-layer.md`](core/trading-debate/references/portfolio-layer.md) — v0.4 多标的组合层 PM
-- [`trading-debate/references/cross-ticker-lessons.md`](core/trading-debate/references/cross-ticker-lessons.md) — v0.5 跨标的教训聚合（4 维度切片找模式级错误）
-- [`trading-debate/references/multi-market.md`](core/trading-debate/references/multi-market.md) — v0.5 跨市场基准选择（市值加权 + 时段对齐 + 汇率敞口 + 双 alpha 口径）
+- [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股八维度分析流程
+- [`stock-analyzer/references/`](stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
+- [`stock-fundamentals/SKILL.md`](stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架（基本面研究流程）
+- [`market-scanner/SKILL.md`](market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
+- [`market-scanner/references/`](market-scanner/references/) — 扫描报告模板
+- [`stock-valuation/SKILL.md`](stock-valuation/SKILL.md) — DCF / P/E / PEG 估值与安全边际模板
+- [`event-calendar/SKILL.md`](event-calendar/SKILL.md) — 前瞻事件日历（Finnhub + Polymarket + Tavily 三源整合）
+- [`event-calendar/references/`](event-calendar/references/) — 三源端点详解 / 中港政策 Tavily 关键词模板 / 输出格式
+- [`trading-debate/SKILL.md`](trading-debate/SKILL.md) — 多 agent 辩论决策七阶段（v0.4：单标的 + 大师 + Reflection + 组合层）
+- [`trading-debate/references/framework-reference.md`](trading-debate/references/framework-reference.md) — TradingAgents + ai-hedge-fund 架构对照
+- [`trading-debate/references/role-prompts.md`](trading-debate/references/role-prompts.md) — 8 个角色完整 prompt 模板
+- [`trading-debate/references/master-styles.md`](trading-debate/references/master-styles.md) — 7 个大师风格 agent（Buffett/Munger/Lynch/Burry/Druckenmiller/Damodaran/Ackman）
+- [`trading-debate/references/reflection.md`](trading-debate/references/reflection.md) — v0.3 跨会话反思机制（基于 Claude Code memory）
+- [`trading-debate/references/portfolio-layer.md`](trading-debate/references/portfolio-layer.md) — v0.4 多标的组合层 PM
+- [`trading-debate/references/cross-ticker-lessons.md`](trading-debate/references/cross-ticker-lessons.md) — v0.5 跨标的教训聚合（4 维度切片找模式级错误）
+- [`trading-debate/references/multi-market.md`](trading-debate/references/multi-market.md) — v0.5 跨市场基准选择（市值加权 + 时段对齐 + 汇率敞口 + 双 alpha 口径）
 
 ## ⚠️ 免责声明
 
