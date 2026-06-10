@@ -132,6 +132,87 @@ def load_all():
     return result
 
 
+def load_macro_cache() -> dict:
+    cache_dir = Path.home() / '.stock-skills' / 'cache'
+    result = {}
+    for fname, key in [('tradfi-macro-latest.json', 'tradfi'), ('crypto-macro-latest.json', 'crypto')]:
+        path = cache_dir / fname
+        if not path.exists():
+            continue
+        try:
+            d = json.loads(path.read_text(encoding='utf-8'))
+            ts = datetime.fromisoformat(d['timestamp'])
+            age_h = (datetime.now() - ts).total_seconds() / 3600
+            result[key] = {
+                'summary': d.get('summary', ''),
+                'timestamp': ts.strftime('%Y-%m-%d %H:%M'),
+                'age_h': round(age_h, 1),
+                'expired': age_h > d.get('ttl_hours', 8),
+            }
+        except Exception:
+            pass
+    return result
+
+
+def _md_table_to_html(text: str) -> str:
+    rows = []
+    for line in text.split('\n'):
+        line = line.strip()
+        if not line.startswith('|'):
+            continue
+        if re.match(r'^\|[\s\-|:]+\|$', line):
+            continue
+        cells = [c.strip() for c in line.split('|')[1:-1]]
+        if cells:
+            rows.append(cells)
+    if not rows:
+        return ''
+    html = '<table class="macro-table">'
+    for i, row in enumerate(rows):
+        html += '<tr>'
+        for cell in row:
+            cell = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', cell)
+            tag = 'th' if i == 0 else 'td'
+            html += f'<{tag}>{cell}</{tag}>'
+        html += '</tr>'
+    html += '</table>'
+    return html
+
+
+def build_macro_panel(macro: dict) -> str:
+    configs = [('tradfi', '🏦 宏观脉搏'), ('crypto', '🌍 加密宏观')]
+    cards = []
+    for key, label in configs:
+        if key not in macro:
+            continue
+        m = macro[key]
+        expired_cls = ' expired' if m['expired'] else ''
+        badge_cls = 'expired' if m['expired'] else 'fresh'
+        badge_text = '已过期' if m['expired'] else f'{m["age_h"]}h 前'
+        table_html = _md_table_to_html(m['summary'])
+        if not table_html:
+            continue
+        cards.append(f'<div class="macro-card{expired_cls}">'
+                     f'<div class="macro-card-header">'
+                     f'<span class="macro-label">{label}</span>'
+                     f'<span class="macro-ts">{m["timestamp"]}</span>'
+                     f'<span class="macro-badge {badge_cls}">{badge_text}</span>'
+                     f'</div>'
+                     f'<div class="macro-content">{table_html}</div>'
+                     f'</div>')
+    if not cards:
+        return ('<div class="macro-panel macro-empty">'
+                '<span class="macro-hint">尚无宏观快照 — 运行 tradfi-macro / crypto-macro skill 后自动出现</span>'
+                '</div>')
+    return ('<div class="macro-panel">'
+            '<div class="macro-panel-header">'
+            '<span class="macro-panel-title">宏观背景</span>'
+            '<span class="macro-panel-hint">tradfi-macro / crypto-macro · 自动更新</span>'
+            '</div>'
+            f'<div class="macro-cards">{"".join(cards)}</div>'
+            '</div>')
+
+
 def rating_color(r):
     return {'Overweight': '#22c55e', 'Underweight': '#f97316', 'Hold': '#eab308', '纯分析': '#60a5fa'}.get(r, '#94a3b8')
 
@@ -204,6 +285,7 @@ def build_card(ticker: str, entries: list[dict]) -> str:
 
 def generate_html(data: dict) -> str:
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    macro_panel_html = build_macro_panel(load_macro_cache())
 
     # 按最新条目日期降序
     sorted_data = sorted(data.items(), key=lambda x: x[1][0]['date'], reverse=True)
@@ -358,6 +440,30 @@ def generate_html(data: dict) -> str:
 
   .file-link {{ font-size: 11px; color: var(--blue); font-family: monospace; word-break: break-all; opacity: .8; }}
 
+  /* ── macro panel ── */
+  .macro-panel {{ border-bottom: 1px solid var(--border); padding: 14px 24px; }}
+  .macro-panel.macro-empty {{ padding: 10px 24px; }}
+  .macro-hint {{ font-size: 11px; color: var(--muted); }}
+  .macro-panel-header {{ display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }}
+  .macro-panel-title {{ font-size: 13px; font-weight: 600; }}
+  .macro-panel-hint {{ font-size: 11px; color: var(--muted); }}
+  .macro-cards {{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }}
+  .macro-card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }}
+  .macro-card.expired {{ opacity: .55; }}
+  .macro-card-header {{ padding: 7px 12px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); background: var(--surface2); }}
+  .macro-label {{ font-size: 12px; font-weight: 600; }}
+  .macro-ts {{ font-size: 11px; color: var(--muted); margin-left: auto; }}
+  .macro-badge {{ font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px; }}
+  .macro-badge.fresh {{ background: rgba(34,197,94,.15); color: #4ade80; }}
+  .macro-badge.expired {{ background: rgba(248,113,113,.15); color: #f87171; }}
+  .macro-content {{ padding: 8px 12px; }}
+  .macro-table {{ width: 100%; border-collapse: collapse; font-size: 11px; }}
+  .macro-table th {{ color: var(--muted); font-weight: 600; text-align: left; padding: 3px 8px 3px 0; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; }}
+  .macro-table td {{ padding: 3px 8px 3px 0; line-height: 1.5; color: var(--text); vertical-align: top; }}
+  .macro-table td:first-child {{ color: var(--muted); white-space: nowrap; width: 38%; }}
+  .macro-table tr:not(:last-child) td {{ border-bottom: 1px solid rgba(255,255,255,.04); }}
+
+  @media (max-width: 768px) {{ .macro-cards {{ grid-template-columns: 1fr; }} }}
   @media (max-width: 600px) {{
     .grid {{ grid-template-columns: 1fr; padding: 12px; }}
     .params {{ grid-template-columns: repeat(2,1fr); }}
@@ -390,6 +496,8 @@ def generate_html(data: dict) -> str:
   <button class="filter-btn" onclick="filterUrgent()">⚠ 待复盘 ({count_overdue + count_urgent})</button>
   {source_filter_btns}
 </div>
+
+{macro_panel_html}
 
 <div class="grid" id="grid">
 {cards_html}

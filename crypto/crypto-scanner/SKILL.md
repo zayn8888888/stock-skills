@@ -11,14 +11,14 @@ description: 加密市场热点赛道扫描 + 候选筛选器。基于 CoinGecko
 
 ```bash
 BASE="https://api.coingecko.com/api/v3"
+CC="https://min-api.cryptocompare.com"  # 免费直连，无需 key，100 req/min
 
-# ⚠️ DNS 绕过（部分网络环境本地 DNS 会将 api.coingecko.com 解析到错误 IP）
-# 用 Google DNS 获取真实 IP，固定写入每条 curl 命令
-# 真实 IP：104.20.41.132（或 172.66.172.219）
-# 每条 curl 加：--resolve "api.coingecko.com:443:104.20.41.132"
+# ⚠️ CoinGecko DNS 绕过（部分网络环境本地 DNS 会将 api.coingecko.com 解析到错误 IP）
+# 每条 CoinGecko curl 加：--resolve "api.coingecko.com:443:104.20.41.132"
 
 # 有 Demo key：每条 curl 加 -H "x-cg-demo-api-key: $COINGECKO_DEMO_KEY"（100次/分）
 # 无 key：省略 header，降级到公共端点（~3次/分，需在请求间加间隔）
+# 阶段 0 全局数据优先用 CryptoCompare，阶段 1/2 仍用 CoinGecko（categories/trending）
 ```
 
 ## 执行前必读（收到任务后第一步）
@@ -35,10 +35,30 @@ Read references/data-sources.md      # CoinGecko API 速查
 
 ```bash
 # 全局市场结构（BTC 主导率、总市值、山寨季指标）
-curl "$BASE/global" $HEADER
+# CryptoCompare 优先（免费直连）→ CoinGecko DNS 绕过 fallback
+curl -sf "$CC/data/top/mktcapfull?limit=100&tsym=USD" \
+  | python3 -c "
+import json, sys
+data = json.load(sys.stdin).get('Data', [])
+total = sum(c['RAW']['USD']['MKTCAP'] for c in data if c.get('RAW', {}).get('USD', {}).get('MKTCAP'))
+btc_mcap = eth_mcap = 0
+for c in data:
+    name = c.get('CoinInfo', {}).get('Name', '')
+    raw = c.get('RAW', {}).get('USD', {})
+    if name == 'BTC': btc_mcap = raw.get('MKTCAP', 0)
+    elif name == 'ETH': eth_mcap = raw.get('MKTCAP', 0)
+print('btc_dominance:', round(btc_mcap / total * 100, 1) if total else 'N/A')
+print('eth_dominance:', round(eth_mcap / total * 100, 1) if total else 'N/A')
+print('total_mcap_T:', round(total / 1e12, 3) if total else 'N/A')
+print('active_cryptos: Top 100 采样')
+" 2>/dev/null || \
+curl -sf "$BASE/global" --resolve "api.coingecko.com:443:104.20.41.132" $HEADER
 
 # BTC 30 日历史（与 Nasdaq 相关性参考）
-curl "$BASE/coins/bitcoin/market_chart?vs_currency=usd&days=30" $HEADER
+# CryptoCompare 优先 → CoinGecko fallback
+curl -sf "$CC/data/v2/histoday?fsym=BTC&tsym=USD&limit=30" 2>/dev/null || \
+curl -sf "$BASE/coins/bitcoin/market_chart?vs_currency=usd&days=30" \
+  --resolve "api.coingecko.com:443:104.20.41.132" $HEADER
 ```
 
 curl 批次完成后，主对话直接 `Skill(skill="event-calendar")` 顺序执行（region=US，from=今天，to=今天+14，返回 FOMC/CPI/非农结构化事件列表）。Skill 返回实际数据 → 继续阶段 1；失败 → 跳过宏观锚定，在报告中标注。

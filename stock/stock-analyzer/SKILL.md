@@ -278,7 +278,7 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 - [ ] 维度 9 `event-calendar` 是否调用并返回？
 
 全部 ✅ 或合法 N/A 后，**立即**以 `## 📊 <标的>` 或报告模板标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
-报告输出完成后，**立即**调用 `Skill(skill="stock-skills:ticker-journal")` → write 存档（来源 `stock-analyzer`，评级 `纯分析`，见下方「分析存档」）。
+报告输出完成后，**立即**调用 `Skill(skill="ticker-journal")` → write 存档（来源 `stock-analyzer`，评级 `纯分析`，见下方「分析存档」）。
 
 ## 输出格式
 
@@ -324,7 +324,7 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 九维度报告输出完成后，**立即**调用：
 
 ```
-Skill(skill="stock-skills:ticker-journal") → write 操作
+Skill(skill="ticker-journal") → write 操作
 ```
 
 - 来源标记为 `stock-analyzer`

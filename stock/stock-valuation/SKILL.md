@@ -138,7 +138,7 @@ JSON 字段提取要点：
 > ⚠️ 本报告为估值模型计算结果，不构成投资建议。
 ```
 
-报告输出完成后，**立即**调用 `Skill(skill="stock-skills:ticker-journal")` → write 存档（来源 `stock-valuation`，评级 `纯分析`，见下方「分析存档」）。
+报告输出完成后，**立即**调用 `Skill(skill="ticker-journal")` → write 存档（来源 `stock-valuation`，评级 `纯分析`，见下方「分析存档」）。
 
 ## 中概股 / 中国 ADR
 
@@ -149,7 +149,7 @@ JSON 字段提取要点：
 三维估值报告输出完成后，**立即**调用：
 
 ```
-Skill(skill="stock-skills:ticker-journal") → write 操作
+Skill(skill="ticker-journal") → write 操作
 ```
 
 - 来源标记为 `stock-valuation`

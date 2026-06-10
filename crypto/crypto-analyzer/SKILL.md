@@ -11,11 +11,13 @@ description: 加密资产七维度深度分析助手。基于 CoinGecko Demo API
 
 ```bash
 BASE="https://api.coingecko.com/api/v3"
+CC="https://min-api.cryptocompare.com"  # 免费直连，无需 key，100 req/min
 
-# ⚠️ DNS 绕过：部分网络环境本地 DNS 将 api.coingecko.com 解析到错误 IP
-# 每条 curl 命令必须加：--resolve "api.coingecko.com:443:104.20.41.132"
+# ⚠️ CoinGecko DNS 绕过：部分网络环境本地 DNS 将 api.coingecko.com 解析到错误 IP
+# 每条 CoinGecko curl 命令必须加：--resolve "api.coingecko.com:443:104.20.41.132"
 # 有 Demo key：加 -H "x-cg-demo-api-key: $COINGECKO_DEMO_KEY"（100次/分）
 # 无 key：省略 header，降级到公共端点（~3次/分，请求间需间隔）
+# CryptoCompare 优先：维度 1/2 用 $CC，无需 key，直连稳定
 ```
 
 ## 第一步：解析 CoinGecko ID
@@ -41,27 +43,69 @@ Read references/data-sources.md             # CoinGecko + Hyperliquid API 速查
 
 每个维度独立拉取。**硬约束：失败必须显式标注"维度 X 数据不可用，原因：XX"，不允许静默跳过。**
 
+### 维度 0：加密宏观背景（**单独执行，不与其他维度并行**）
+
+若本会话 context 中已有 `crypto-macro` 输出（crypto-scanner 可能已调用），直接沿用，跳过本维度。否则：
+
+```
+Skill(skill="crypto-macro")
+```
+
+输出背景小结后**立即**继续下方维度 1-7，不停等用户确认。
+
+---
+
 ### 维度 1：行情快照
 
 ```bash
-curl "$BASE/coins/{id}?localization=false&tickers=false&community_data=true&developer_data=false" $HEADER
+# CryptoCompare（优先，用 step 1 解析出的 SYMBOL 大写，如 SOL / BTC）
+curl -sf "$CC/data/pricemultifull?fsyms={SYMBOL}&tsyms=USD" \
+  | python3 -c "
+import json, sys
+d = json.load(sys.stdin)['RAW']['{SYMBOL}']['USD']
+print('price_usd:', d.get('PRICE'))
+print('mktcap:', d.get('MKTCAP'))
+print('volume_24h:', d.get('TOTALVOLUME24HTO'))
+print('change_24h_pct:', d.get('CHANGEPCT24HOUR'))
+print('high_24h:', d.get('HIGH24HOUR'))
+print('low_24h:', d.get('LOW24HOUR'))
+print('supply:', d.get('SUPPLY'))
+print('注意: ATH/FDV/7d/30d 涨跌幅 → 见维度 2 histoday 计算结果')
+" 2>/dev/null || \
+curl -sf "$BASE/coins/{id}?localization=false&tickers=false&community_data=true&developer_data=false" \
+  --resolve "api.coingecko.com:443:104.20.41.132" $HEADER
 ```
 
-提取：当前价（USD）/ 市值 / FDV / 24h 成交量 / ATH 及距离% / 24h/7d/30d 涨跌幅 / 市值排名 / 流通量÷总量
+提取：当前价（USD）/ 市值 / 24h 成交量 / 24h 涨跌幅（CryptoCompare）或 ATH/FDV/7d/30d（CoinGecko fallback）；7d/30d 涨跌幅由维度 2 histoday 数据计算补充
 
 ### 维度 2：技术面
 
 ```bash
-curl "$BASE/coins/{id}/market_chart?vs_currency=usd&days=90" $HEADER
+# CryptoCompare histoday（优先）→ CoinGecko market_chart fallback
+curl -sf "$CC/data/v2/histoday?fsym={SYMBOL}&tsym=USD&limit=90" 2>/dev/null || \
+curl -sf "$BASE/coins/{id}/market_chart?vs_currency=usd&days=90" \
+  --resolve "api.coingecko.com:443:104.20.41.132" $HEADER
 ```
 
-用以下 Python 片段内联计算（market_chart 响应存为变量 `data`）：
+用以下 Python 片段内联计算（根据数据源选择对应解析逻辑）：
 
 ```python
 import json, statistics
 
-data = json.loads("""<market_chart API 响应>""")
-prices = [p[1] for p in data["prices"]]
+resp = json.loads("""<API 响应>""")
+
+# CryptoCompare histoday 格式
+if "Data" in resp and "Data" in resp.get("Data", {}):
+    bars = resp["Data"]["Data"]
+    prices = [b["close"] for b in bars]
+    week_high = max(b["high"] for b in bars[-7:])
+    week_low  = min(b["low"]  for b in bars[-7:])
+else:
+    # CoinGecko market_chart fallback 格式
+    bars = None
+    prices = [p[1] for p in resp["prices"]]
+    week_high = max(p[1] for p in resp["prices"][-7:])
+    week_low  = min(p[1] for p in resp["prices"][-7:])
 
 # 14 日 RSI
 def rsi(series, n=14):
@@ -83,16 +127,17 @@ ma7  = statistics.mean(prices[-7:])
 ma30 = statistics.mean(prices[-30:])
 cross = "金叉（上涨信号）" if ma7 > ma30 else "死叉（下跌信号）"
 
-# 7 日高低（支撑阻力）
-week_high = max(p[1] for p in data["prices"][-7:])
-week_low  = min(p[1] for p in data["prices"][-7:])
-
 # 90 日趋势
 first30_avg = statistics.mean(prices[:30])
 last30_avg  = statistics.mean(prices[-30:])
 trend = "上升" if last30_avg > first30_avg * 1.05 else ("下降" if last30_avg < first30_avg * 0.95 else "震荡")
 
+# 7d / 30d 涨跌幅（补充维度 1 缺失字段）
+change_7d  = round((prices[-1] - prices[-8])  / prices[-8]  * 100, 2) if len(prices) >= 8  else 'N/A'
+change_30d = round((prices[-1] - prices[-31]) / prices[-31] * 100, 2) if len(prices) >= 31 else 'N/A'
+
 print(f"RSI14={rsi14} | MA7={ma7:.4f} vs MA30={ma30:.4f}（{cross}）| 7日区间 {week_low:.4f}~{week_high:.4f} | 90日趋势：{trend}")
+print(f"7d涨跌幅: {change_7d}% | 30d涨跌幅: {change_30d}%")
 ```
 
 ### 维度 3：链上信号（Hyperliquid）
@@ -151,8 +196,14 @@ Tavily（days=90）：`{coin_name} upgrade unlock airdrop event schedule 2026`
 
 ## ⚠️ 输出即止规则
 
-七个维度数据全部在 context 后，**立即**以 `## 📊 <标的>` 或报告模板标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
-报告输出完成后，**立即**调用 `Skill(skill="stock-skills:ticker-journal")` → write 存档（来源 `crypto-analyzer`，评级 `纯分析`，见下方「分析存档」）。
+**输出前自检**：
+
+- [ ] 维度 0 `crypto-macro` 背景小结是否已输出？
+- [ ] 维度 3 `hyperliquid-perps` 是否已调用？（无镜像可 N/A）
+- [ ] 维度 7 `event-calendar` 是否已调用？
+
+全部 ✅ 或合法 N/A 后，**立即**以 `## 📊 <标的>` 或报告模板标题开头写正文。禁止 `echo` / `python print` 等"准备输出"工具调用。
+报告输出完成后，**立即**调用 `Skill(skill="ticker-journal")` → write 存档（来源 `crypto-analyzer`，评级 `纯分析`，见下方「分析存档」）。
 
 ## 输出规范
 
@@ -175,7 +226,7 @@ hyperliquid-perps → 维度 3
 七维度报告输出完成后，**立即**调用：
 
 ```
-Skill(skill="stock-skills:ticker-journal") → write 操作
+Skill(skill="ticker-journal") → write 操作
 ```
 
 - 来源标记为 `crypto-analyzer`

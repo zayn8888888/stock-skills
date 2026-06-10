@@ -46,7 +46,7 @@ Read references/reflection.md             # 阶段 8 决策存档 + 历史召回
 | **Charlie Munger** | ✅ 必须 | 可选 | ROIC（不是 ROE）+ 反向失败路径需 fundamentals 业务深挖 |
 | **Peter Lynch** | ✅ 必须 | ✅ 必须 | 六分类需 fundamentals + PEG 需 valuation 的成长率 |
 | **Michael Burry** | 可选 | ✅ 必须 | 深度价值需 NCAV / 清算价值，valuation 计算 |
-| **Stanley Druckenmiller** | 可选 | 可选 | 宏观顺势仅依赖 stock-analyzer 资金流 + event-calendar |
+| **Stanley Druckenmiller** | 可选 | 可选 | **必调 `tradfi-macro`**，宏观顺势需要真实 VIX/DXY/利率数据支撑 |
 | **Aswath Damodaran** | 可选 | ✅ 必须 | DCF 三法是核心输入，无 valuation 直接没法跑 |
 | **Bill Ackman** | ✅ 必须 | 可选 | 业务质量 + 治理瑕疵需 fundamentals 商业模式段 |
 
@@ -125,8 +125,9 @@ Read references/reflection.md             # 阶段 8 决策存档 + 历史召回
                            - futu-capital-anomaly / hyperliquid-perps（维度 4 资金/链上 funding）
                            - futu-derivatives-anomaly（维度 8 期权 Step 0 快通道）
 2. event-calendar       — 前瞻 14 天事件（任何选项都必调）
-3. stock-fundamentals   — [若启用 Buffett/Munger/Lynch/Ackman 必调；否则可选]
-4. stock-valuation      — [若启用 Lynch/Burry/Damodaran 必调；否则可选]
+3. tradfi-macro         — [若启用 Druckenmiller 必调]
+4. stock-fundamentals   — [若启用 Buffett/Munger/Lynch/Ackman 必调；否则可选]
+5. stock-valuation      — [若启用 Lynch/Burry/Damodaran 必调；否则可选]
 
 合计：[2 / 3 / 4] 个 skill（取决于启用的大师）
 ```
@@ -170,10 +171,12 @@ Read references/reflection.md             # 阶段 8 决策存档 + 历史召回
 ```
 skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
 
-  step 1：Skill(skill="stock-analyzer")  → 等待主对话中输出完整九维度报告后继续
-  step 2：Skill(skill="event-calendar")  → 等待主对话中输出结构化事件日历表后继续
-  step 3：Skill(skill="stock-fundamentals")   [若清单含，等待主对话中输出四步分析报告后继续]
-  step 4：Skill(skill="stock-valuation")      [若清单含，等待主对话中输出三维估值报告后继续]
+  step 1：Skill(skill="stock-analyzer")       → 等待主对话中输出完整九维度报告后继续
+  step 2：Skill(skill="event-calendar")       → 等待主对话中输出结构化事件日历表后继续
+  step 3：Skill(skill="tradfi-macro")         [若启用 Druckenmiller 且标的为股票/FX/商品，必调]
+          Skill(skill="crypto-macro")         [若启用 Druckenmiller 且标的为加密资产，必调]
+  step 4：Skill(skill="stock-fundamentals")   [若清单含，等待主对话中输出四步分析报告后继续]
+  step 5：Skill(skill="stock-valuation")      [若清单含，等待主对话中输出三维估值报告后继续]
 
   ※ 各 skill 必须严格串行——前一个的完整报告已出现在主对话中，再调下一个
   ※ 每个 Skill() 注入对应 SKILL.md 后，主 agent 必须遵循该 skill 的"输出即止"规则，
@@ -184,9 +187,10 @@ skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
 ⚠️ 阶段 0 输出门禁（硬阻，阶段 0 完成前必须逐条通过）：
   □ 主对话中可见 stock-analyzer 的完整九维度报告（含综合研判）？
   □ 主对话中可见 event-calendar 的结构化事件日历表？
+  □ 若启用 Druckenmiller：tradfi-macro（股票/FX/商品）或 crypto-macro（加密）背景小结可见？
   □ 若清单含 stock-fundamentals，主对话中可见其四步分析完整报告？
   □ 若清单含 stock-valuation，主对话中可见其三维估值完整报告？
-  → 以上四问缺一不可，缺任何一个 → 阶段 0 未完成，禁止进入阶段 1
+  → 以上各问缺一不可，缺任何一个 → 阶段 0 未完成，禁止进入阶段 1
 
 补充数据批次（仅用于填写共享报告，不是子 skill 报告的替代品）：
   ‖ Bash: finnhub earnings + economic calendar curl（event-calendar 未覆盖的补充）
@@ -210,7 +214,9 @@ skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
    - Buffett / Munger / Ackman → `Skill(skill="stock-fundamentals")`
    - Lynch → `Skill(skill="stock-fundamentals")` + `Skill(skill="stock-valuation")`
    - Burry / Damodaran → `Skill(skill="stock-valuation")`
-   - 不允许"启用 Buffett 视角但不调 stock-fundamentals"（大师会编 ROE / 护城河）
+   - Druckenmiller @ 股票/FX/商品 → `Skill(skill="tradfi-macro")`
+   - Druckenmiller @ 加密资产 → `Skill(skill="crypto-macro")`
+   - 不允许"启用 Druckenmiller 但不调宏观 skill"（大师会编 VIX / DXY）
 4. **数据时点必须记录** — 在共享报告头部写明 `data_timestamp: YYYY-MM-DD HH:MM`，所有后续角色引用数据必须挂这个时点。
 
 #### 时效性硬规则
@@ -247,6 +253,14 @@ skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
   },
   "market_report":        "<引用上方 stock-analyzer 完整报告 维度 1+2 结论要点；非原始 API 数据重新汇总>",
   "fundamentals_report":  "<引用上方 stock-analyzer 完整报告 维度 3 结论；若 stock-fundamentals 已输出完整四步报告，则改为引用该报告的核心结论，并注明'完整报告见上方 stock-fundamentals 报告'>",
+  "macro_report": {
+    "skipped": "<若未启用 Druckenmiller，填 true>",
+    "data_timestamp": "<tradfi-macro 或 crypto-macro 报告末尾的数据时点>",
+    "risk_state": "Risk-on | Risk-off | 中性",
+    "vix": "<数值，仅 tradfi-macro>",
+    "dxy": "<数值，仅 tradfi-macro>",
+    "summary": "<背景小结表格最后一行'综合宏观判断'内容>"
+  },
   "capital_report":       "<引用上方 stock-analyzer 完整报告 维度 4+5；含 hyperliquid-perps 链上 funding/OI/premium（美股/美元资产标的；港股除 BABA 外应标'流动性不足'；A 股应标'链上无镜像'）>",
   "peers_report":         "<引用上方 stock-analyzer 完整报告 维度 6 结论要点>",
   "news_report":          "<引用上方 stock-analyzer 完整报告 维度 7 结论要点>",
@@ -347,14 +361,25 @@ skill 串行执行（按阶段 0a 锁定清单，逐个 Skill() 调用）：
 
 ### 阶段 4：Trader — 交易 proposal
 
-基于 ResearchPlan 输出结构化 TraderProposal：
+**前置步骤（必做，输出 TraderProposal 之前）**：
+
+```
+Skill(skill="stock-skills:ta-levels")
+```
+
+skill 内部使用 `--code <CODE> --ktype 1d --num 100 --method all` 自动拉 100 根日线并计算全量支撑/压力位。拿到输出后：
+- `entry_price` 锚定至最近支撑上方（买多）或最近压力下方（做空）的具体价位
+- `stop_loss` 置于关键支撑下方（买多）或关键压力上方（做空）的具体价位
+- 在 `reasoning` 里注明引用了哪个价位区间（例：`入场 $X 锚定 swing 支撑 $Y，止损 $Z 置于 fibonacci 0.618 下方`）
+
+基于 ResearchPlan + ta-levels 价位表，输出结构化 TraderProposal：
 
 ```
 {
   "action": "Buy" | "Hold" | "Sell",
-  "reasoning": "<2-4 句，锚定分析师报告 + research plan>",
-  "entry_price": <float, 报价币种>,
-  "stop_loss": <float>,
+  "reasoning": "<2-4 句，锚定分析师报告 + research plan + ta-levels 价位>",
+  "entry_price": <float, 报价币种，必须来自 ta-levels 支撑/压力位>,
+  "stop_loss": <float, 必须来自 ta-levels 支撑/压力位>,
   "position_sizing": "<数字% of portfolio，必须附计算过程，见下方公式>",
   "fundamental_exit_triggers": [
     "<基本面止损条件 1，例：核心业务毛利率连续 2 季下滑 >3pp>",
@@ -438,7 +463,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - 标注"待 3 个月后反思"
 
 **8c. 阶段 8b 完成后（立即）**：
-- 调用 `Skill(skill="stock-skills:ticker-journal")` → **write** 操作
+- 调用 `Skill(skill="ticker-journal")` → **write** 操作
 - 数据来源：从阶段 6 PM 最终报告（评级/仓位/入场价/止损/目标/大师信号/复盘锚点）+ 阶段 0 共享报告（价格/估值/技术位/核心催化风险）提取快照字段
 - ❌ 禁止在 8b 的 Write 工具调用未完成时就启动 8c
 
@@ -521,6 +546,7 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 - [ ] 阶段 0-6 全部跑完，无静默略过（阶段 1 / 7 可选但要明确说"未启用"）
 - [ ] Bull/Bear 至少完成 1 轮（2 次发言），第二次发言起包含明确反驳
 - [ ] Research Manager 输出 5 档评级（不是 6 档自创）
+- [ ] **Trader 前置 ta-levels 已调用**：`Skill(skill="stock-skills:ta-levels")` 调用记录可见，entry_price / stop_loss 锚定了具体支撑/压力位
 - [ ] Trader 输出含 entry_price / stop_loss / position_sizing 三项
 - [ ] Risk 三方都发言，每个角色都直接回应了至少一位对方
 - [ ] PM 最终评级 + executive_summary + investment_thesis 都有
@@ -573,6 +599,7 @@ READ GATE 存在的唯一理由是强制工具调用留下可见记录——**�
 - ❌ **财报在 5 日内但 Risk 未建模严重 miss 情景**（Conservative 必须给出跳空风险评估）
 - ❌ **财报在 5 日内但 Conservative 未完成 IV-implied 止损有效性验证**（期权卖方参考见 stock-analyzer 维度 8）
 - ❌ 跳过 Trader proposal 直接到 PM 决策
+- ❌ **Trader 未调 ta-levels 直接出 entry_price / stop_loss**（主观拍脑袋价位，止损缺技术依据）
 - ❌ Trader 不给具体止损价，只写"破位止损"
 - ❌ PM 评级写"看个人风险偏好"——必须从 5 档中选一档
 - ❌ PM 改了 Trader 的 entry/stop_loss/position_sizing 但不在 investment_thesis 里写"参数漂移"行

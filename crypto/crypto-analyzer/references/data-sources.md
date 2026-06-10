@@ -1,18 +1,61 @@
 # crypto-analyzer 数据源速查
 
-## CoinGecko Demo API
+## CryptoCompare API（维度 1 / 2 优先使用）
 
-**Base URL：** `https://api.coingecko.com/api/v3`  
-**Demo Key Header：** `x-cg-demo-api-key: $COINGECKO_DEMO_KEY`  
-**限速：** Demo key 100次/分钟；无 key（公共端点）~3次/分钟
+**Base URL：** `https://min-api.cryptocompare.com`  
+**认证：** 无需 key（免费 tier）  
+**限速：** 100 req/min，100K req/month  
+**直连：** 国内可直连，无需代理
 
 ### 常用端点
 
 | 端点 | 用途 | 维度 |
 |---|---|---|
-| `/search?query={ticker}` | 解析 ticker → CoinGecko ID | 前置 |
-| `/coins/{id}?localization=false&tickers=false&community_data=true` | 行情快照 + 基本面 + 赛道分类 | 1, 4 |
-| `/coins/{id}/market_chart?vs_currency=usd&days=90` | 90日历史价格（含成交量）| 2 |
+| `/data/pricemultifull?fsyms={SYMBOL}&tsyms=USD` | 当前行情快照（价格/市值/成交量/24h 涨跌）| 1 |
+| `/data/v2/histoday?fsym={SYMBOL}&tsym=USD&limit=90` | 90日 OHLCV 历史（计算 RSI/MA/7d/30d 涨跌）| 2 |
+
+### `pricemultifull` 关键响应字段（`RAW.{SYMBOL}.USD`）
+
+```
+PRICE                当前价格
+MKTCAP               市值
+TOTALVOLUME24HTO     24h 成交量（USD）
+CHANGEPCT24HOUR      24h 涨跌幅%
+HIGH24HOUR           24h 最高
+LOW24HOUR            24h 最低
+SUPPLY               流通量
+```
+
+**注意：** ATH / FDV / 7d / 30d 涨跌幅需从 histoday 计算，或使用 CoinGecko fallback。
+
+### `histoday` 响应结构（`Data.Data[]`）
+
+```json
+{
+  "Data": {
+    "Data": [
+      {"time": 1234567890, "open": 44000, "high": 46000, "low": 43000, "close": 45000, "volumeto": 1234567}
+    ]
+  }
+}
+```
+
+---
+
+## CoinGecko Demo API（维度 4 / 5 / ticker search）
+
+**Base URL：** `https://api.coingecko.com/api/v3`  
+**Demo Key Header：** `x-cg-demo-api-key: $COINGECKO_DEMO_KEY`  
+**限速：** Demo key 100次/分钟；无 key（公共端点）~3次/分钟  
+**直连：** 国内需 DNS 绕过 `--resolve "api.coingecko.com:443:104.20.41.132"`
+
+### 常用端点
+
+| 端点 | 用途 | 维度 |
+|---|---|---|
+| `/search?query={ticker}` | 解析 ticker → CoinGecko ID + symbol | 前置 |
+| `/coins/{id}?localization=false&tickers=false&community_data=true` | 行情快照（维度 1 fallback）+ 赛道分类 | 1 fallback, 4 |
+| `/coins/{id}/market_chart?vs_currency=usd&days=90` | 90日历史价格（维度 2 fallback）| 2 fallback |
 | `/coins/markets?vs_currency=usd&category={id}&order=market_cap_desc&per_page=10&price_change_percentage=7d,30d` | 同赛道对比 | 5 |
 
 ### 关键响应字段

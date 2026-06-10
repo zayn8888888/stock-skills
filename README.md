@@ -25,7 +25,37 @@
 - **hyperliquid-perps** 横向辅助：被 analyzer 的「资金」维度引用 funding rate + 拥挤度，被 trading-debate 的 Risk 风险辩论引用作为"拥挤交易硬约束"，被 event-calendar 用于"事件后链上即时反应"
 - **crypto-scanner** 扫出加密候选 → **crypto-analyzer** 七维度深挖 → 可选接 **trading-debate**
 
-## 安装
+
+
+## 安装（Plugin 方式 · 推荐）
+
+仓库内置 Claude Code Plugin 配置，整套 17 个 skill 作为单个 plugin 一起 enable / disable，最少手工管理。
+
+```bash
+# 1. 克隆仓库（私有 repo 需要你的 git 凭据，git clone 能成功就够了）
+git clone git@github.com:zayn8888888/stock-skills.git ~/stock-skills
+
+# 2. 在 Claude Code 内执行（注意 marketplace 路径用你 clone 的位置）
+/plugin marketplace add ~/stock-skills
+/plugin install stock-skills@stock-skills
+```
+
+> 安装后 plugin 内置的 `SessionStart` hook 会自动注入 `CLAUDE_SKILLS_DIR`，futuapi 相关 skill 开箱即用，无需手动配置。
+
+之后管理：
+
+```bash
+/plugin disable stock-skills          # 全套 17 skill 一起下线
+/plugin enable stock-skills           # 全套恢复
+/plugin uninstall stock-skills        # 卸载
+cd ~/stock-skills && git pull                  # 1. 拉最新代码
+claude plugin uninstall stock-skills@stock-skills  # 2. 清除旧 cache
+claude plugin install stock-skills@stock-skills   # 3. 重新安装
+```
+
+> 私有 repo 不能让陌生人通过 `/plugin marketplace add owner/repo` 直接拉，必须先 `git clone`，再 `/plugin marketplace add <本地路径>`。
+
+## 安装（手动 · 不用 plugin）
 
 ```bash
 git clone https://github.com/zayn8888888/stock-skills.git ~/stock-skills
