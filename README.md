@@ -214,7 +214,7 @@ NVDA + 700 + 茅台 该怎么排            # v0.5 跨市场：市值加权基�
 
 ## 文档
 
-- [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股八维度分析流程
+- [`stock-analyzer/SKILL.md`](stock-analyzer/SKILL.md) — 个股九维度分析流程
 - [`stock-analyzer/references/`](stock-analyzer/references/) — 方法论 / 指标陷阱 / 报告模板
 - [`stock-fundamentals/SKILL.md`](stock-fundamentals/SKILL.md) — 商业模式 / 护城河 / 财务验证 / 估值四步框架（基本面研究流程）
 - [`market-scanner/SKILL.md`](market-scanner/SKILL.md) — 板块扫描 + 候选股筛选流程
