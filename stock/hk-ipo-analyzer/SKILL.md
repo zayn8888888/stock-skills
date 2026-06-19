@@ -183,14 +183,14 @@ python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_k
 
 按 `scoring-framework.md` 计算两个评分：
 
-**IPO Trade Score / 打新评分**（7 因子）：
-1. 市场需求与认购热度 25%
-2. 流通盘与供需结构 20%
-3. 板块主题与短期情绪 15%
-4. 估值锚 15%
+**IPO Trade Score / 打新评分**（7 因子，含 Pre/Post-listing 双版本，详见 `scoring-framework.md`）：
+1. 市场需求与认购热度 20%（Pre-listing 降至 10%）
+2. 流通盘与供需结构 25%（Pre-listing 升至 30%）
+3. 板块主题与短期情绪 10%
+4. 估值锚 15%（Pre-listing 升至 20%）
 5. 定价弹性 10%
 6. 保荐人短期战绩 10%
-7. 基本面风险过滤 5%
+7. 基本面风险过滤 10%
 
 **Fundamental Holding Score / 持有评分**（6 因子）：
 1. 盈利质量与盈利路径 25%
