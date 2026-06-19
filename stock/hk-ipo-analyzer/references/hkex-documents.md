@@ -114,3 +114,20 @@ https://www1.hkexnews.hk/app/sehk/2026/108456/documents/sehk26042200374.pdf
 - 同一家公司多版 Application Proof / PHIP 必须做版本管理。
 - 最终投资评估优先使用最终 Prospectus；AP / PHIP 只作为递表阶段或版本变更研究材料。
 - 下载失败、Warning Statement 阻塞、Inactive 文件不可访问时，必须写进数据缺口。
+
+## 文件登记脚本
+
+找到官方 PDF href 后，可用脚本规范化记录：
+
+```bash
+python3 stock/hk-ipo-analyzer/scripts/record_hkex_document.py \
+  --company "<公司名>" \
+  --stock-code "<代码>" \
+  --doc-type PROSPECTUS \
+  --title "<文件标题>" \
+  --pdf-url "<官方 PDF URL>" \
+  --source-page-url "<来源页面 URL>" \
+  --local-file "<已下载 PDF 路径>"
+```
+
+`--local-file` 可省略；提供时脚本会计算 sha256。脚本只做登记与校验，不负责发现 PDF 链接。

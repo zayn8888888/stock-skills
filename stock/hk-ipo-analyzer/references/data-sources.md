@@ -21,6 +21,19 @@ python3 "${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}"/futuapi/scripts/quote/get_k
 
 用途：已上市新股的实时行情、公司概况、K 线走势。
 
+### Skill 内置辅助脚本
+
+```bash
+python3 stock/hk-ipo-analyzer/scripts/record_hkex_document.py --help
+python3 stock/hk-ipo-analyzer/scripts/sponsor_performance.py --help
+```
+
+用途：
+- `record_hkex_document.py`：把 HKEX 文件的公司、文件类型、PDF URL、来源页面、抓取时间和本地 PDF sha256 规范化为 JSON。
+- `sponsor_performance.py`：对保荐人 / 承销商样本 CSV 或 JSON 计算首日破发率、当前破发率、当前上涨率和收益中位数。
+
+这些脚本不替代搜索。先找到来源和样本，再用脚本做登记或计算。
+
 ## 官方披露源（港股优先）
 
 | 来源 | 查什么 |
@@ -65,6 +78,12 @@ site:hkexnews.hk <公司名> application proof PHIP OC announcement
 <保荐人> sponsor IPO listings last 24 months issue price first day close
 <承销商> lead underwriter IPO performance last 12 months
 site:hkexnews.hk <保荐人> 保荐人 配发结果 上市 发行价
+```
+
+样本整理成 CSV 或 JSON 后，用：
+
+```bash
+python3 stock/hk-ipo-analyzer/scripts/sponsor_performance.py samples.csv --json
 ```
 
 ### 价格表现补证
