@@ -223,15 +223,11 @@ hyperliquid-perps → 维度 3
 
 ## 分析存档（自动，输出报告后立即执行）
 
-七维度报告输出完成后，**立即**调用：
+七维度报告输出完成后，**立即**调用 `Skill(skill="ticker-journal")` → write 操作：
 
-```
-Skill(skill="ticker-journal") → write 操作
-```
-
-- 来源标记为 `crypto-analyzer`
-- 评级填 `纯分析`
-- 大师信号填 `N/A`，复盘锚点填 `N/A`
+- 来源标记为 `crypto-analyzer`，评级填 `纯分析`
+- **完整七维度报告**写入 `~/.stock-skills/reports/{TICKER}/`（通过 `write.py --report-file`）
+- 同天其他 skill 已写档的条目禁止覆盖，各自独立区块
 - PE/PB 百分位不适用时填 `N/A`，改填 MV/RV 比率（如有）
 - 字段从刚输出的报告中提取，禁止重新调用 API
 - 提取失败的字段填 `N/A`，不中止流程

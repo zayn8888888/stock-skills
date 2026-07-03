@@ -465,6 +465,8 @@ PM 评级**可以与 Trader 的 action 不一致**——Risk 辩论可能让 PM 
 **8c. 阶段 8b 完成后（立即）**：
 - 调用 `Skill(skill="ticker-journal")` → **write** 操作
 - 数据来源：从阶段 6 PM 最终报告（评级/仓位/入场价/止损/目标/大师信号/复盘锚点）+ 阶段 0 共享报告（价格/估值/技术位/核心催化风险）提取快照字段
+- **PM 最终决策报告全文**须通过 `write.py --report-file` 存入 `~/.stock-skills/reports/{TICKER}/`
+- 子 skill（stock-analyzer / stock-fundamentals / stock-valuation）各自已在报告末尾 write 过的，8c **不得覆盖**，只追加 `trading-debate` 来源的决策快照
 - ❌ 禁止在 8b 的 Write 工具调用未完成时就启动 8c
 
 **反思触发**（用户主动 / 自动）：

@@ -146,15 +146,11 @@ JSON 字段提取要点：
 
 ## 分析存档（自动，输出报告后立即执行）
 
-三维估值报告输出完成后，**立即**调用：
+三维估值报告输出完成后，**立即**调用 `Skill(skill="ticker-journal")` → write 操作：
 
-```
-Skill(skill="ticker-journal") → write 操作
-```
-
-- 来源标记为 `stock-valuation`
-- 评级填 `纯分析`
-- 大师信号填 `N/A`，复盘锚点填 `N/A`
+- 来源标记为 `stock-valuation`，评级填 `纯分析`
+- **完整三维估值报告**写入 `~/.stock-skills/reports/{TICKER}/`（通过 `write.py --report-file`）
+- 同天其他 skill 已写档的条目禁止覆盖，各自独立区块
 - 估值字段直接从报告中的三法加权中枢、安全边际买点区间提取填入"数据快照·估值"字段
 - 核心催化 = 估值支撑逻辑；核心风险 = 估值失效条件（如 EPS 下修 / 行业 PE 收缩）
 - 字段从刚输出的报告中提取，禁止重新调用 API

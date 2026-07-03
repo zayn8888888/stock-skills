@@ -321,14 +321,10 @@ A 股注意：`get_research_rating_summary` / `get_insider_trade_list` / `get_sh
 
 ## 分析存档（自动，输出报告后立即执行）
 
-九维度报告输出完成后，**立即**调用：
+九维度报告输出完成后，**立即**调用 `Skill(skill="ticker-journal")` → write 操作：
 
-```
-Skill(skill="ticker-journal") → write 操作
-```
-
-- 来源标记为 `stock-analyzer`
-- 评级填 `纯分析`（stock-analyzer 不出买卖决策）
-- 大师信号填 `N/A`，复盘锚点填 `N/A`
-- 字段从刚输出的报告中提取，禁止重新调用 API
+- 来源标记为 `stock-analyzer`，评级填 `纯分析`
+- **完整九维度报告**写入 `~/.stock-skills/reports/{TICKER}/`（通过 `write.py --report-file`）
+- journal 快照从刚输出的报告中提取字段，禁止重新调用 API
+- 同天若还跑了 stock-fundamentals / stock-valuation / trading-debate，各自独立写档，禁止合并或覆盖
 - 提取失败的字段填 `N/A`，不中止流程

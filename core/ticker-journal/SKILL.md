@@ -7,8 +7,9 @@ description: 标的档案读写助手。write=分析后写快照，load=新会�
 
 ## 核心原则
 
-- **快照不是报告**：journal 存的是数据快照用于追问，不存完整分析报告全文
-- **追加不覆盖**：每次分析产生新区块，历史区块只读不改
+- **双层存档**：`reports/` 存完整报告全文；`journals/` 存数据快照用于追问和仪表盘
+- **追加不覆盖**：每次分析产生新区块，历史区块只读不改；同天不同 skill 各自独立一条
+- **脚本写入**：write 必须通过 `write.py` 原子追加，禁止 AI 直接 Write 覆盖已有 journal 文件
 - **无历史不报错**：没有档案时直接说"暂无历史档案"，不创建空文件
 
 ## Ticker 规范化（所有操作执行前必须先规范化）
@@ -58,17 +59,23 @@ INDEX.md 里搜索时用**编号匹配**，不要求完整匹配：
 ## 路径
 
 ```
-~/.stock-skills/journals/
-  INDEX.md                ← 所有标的一行索引
-  HK-1810-小米.md          ← 港股
-  SH-601166-兴业银行.md    ← 上交所 A 股
-  SZ-000858-五粮液.md      ← 深交所 A 股
-  US-FUTU.md               ← 美股
-  CRYPTO-HYPE.md           ← 加密资产
-  ...
+~/.stock-skills/
+  reports/                              ← 完整报告全文（按标的分目录）
+    HK-1810-小米/
+      2026-06-04-1736-stock-analyzer.md
+      2026-06-04-1745-stock-fundamentals.md
+      ...
+  journals/                             ← 数据快照（追问 / 仪表盘用）
+    INDEX.md                            ← 所有标的一行索引
+    HK-1810-小米.md
+    SH-601166-兴业银行.md
+    US-FUTU.md
+    CRYPTO-HYPE.md
+    ...
+  trading-debate/decisions/             ← trading-debate 决策报告（已有，不动）
 ```
 
-首次写入时自建目录：`mkdir -p ~/.stock-skills/journals`
+首次写入时 `write.py` 自动创建目录，无需手动 mkdir。
 
 ---
 
@@ -82,15 +89,36 @@ INDEX.md 里搜索时用**编号匹配**，不要求完整匹配：
 
 ### 执行步骤
 
+> ⚠️ **禁止**对已有 `{TICKER}.md` 使用 Write 工具——会覆盖同天其他 skill 的记录。一律走下方 `write.py` 脚本。
+
 1. 从当前 context 提取快照字段（见下方字段映射表）
-2. `Bash: ls ~/.stock-skills/journals/{TICKER}.md 2>/dev/null || echo "NOT_FOUND"` 检查文件是否存在
-3. **不存在**：`Write ~/.stock-skills/journals/{TICKER}.md`，内容为新文件头 + 第一个区块
-4. **已存在**：`Read ~/.stock-skills/journals/{TICKER}.md`，然后 `Edit` 在文件末尾最后一个 `---` 之后追加新区块
-5. `Bash: ls ~/.stock-skills/journals/INDEX.md 2>/dev/null || echo "NOT_FOUND"` 检查 INDEX.md
-6. **INDEX 不存在**：`Write` 新建，写入该 ticker 一行
-7. **INDEX 已存在**：`Read` INDEX.md，判断该 ticker 行是否已有：
-   - 已有：`Edit` 更新该行（记录数 +1，"最近"日期更新）
-   - 未有：`Edit` 追加该 ticker 行
+2. 将**刚输出的完整报告**写入临时文件 `/tmp/ticker-report-{TICKER}-{source}.md`（九维度 / 四步 / 三维估值 / PM 决策报告全文，一字不漏）
+3. 按下方格式组装快照区块，写入临时文件 `/tmp/ticker-block-{TICKER}-{source}.md`
+4. 调用原子写入脚本（`write.py` 负责追加 journal + 保存 reports + 更新 INDEX）：
+
+```bash
+python3 ${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/write.py \
+  --ticker {CANONICAL_TICKER} \
+  --source {来源skill} \
+  --block-file /tmp/ticker-block-{TICKER}-{source}.md \
+  --report-file /tmp/ticker-report-{TICKER}-{source}.md
+```
+
+5. 若本次无完整报告可存档（如 followup 增量），省略 `--report-file`
+
+### 同天多 skill 规则
+
+| 场景 | 行为 |
+|------|------|
+| 同天 stock-analyzer + stock-fundamentals + stock-valuation + trading-debate | **各写各的**，4 条独立区块，禁止合并 |
+| 同天同 skill 跑两次（如两次 stock-analyzer） | 两条都保留（靠区块头时间戳区分） |
+| `(date, time, source)` 三者完全相同 | `write.py` 自动跳过，不重复写入 |
+| trading-debate 子 skill 已各自 write | 阶段 8c 仍须再写一条 `trading-debate` 来源的决策快照 |
+
+### 重复检测键
+
+区块头必须含**时间**（精确到分钟），格式 `## {YYYY-MM-DD} {HH:MM} · {source} · {rating}`。
+重复判定 = `(日期, 时间, 来源)` 三者完全相同才跳过；**同天不同 source 永远不算重复**。
 
 ### journal 文件格式
 
@@ -102,7 +130,7 @@ INDEX.md 里搜索时用**编号匹配**，不要求完整匹配：
 每次追加的区块（顺序追加，最旧在上，最新在末尾）：
 ```markdown
 
-## {YYYY-MM-DD} · {来源 skill} · {评级或"纯分析"}
+## {YYYY-MM-DD} {HH:MM} · {来源 skill} · {评级或"纯分析"}
 
 **决策**：{评级} {仓位} @ {入场价}，stop {止损}，target {目标}（纯分析则填"N/A"）
 **数据快照**：
@@ -121,7 +149,8 @@ INDEX.md 里搜索时用**编号匹配**，不要求完整匹配：
 
 **大师信号**：{大师1}🟢{分} / {大师2}🟡{分}（仅 trading-debate 有，其余填"N/A"）
 **复盘锚点**：{YYYY-MM-DD}（仅 trading-debate 有，其余填"N/A"）
-**关联决策文件**：`~/.stock-skills/trading-debate/decisions/trading-debate-decision-{ticker}-{YYYYMMDD}.md`（无则省略此行）
+**关联报告**：`~/.stock-skills/reports/{TICKER}/{YYYY-MM-DD-HHMM}-{source}.md`（write.py 自动注入）
+**关联决策文件**：`~/.stock-skills/trading-debate/decisions/trading-debate-decision-{ticker}-{YYYYMMDD}.md`（仅 trading-debate，无则省略）
 
 ---
 ```
@@ -252,10 +281,14 @@ INDEX.md 每行格式：
 
 ### 仪表盘说明
 
-- **serve.py**：本地 HTTP 服务器，每次刷新页面自动重新读取 `~/.stock-skills/journals/` 目录，无需手动 generate
+- **serve.py**：本地 HTTP 服务器，每次刷新页面自动重新读取 `journals/` + `reports/` + `decisions/`
 - **generate.py**：独立脚本，输出静态 `dashboard.html`（离线使用时用）
 - 页面右上角有 **↻ 刷新** 按钮，新的分析存档后点一下即可更新
 - 点任意标的卡片打开右侧详情抽屉，展示该标的所有历史条目
+- 每条记录支持 **快照 / 完整报告** Tab 切换：
+  - `reports/` 有存档 → 显示「完整报告」
+  - 仅 `trading-debate/decisions/` 有文件 → 显示「决策报告」
+  - 历史条目无报告存档 → Tab 置灰，新分析通过 `write.py` 自动补齐
 - 卡片按最新分析日期降序排列
 
 ---
@@ -265,6 +298,9 @@ INDEX.md 每行格式：
 - ❌ 从 context "印象"提取字段而不读取报告对应章节——必须定位到报告里的具体数字
 - ❌ 字段提取失败时报错中止——必须降级填 "N/A" 继续写
 - ❌ followup 重新做全量 9 维度分析——只拉价格快照 + 近 7 天新闻
-- ❌ 写新区块时覆盖已有区块——必须 Edit 追加在末尾 `---` 之后
-- ❌ write 完成后不更新 INDEX.md——每次 write 都必须同步 INDEX
+- ❌ 对已有 journal 文件使用 Write 工具——必须用 `write.py` 原子追加
+- ❌ 同天多个 skill 合并为一条或覆盖前一条——每个 skill 独立区块
+- ❌ 只写快照不写完整报告——有完整报告时必须传 `--report-file`
+- ❌ 区块头省略时间戳——必须含 `HH:MM`，否则同天同 skill 无法区分
+- ❌ write 完成后不更新 INDEX.md——`write.py` 自动处理，禁止手动跳过
 - ❌ dashboard 已运行时重复启动服务器——先 curl 检测再决定是否启动

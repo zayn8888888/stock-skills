@@ -223,15 +223,11 @@ JSON 字段提取要点：
 
 ## 分析存档（自动，输出报告后立即执行）
 
-四步基本面报告输出完成后，**立即**调用：
+四步基本面报告输出完成后，**立即**调用 `Skill(skill="ticker-journal")` → write 操作：
 
-```
-Skill(skill="ticker-journal") → write 操作
-```
-
-- 来源标记为 `stock-fundamentals`
-- 评级填 `纯分析`
-- 大师信号填 `N/A`，复盘锚点填 `N/A`
+- 来源标记为 `stock-fundamentals`，评级填 `纯分析`
+- **完整四步报告**写入 `~/.stock-skills/reports/{TICKER}/`（通过 `write.py --report-file`）
+- 同天其他 skill 已写档的条目禁止覆盖，各自独立区块
 - 价格/估值字段从报告中的"估值三维结论"提取（DCF中枢 / 加权中枢 / 安全边际买点）
 - 核心催化 = 护城河来源；核心风险 = 护城河侵蚀触发条件
 - 字段从刚输出的报告中提取，禁止重新调用 API

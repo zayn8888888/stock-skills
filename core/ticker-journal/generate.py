@@ -6,28 +6,36 @@
 """
 import re
 import json
+import html as html_mod
 from pathlib import Path
 from datetime import date, datetime
 from typing import Optional
 
 JOURNALS_DIR = Path.home() / '.stock-skills' / 'journals'
+REPORTS_DIR = Path.home() / '.stock-skills' / 'reports'
+DECISIONS_DIR = Path.home() / '.stock-skills' / 'trading-debate' / 'decisions'
 OUTPUT = JOURNALS_DIR / 'dashboard.html'
+DOC_ROOTS = [REPORTS_DIR, DECISIONS_DIR]
 
 
 def parse_journal(filepath: Path) -> list[dict]:
     text = filepath.read_text(encoding='utf-8')
     ticker = filepath.stem
-    blocks = re.split(r'\n(?=## \d{4}-\d{2}-\d{2} ·)', text)
+    blocks = re.split(r'\n(?=## \d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})? ·)', text)
     entries = []
 
     for block in blocks:
-        m = re.match(r'## (\d{4}-\d{2}-\d{2}) · ([^\n·]+?) · ([^\n]+)', block)
+        m = re.match(
+            r'## (\d{4}-\d{2}-\d{2})(?: (\d{2}:\d{2}))? · ([^\n·]+?) · ([^\n]+)',
+            block,
+        )
         if not m:
             continue
 
         entry_date = m.group(1).strip()
-        source = m.group(2).strip()
-        raw_rating = m.group(3).strip()
+        entry_time = m.group(2).strip() if m.group(2) else ''
+        source = m.group(3).strip()
+        raw_rating = m.group(4).strip()
 
         rating = 'N/A'
         for r in ['Overweight', 'Underweight', 'Hold', '纯分析']:
@@ -66,9 +74,12 @@ def parse_journal(filepath: Path) -> list[dict]:
         review_m = re.search(r'\*\*复盘锚点\*\*：(\d{4}-\d{2}-\d{2})', block)
         review_date = review_m.group(1) if review_m else None
 
-        # 关联决策文件
+        # 关联决策 / 报告文件
         link_m = re.search(r'\*\*关联决策文件\*\*：`([^`]+)`', block)
         decision_file = link_m.group(1) if link_m else None
+
+        report_m = re.search(r'\*\*关联报告\*\*：`([^`]+)`', block)
+        report_file = report_m.group(1) if report_m else None
 
         # 全部催化（不截断）
         cat_start = block.find('核心催化')
@@ -98,6 +109,7 @@ def parse_journal(filepath: Path) -> list[dict]:
         entries.append({
             'ticker': ticker,
             'date': entry_date,
+            'time': entry_time,
             'source': source,
             'rating': rating,
             'decision': decision_text,
@@ -111,6 +123,7 @@ def parse_journal(filepath: Path) -> list[dict]:
             'review_date': review_date,
             'days_to_review': days_to_review,
             'decision_file': decision_file,
+            'report_file': report_file,
             'catalysts': catalysts_all[:2],
             'catalysts_all': catalysts_all,
             'risks': risks_all[:2],
@@ -118,7 +131,182 @@ def parse_journal(filepath: Path) -> list[dict]:
         })
 
     entries.sort(key=lambda x: x['date'], reverse=True)
+    for entry in entries:
+        attach_doc(entry)
     return entries
+
+
+def expand_path(p: str) -> Path:
+    return Path(p.replace('~', str(Path.home())))
+
+
+def is_allowed_doc(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+        return any(
+            str(resolved).startswith(str(root.resolve()))
+            for root in DOC_ROOTS
+        )
+    except OSError:
+        return False
+
+
+def find_report_path(ticker: str, date: str, time: str, source: str, explicit: Optional[str]) -> Optional[Path]:
+    if explicit:
+        p = expand_path(explicit)
+        if p.exists():
+            return p
+    ticker_dir = REPORTS_DIR / ticker
+    if not ticker_dir.exists():
+        return None
+    if time:
+        p = ticker_dir / f'{date}-{time.replace(":", "")}-{source}.md'
+        if p.exists():
+            return p
+    matches = sorted(ticker_dir.glob(f'{date}*-{source}.md'), reverse=True)
+    return matches[0] if matches else None
+
+
+def attach_doc(entry: dict) -> None:
+    """解析并挂载完整报告 / 决策文件路径。"""
+    report_path = find_report_path(
+        entry['ticker'], entry['date'], entry.get('time', ''),
+        entry['source'], entry.get('report_file'),
+    )
+    decision_path = None
+    if entry.get('decision_file'):
+        p = expand_path(entry['decision_file'])
+        if p.exists():
+            decision_path = p
+
+    if report_path:
+        entry['doc_path'] = str(report_path)
+        entry['doc_type'] = 'report'
+        entry['doc_label'] = '完整报告'
+    elif decision_path:
+        entry['doc_path'] = str(decision_path)
+        entry['doc_type'] = 'decision'
+        entry['doc_label'] = '决策报告'
+    else:
+        entry['doc_path'] = None
+        entry['doc_type'] = None
+        entry['doc_label'] = None
+
+
+def load_doc_html(path: str) -> Optional[str]:
+    p = Path(path)
+    if not p.exists() or not is_allowed_doc(p):
+        return None
+    return md_to_html(p.read_text(encoding='utf-8'))
+
+
+def md_to_html(text: str) -> str:
+    """轻量 markdown → HTML，覆盖分析报告常用格式。"""
+    lines = text.split('\n')
+    out: list[str] = []
+    in_ul = False
+    in_ol = False
+    in_table = False
+    in_code = False
+    code_buf: list[str] = []
+
+    def close_lists():
+        nonlocal in_ul, in_ol
+        if in_ul:
+            out.append('</ul>')
+            in_ul = False
+        if in_ol:
+            out.append('</ol>')
+            in_ol = False
+
+    def close_table():
+        nonlocal in_table
+        if in_table:
+            out.append('</tbody></table>')
+            in_table = False
+
+    def inline(s: str) -> str:
+        s = html_mod.escape(s)
+        s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
+        s = re.sub(r'`([^`]+)`', r'<code>\1</code>', s)
+        return s
+
+    for line in lines:
+        if in_code:
+            if line.strip() == '```':
+                out.append(f'<pre><code>{html_mod.escape(chr(10).join(code_buf))}</code></pre>')
+                code_buf = []
+                in_code = False
+            else:
+                code_buf.append(line)
+            continue
+
+        if line.strip().startswith('```'):
+            close_lists()
+            close_table()
+            in_code = True
+            continue
+
+        # 表格
+        if '|' in line and line.strip().startswith('|'):
+            cells = [c.strip() for c in line.strip().strip('|').split('|')]
+            if all(re.match(r'^[\s\-:|]+$', c) for c in cells):
+                continue
+            if not in_table:
+                close_lists()
+                out.append('<table class="report-table"><tbody>')
+                in_table = True
+                tag = 'th'
+            else:
+                tag = 'td'
+            out.append('<tr>' + ''.join(f'<{tag}>{inline(c)}</{tag}>' for c in cells) + '</tr>')
+            continue
+
+        close_table()
+
+        stripped = line.strip()
+        if not stripped:
+            close_lists()
+            continue
+
+        if stripped == '---':
+            close_lists()
+            out.append('<hr>')
+            continue
+
+        hm = re.match(r'^(#{1,4})\s+(.+)$', stripped)
+        if hm:
+            close_lists()
+            level = len(hm.group(1))
+            out.append(f'<h{level}>{inline(hm.group(2))}</h{level}>')
+            continue
+
+        if re.match(r'^[-*]\s+', stripped):
+            if not in_ul:
+                close_lists()
+                out.append('<ul>')
+                in_ul = True
+            item_text = re.sub(r'^[-*]\s+', '', stripped)
+            out.append(f'<li>{inline(item_text)}</li>')
+            continue
+
+        if re.match(r'^\d+\.\s+', stripped):
+            if not in_ol:
+                close_lists()
+                out.append('<ol>')
+                in_ol = True
+            item_text = re.sub(r'^\d+\.\s+', '', stripped)
+            out.append(f'<li>{inline(item_text)}</li>')
+            continue
+
+        close_lists()
+        out.append(f'<p>{inline(stripped)}</p>')
+
+    close_lists()
+    close_table()
+    if in_code and code_buf:
+        out.append(f'<pre><code>{html_mod.escape(chr(10).join(code_buf))}</code></pre>')
+    return '\n'.join(out)
 
 
 def load_all():
@@ -314,6 +502,17 @@ def generate_html(data: dict) -> str:
     # 把全部 journal 数据序列化给 JS 用
     journal_json = json.dumps(data, ensure_ascii=False)
 
+    # 预加载完整报告 HTML（离线 dashboard.html 也能看；serve.py 刷新时同步更新）
+    docs_cache: dict[str, str] = {}
+    for entries in data.values():
+        for entry in entries:
+            doc_path = entry.get('doc_path')
+            if doc_path and doc_path not in docs_cache:
+                html = load_doc_html(doc_path)
+                if html:
+                    docs_cache[doc_path] = html
+    docs_json = json.dumps(docs_cache, ensure_ascii=False)
+
     return f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -440,6 +639,44 @@ def generate_html(data: dict) -> str:
 
   .file-link {{ font-size: 11px; color: var(--blue); font-family: monospace; word-break: break-all; opacity: .8; }}
 
+  /* ── 条目 Tab（快照 / 完整报告） ── */
+  .entry-tabs {{ display: flex; gap: 4px; padding: 0 20px 10px; border-bottom: 1px solid var(--border); }}
+  .entry-tab {{
+    padding: 4px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted); cursor: pointer; font-size: 11px;
+    transition: all .15s;
+  }}
+  .entry-tab:hover {{ border-color: var(--blue); color: var(--blue); }}
+  .entry-tab.active {{ border-color: var(--blue); color: var(--blue); background: rgba(96,165,250,.12); }}
+  .entry-tab.disabled {{ opacity: .35; cursor: not-allowed; pointer-events: none; }}
+  .tab-panel {{ display: none; padding: 0 20px 16px; }}
+  .tab-panel.active {{ display: block; }}
+
+  /* ── 完整报告渲染区 ── */
+  .report-body {{
+    font-size: 12px; line-height: 1.7; color: var(--text);
+    max-height: 60vh; overflow-y: auto; padding: 4px 0;
+  }}
+  .report-body h1, .report-body h2, .report-body h3, .report-body h4 {{
+    margin: 14px 0 6px; font-weight: 600; color: var(--text);
+  }}
+  .report-body h1 {{ font-size: 16px; }}
+  .report-body h2 {{ font-size: 14px; color: var(--blue); }}
+  .report-body h3 {{ font-size: 13px; }}
+  .report-body p {{ margin: 6px 0; color: var(--muted); }}
+  .report-body ul, .report-body ol {{ padding-left: 18px; margin: 6px 0; }}
+  .report-body li {{ margin: 3px 0; color: var(--muted); line-height: 1.6; }}
+  .report-body strong {{ color: var(--text); }}
+  .report-body code {{ background: var(--surface2); padding: 1px 4px; border-radius: 3px; font-size: 11px; }}
+  .report-body pre {{ background: var(--surface2); padding: 10px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }}
+  .report-body pre code {{ background: none; padding: 0; }}
+  .report-body hr {{ border: none; border-top: 1px solid var(--border); margin: 12px 0; }}
+  .report-table {{ width: 100%; border-collapse: collapse; font-size: 11px; margin: 8px 0; }}
+  .report-table th {{ color: var(--muted); font-weight: 600; text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border); }}
+  .report-table td {{ padding: 4px 8px 4px 0; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: top; }}
+  .report-empty {{ font-size: 12px; color: var(--muted); padding: 16px 0; text-align: center; }}
+  .report-loading {{ font-size: 12px; color: var(--muted); padding: 20px 0; text-align: center; }}
+
   /* ── macro panel ── */
   .macro-panel {{ border-bottom: 1px solid var(--border); padding: 14px 24px; }}
   .macro-panel.macro-empty {{ padding: 10px 24px; }}
@@ -516,6 +753,7 @@ def generate_html(data: dict) -> str:
 
 <script>
 const JOURNAL = {journal_json};
+const DOCS = {docs_json};
 
 const RC = {{
   'Overweight':'#22c55e','Underweight':'#f97316','Hold':'#eab308','纯分析':'#60a5fa'
@@ -535,26 +773,11 @@ function buildEntryBlock(entry, idx) {{
 
   const catItems = (entry.catalysts_all || []).map(c => `<li>${{esc(c)}}</li>`).join('') || '<li>—</li>';
   const riskItems = (entry.risks_all || []).map(r => `<li>${{esc(r)}}</li>`).join('') || '<li>—</li>';
-
-  const fileLink = entry.decision_file
-    ? `<div class="detail-section"><div class="detail-title">关联文件</div><div class="file-link">${{esc(entry.decision_file)}}</div></div>`
-    : '';
-
   const reviewDate = entry.review_date || 'N/A';
+  const hasDoc = !!entry.doc_path;
+  const docLabel = entry.doc_label || '完整报告';
 
-  return `
-<div class="entry-block${{idx===0?' open':''}}" id="entry-${{idx}}">
-  <div class="entry-head" onclick="toggleEntry(${{idx}})">
-    <div class="entry-head-left">
-      <span class="entry-head-date">${{esc(entry.date)}}</span>
-      <span class="entry-head-source">${{esc(entry.source)}}</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="entry-rating" style="color:${{rc}}">${{esc(entry.rating)}}</span>
-      <span class="entry-chevron">▶</span>
-    </div>
-  </div>
-  <div class="entry-detail">
+  const snapshotPanel = `
     <div class="detail-section">
       <div class="detail-title">决策</div>
       <div class="decision-text">${{esc(entry.decision)}}</div>
@@ -574,10 +797,74 @@ function buildEntryBlock(entry, idx) {{
     <div class="detail-section">
       <div class="detail-title">复盘锚点</div>
       <div class="masters-detail" style="color:var(--blue)">${{esc(reviewDate)}}</div>
+    </div>`;
+
+  return `
+<div class="entry-block${{idx===0?' open':''}}" id="entry-${{idx}}" data-doc-path="${{esc(entry.doc_path || '')}}">
+  <div class="entry-head" onclick="toggleEntry(${{idx}})">
+    <div class="entry-head-left">
+      <span class="entry-head-date">${{esc(entry.date)}}${{entry.time ? ' ' + esc(entry.time) : ''}}</span>
+      <span class="entry-head-source">${{esc(entry.source)}}</span>
     </div>
-    ${{fileLink}}
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="entry-rating" style="color:${{rc}}">${{esc(entry.rating)}}</span>
+      <span class="entry-chevron">▶</span>
+    </div>
+  </div>
+  <div class="entry-detail">
+    <div class="entry-tabs">
+      <button class="entry-tab active" onclick="switchTab(${{idx}}, 'snapshot', event)">快照</button>
+      <button class="entry-tab${{hasDoc ? '' : ' disabled'}}" onclick="switchTab(${{idx}}, 'report', event)">${{esc(docLabel)}}</button>
+    </div>
+    <div class="tab-panel active" id="panel-${{idx}}-snapshot">${{snapshotPanel}}</div>
+    <div class="tab-panel" id="panel-${{idx}}-report">
+      <div class="report-loading" id="report-load-${{idx}}" style="display:none">加载中…</div>
+      <div class="report-body" id="report-body-${{idx}}">${{hasDoc ? '' : '<div class="report-empty">暂无完整报告存档<br><span style="font-size:11px;opacity:.7">新分析会通过 write.py 自动保存至 reports/</span></div>'}}</div>
+    </div>
   </div>
 </div>`;
+}}
+
+const docCache = {{}};
+
+async function switchTab(idx, tab, ev) {{
+  if (ev) ev.stopPropagation();
+  const block = document.getElementById('entry-' + idx);
+  if (!block) return;
+  block.querySelectorAll('.entry-tab').forEach(t => t.classList.remove('active'));
+  block.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const tabIdx = tab === 'snapshot' ? 0 : 1;
+  block.querySelectorAll('.entry-tab')[tabIdx]?.classList.add('active');
+  document.getElementById('panel-' + idx + '-' + tab)?.classList.add('active');
+
+  if (tab === 'report') {{
+    const docPath = block.dataset.docPath;
+    const bodyEl = document.getElementById('report-body-' + idx);
+    const loadEl = document.getElementById('report-load-' + idx);
+    if (!docPath || !bodyEl) return;
+    if (DOCS[docPath]) {{
+      bodyEl.innerHTML = DOCS[docPath];
+      docCache[docPath] = DOCS[docPath];
+      return;
+    }}
+    if (docCache[docPath]) {{
+      bodyEl.innerHTML = docCache[docPath];
+      return;
+    }}
+    loadEl.style.display = 'block';
+    bodyEl.innerHTML = '';
+    try {{
+      const resp = await fetch('/api/doc?path=' + encodeURIComponent(docPath));
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      docCache[docPath] = data.html;
+      bodyEl.innerHTML = data.html;
+    }} catch (e) {{
+      bodyEl.innerHTML = '<div class="report-empty">加载失败：' + esc(String(e)) + '<br><span style="font-size:11px;opacity:.7">' + esc(docPath) + '</span></div>';
+    }} finally {{
+      loadEl.style.display = 'none';
+    }}
+  }}
 }}
 
 function openModal(ticker) {{
