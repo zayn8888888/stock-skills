@@ -2,6 +2,7 @@
 """
 生成 ticker journal 仪表盘 HTML。
 用法：python3 ${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/generate.py
+（路径回退同 write.py：`../core/ticker-journal/generate.py`）
 输出：~/.stock-skills/journals/dashboard.html（由 JOURNALS_DIR 决定）
 """
 import re

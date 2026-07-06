@@ -77,6 +77,18 @@ INDEX.md 里搜索时用**编号匹配**，不要求完整匹配：
 
 首次写入时 `write.py` 自动创建目录，无需手动 mkdir。
 
+### 脚本路径（防御性解析）
+
+与 `hyperliquid-perps` 同款：`CLAUDE_SKILLS_DIR` 可能指向 futu 插件子目录，需回退到 `../core/ticker-journal/`。
+
+```bash
+WRITE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/write.py"
+[ -f "$WRITE_PY" ] || WRITE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/ticker-journal/write.py"
+
+SERVE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/serve.py"
+[ -f "$SERVE_PY" ] || SERVE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/ticker-journal/serve.py"
+```
+
 ---
 
 ## 操作一：write（分析完后自动调用）
@@ -94,10 +106,13 @@ INDEX.md 里搜索时用**编号匹配**，不要求完整匹配：
 1. 从当前 context 提取快照字段（见下方字段映射表）
 2. 将**刚输出的完整报告**写入临时文件 `/tmp/ticker-report-{TICKER}-{source}.md`（九维度 / 四步 / 三维估值 / PM 决策报告全文，一字不漏）
 3. 按下方格式组装快照区块，写入临时文件 `/tmp/ticker-block-{TICKER}-{source}.md`
-4. 调用原子写入脚本（`write.py` 负责追加 journal + 保存 reports + 更新 INDEX）：
+4. 调用原子写入（`write.py` 负责追加 journal + 保存 reports + 更新 INDEX）：
 
 ```bash
-python3 ${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/write.py \
+WRITE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/write.py"
+[ -f "$WRITE_PY" ] || WRITE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/ticker-journal/write.py"
+
+python3 "$WRITE_PY" \
   --ticker {CANONICAL_TICKER} \
   --source {来源skill} \
   --block-file /tmp/ticker-block-{TICKER}-{source}.md \
@@ -276,7 +291,11 @@ INDEX.md 每行格式：
    `Bash: curl -s --max-time 1 http://localhost:7788/ > /dev/null && echo "RUNNING" || echo "STOPPED"`
 2. **已运行** → 直接告知用户访问 `http://localhost:7788`，无需重复启动
 3. **未运行** → 启动服务器（后台运行）：
-   `Bash: python3 ${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/serve.py &`
+   ```bash
+   SERVE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/serve.py"
+   [ -f "$SERVE_PY" ] || SERVE_PY="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/../core/ticker-journal/serve.py"
+   python3 "$SERVE_PY" &
+   ```
    然后告知用户访问 `http://localhost:7788`
 
 ### 仪表盘说明
@@ -304,3 +323,4 @@ INDEX.md 每行格式：
 - ❌ 区块头省略时间戳——必须含 `HH:MM`，否则同天同 skill 无法区分
 - ❌ write 完成后不更新 INDEX.md——`write.py` 自动处理，禁止手动跳过
 - ❌ dashboard 已运行时重复启动服务器——先 curl 检测再决定是否启动
+- ❌ 定位 write.py / serve.py 时省略 `../core/` 回退——`CLAUDE_SKILLS_DIR` 指向 futu 子目录时必须走回退路径

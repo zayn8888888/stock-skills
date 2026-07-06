@@ -2,6 +2,7 @@
 """
 Ticker Journal 本地服务器。
 用法：python3 ${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/ticker-journal/serve.py
+（路径回退同 write.py：`../core/ticker-journal/serve.py`）
 访问：http://localhost:7788
 每次刷新页面都会重新读取 journals 目录，无需手动 generate。
 """
