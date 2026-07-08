@@ -4,6 +4,8 @@
 
 **Goal:** 创建 `stock-skills:ticker-journal` skill，让每次分析后自动存数据快照，新会话可按 ticker 加载历史 context 做轻量追问。
 
+**Status:** 已实现。当前实现位于 `core/ticker-journal/`，并已从原计划的 journal 快照扩展为 `journals/` 快照、`reports/` 完整报告存档、`write.py` 原子写入和 `serve.py` 本地 dashboard。
+
 **Architecture:** 新 skill 文件 `core/ticker-journal/SKILL.md` 定义 write/load/followup 三个操作；runtime 文件存于 `~/.stock-skills/journals/`；在 trading-debate（阶段 8c）、stock-analyzer 和 crypto-analyzer 末尾各加一段自动调用指令。
 
 **Tech Stack:** Markdown skill files (无代码)；runtime 目录由 skill 首次运行时自建；数据源来自各 skill 已在 context 中的报告内容。

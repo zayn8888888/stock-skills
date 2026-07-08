@@ -1,7 +1,7 @@
 {
   "name": "stock-skills",
   "version": "1.1.3",
-  "description": "股票/加密/富途生态分析 skill 套件 — 18 个 skill 覆盖：板块扫描、个股九维度分析、基本面研究、定量估值、确定性支撑压力位、加密赛道扫描、链上永续镜像、多 agent 辩论决策、富途 OpenAPI 异动检测",
+  "description": "股票/加密/富途生态分析 skill 套件 — 24 个 skill 覆盖：板块扫描、个股九维度分析、基本面研究、定量估值、确定性支撑压力位、加密赛道扫描、链上永续镜像、多 agent 辩论决策、ticker-journal 留痕、富途 OpenAPI 与异动检测",
   "homepage": "https://github.com/zayn8888888/stock-skills",
   "repository": "https://github.com/zayn8888888/stock-skills",
   "license": "MIT",
