@@ -1,0 +1,494 @@
+#!/usr/bin/env python3
+"""
+Iron Condor 适配度扫描器 v2
+6 维度打分: 流动性(门槛)/IV溢价(负值否决)/IV Rank(真算分位)/区间形态(HV趋势)/DTE/GEX(dealer净gamma)
++ 财报事件期扣分 + --detail 铁鹰腿骨架 + --output CSV
+
+用法:
+  python3 scan_ic.py                              # 默认标的池
+  python3 scan_ic.py --top 10 --detail 3          # 前10名,对前3输出铁鹰腿
+  python3 scan_ic.py --codes US.SPY,US.IWM --output out.csv
+依赖: 富途 OpenD(11111) + stock-skills common.py
+"""
+import sys, os, math, argparse, time, csv, glob
+
+
+def _find_futuapi_scripts():
+    """定位 futuapi 的 scripts 目录(common.py 所在)。
+    优先级: CLAUDE_SKILLS_DIR > ~/.claude/skills > plugin cache(多版本按版本号取最新)"""
+    cands = []
+    env_dir = os.environ.get('CLAUDE_SKILLS_DIR', '')
+    if env_dir:
+        cands.append(os.path.join(env_dir, 'futuapi', 'scripts'))
+    cands.append(os.path.expanduser('~/.claude/skills/futuapi/scripts'))
+    hits = glob.glob(os.path.expanduser('~/.claude/plugins/cache/*/*/*/futu/futuapi/scripts'))
+
+    def _ver(p):  # 路径倒数第4段是版本号; 字符串排序对 1.1.10 vs 1.1.9 会错, 用元组
+        try:
+            return tuple(int(x) for x in p.split(os.sep)[-4].split('.'))
+        except ValueError:
+            return (0,)
+    cands.extend(sorted(hits, key=_ver, reverse=True))
+    for p in cands:
+        if os.path.isfile(os.path.join(p, 'common.py')):
+            return p
+    return None
+
+
+_FUTUAPI = _find_futuapi_scripts()
+if _FUTUAPI is None:
+    sys.exit('未找到 futuapi 的 common.py (找过 CLAUDE_SKILLS_DIR / ~/.claude/skills / plugin cache)，'
+             '请先安装 stock-skills 插件或 futuapi skill')
+sys.path.insert(0, _FUTUAPI)
+from common import create_quote_context, safe_close, pad_disp
+import pandas as pd
+
+# 精简默认池: 宽基ETF + 流动性尚可行业ETF + 大盘股 (已淘汰 XLE/XLV/XLI/XLY/XLP/XLB/XLU/IYT)
+DEFAULT_CODES = ('US.SPY,US.QQQ,US.IWM,US.DIA,US.XLF,US.XLK,US.SMH,US.EEM,'
+                'US.AAPL,US.MSFT,US.NVDA,US.AMZN,US.GOOG,US.META,US.TSLA,US.AVGO,'
+                'US.AMD,US.NFLX,US.JPM,US.BAC,US.CRM,US.INTC')
+
+# 发现模式大池(~180): 纳指100/标普100 主要成分 + 主流ETF, 均为有期权且流动性尚可的标的
+# 粗筛按成交额排序, 新晋热门股需手动补充进池
+LARGE_POOL = (
+    # 宽基/商品/债券/行业 ETF
+    'US.SPY,US.QQQ,US.IWM,US.DIA,US.TLT,US.GLD,US.SLV,US.USO,US.HYG,US.LQD,'
+    'US.EEM,US.EFA,US.ARKK,US.SOXX,US.SMH,US.XLF,US.XLK,US.XLE,US.XLV,US.XLY,'
+    'US.XLP,US.XBI,US.IBB,US.GDX,US.KRE,US.OIH,US.XOP,US.KWEB,US.FXI,US.EWZ,'
+    'US.TQQQ,US.SQQQ,'
+    # 科技
+    'US.AAPL,US.MSFT,US.NVDA,US.AMZN,US.GOOG,US.META,US.TSLA,US.AVGO,US.NFLX,US.AMD,'
+    'US.INTC,US.CRM,US.ADBE,US.ORCL,US.CSCO,US.QCOM,US.TXN,US.AMAT,US.MU,US.LRCX,'
+    'US.ASML,US.PANW,US.CRWD,US.DDOG,US.SNOW,US.NET,US.SHOP,US.UBER,US.ABNB,US.DASH,'
+    'US.COIN,US.HOOD,US.PLTR,US.SMCI,US.ARM,US.MSTR,US.RBLX,US.AI,US.IONQ,US.RIVN,'
+    'US.LCID,US.NOW,US.INTU,US.WDAY,US.OKTA,US.ZS,US.MDB,US.TWLO,US.DOCU,US.ZM,'
+    # 金融
+    'US.JPM,US.BAC,US.WFC,US.C,US.GS,US.MS,US.BLK,US.SCHW,US.AXP,US.V,'
+    'US.MA,US.PYPL,US.XYZ,US.COF,US.SOFI,'
+    # 能源
+    'US.XOM,US.CVX,US.COP,US.SLB,US.OXY,US.EOG,US.MPC,US.VLO,US.HAL,US.DVN,'
+    # 医药
+    'US.JNJ,US.UNH,US.LLY,US.PFE,US.MRK,US.ABBV,US.TMO,US.ABT,US.BMY,US.AMGN,'
+    'US.GILD,US.VRTX,US.REGN,US.ISRG,US.MDT,US.MRNA,US.CVS,US.CI,US.ELV,'
+    # 消费
+    'US.WMT,US.COST,US.HD,US.LOW,US.TGT,US.NKE,US.SBUX,US.MCD,US.CMG,US.PG,'
+    'US.KO,US.PEP,US.PM,US.MO,US.DG,'
+    # 通信/媒体 (EA 2026 已私有化退市, 勿加回)
+    'US.DIS,US.CMCSA,US.T,US.VZ,US.TMUS,US.TTWO,US.ROKU,US.WBD,US.FOXA,'
+    # 工业
+    'US.BA,US.GE,US.HON,US.CAT,US.DE,US.LMT,US.RTX,US.UPS,US.FDX,US.UNP,'
+    # 中概
+    'US.BABA,US.JD,US.PDD,US.BIDU,US.BILI,US.NIO,US.XPEV,US.LI,US.FUTU,US.TCOM,'
+    'US.NTES,US.BEKE,'
+    # 其他
+    'US.F,US.GM,US.MELI,US.SE,US.SPOT,US.RACE,US.AMT,US.PLD,US.EQIX')
+
+IMPVOL_STATUS = {0: '震荡', 1: '高估', 2: '低估'}
+
+
+def _f(row, col):
+    if col not in row.index:
+        return None
+    v = row[col]
+    if v is None:
+        return None
+    try:
+        if isinstance(v, float) and math.isnan(v):
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _call(ctx, method, *args, retries=4, **kw):
+    fn = getattr(ctx, method)
+    for i in range(retries):
+        ret, data = fn(*args, **kw)
+        if ret == 0 or str(ret) == '0':
+            return data
+        time.sleep(1.5 * (i + 1))
+    return None
+
+
+def _snapshot_batch(ctx, codes, batch=400):
+    """get_market_snapshot 单次最多 400 个代码, 全链可能超限, 分批拉取合并"""
+    dfs = []
+    for i in range(0, len(codes), batch):
+        d = _call(ctx, 'get_market_snapshot', codes[i:i + batch])
+        if d is not None and len(d) > 0:
+            dfs.append(d)
+    if not dfs:
+        return None
+    return pd.concat(dfs, ignore_index=True).drop_duplicates(subset='code')
+
+
+def _snapshot_tolerant(ctx, codes):
+    """大池快照: 单个无效代码(如退市)会导致整批 ret=-1, 失败时二分定位剔除。
+    直接调 API 不走 _call(无效代码重试无意义); 副作用是网络抖动时个别标的会被误判跳过, 大池粗筛场景可接受"""
+    if not codes:
+        return []
+    ret, data = ctx.get_market_snapshot(codes)
+    if ret == 0 or str(ret) == '0':
+        return [data] if data is not None and len(data) > 0 else []
+    if len(codes) == 1:
+        print(f'  (跳过无效标的 {codes[0]})')
+        return []
+    mid = len(codes) // 2
+    return _snapshot_tolerant(ctx, codes[:mid]) + _snapshot_tolerant(ctx, codes[mid:])
+
+
+def _discover(ctx, top_n):
+    """发现模式: 内置大池批量快照, 按成交额降序取 top_n 进入精筛。
+    成交额是期权链厚度的代理指标(正股没量的标的期权链必然稀疏); 低价股链稀疏直接剔除"""
+    pool = [c.strip() for c in LARGE_POOL.split(',') if c.strip()]
+    print(f'发现模式: 大池 {len(pool)} 标的批量快照粗筛 → 成交额 top {top_n} 入围')
+    dfs = _snapshot_tolerant(ctx, pool)
+    snap = pd.concat(dfs, ignore_index=True).drop_duplicates(subset='code') if dfs else None
+    if snap is None or len(snap) == 0:
+        return []
+    rows = []
+    for _, row in snap.iterrows():
+        code = row.get('code')
+        px = _f(row, 'last_price')
+        to = _f(row, 'turnover')
+        if code and px and px >= 5 and to:
+            rows.append((code, to))
+    rows.sort(key=lambda x: -x[1])
+    picked = rows[:top_n]
+    print(f'  入围 {len(picked)}: ' + ', '.join(c.replace('US.', '') for c, _ in picked) + '\n')
+    return [c for c, _ in picked]
+
+
+# ===================== 数据采集 =====================
+def collect(ctx, code, dte_min, dte_max):
+    r = {'code': code, 'reason': None, 'total': 0, 'event': False}
+    try:
+        # 1. 现价
+        snap = _call(ctx, 'get_market_snapshot', [code])
+        if snap is None or len(snap) == 0:
+            r['reason'] = '无快照'; return r
+        S = _f(snap.iloc[0], 'last_price')
+        if S is None or S <= 0:
+            r['reason'] = '现价异常'; return r
+        r['S'] = S
+
+        # 2. 到期日(找 DTE 窗口)
+        exp = _call(ctx, 'get_option_expiration_date', code)
+        if exp is None or len(exp) == 0:
+            r['reason'] = '无到期日'; return r
+        exp = exp.copy()
+        exp['d'] = exp['option_expiry_date_distance'].astype(int)
+        exp = exp[exp['d'] >= 0].sort_values('d')
+        if len(exp) == 0:
+            r['reason'] = '无未来到期日'; return r
+        mid = (dte_min + dte_max) / 2
+        in_win = exp[(exp['d'] >= dte_min) & (exp['d'] <= dte_max)]
+        pool = in_win if len(in_win) > 0 else exp
+        best = pool.iloc[(pool['d'] - mid).abs().argsort().iloc[0]]
+        exp_date = str(best['strike_time'])[:10]
+        r['exp_date'] = exp_date; r['dte'] = int(best['d'])
+
+        # 3. 期权链 + 全合约快照(一次拉 CALL+PUT, 供流动性+GEX+detail 复用)
+        chain = _call(ctx, 'get_option_chain', code, start=exp_date, end=exp_date)
+        if chain is None or len(chain) == 0:
+            r['reason'] = '无期权链'; return r
+        sn = _snapshot_batch(ctx, chain['code'].tolist())
+        if sn is None or len(sn) == 0:
+            r['reason'] = '无合约快照'; return r
+        m = chain[['code', 'option_type', 'strike_price']].copy()
+        m['sp'] = m['strike_price'].astype(float)
+        cols = ['code', 'option_open_interest', 'option_delta', 'option_gamma',
+                'option_implied_volatility', 'bid_price', 'ask_price']
+        sn2 = sn[[c for c in cols if c in sn.columns]].copy()
+        for c in cols[1:]:
+            if c in sn2:
+                sn2[c] = pd.to_numeric(sn2[c], errors='coerce')
+        m = m.merge(sn2, on='code', how='left')
+        m['oi'] = m['option_open_interest'].fillna(0)
+        m['gamma'] = m['option_gamma'].fillna(0)
+        calls = m[m['option_type'] == 'CALL'].copy()
+        puts = m[m['option_type'] == 'PUT'].copy()
+        if len(calls) == 0:
+            r['reason'] = '无CALL'; return r
+        r['calls'] = calls; r['puts'] = puts
+
+        # 4. ATM call → 流动性
+        atm = calls.iloc[(calls['sp'] - S).abs().argsort().iloc[0]]
+        r['atm_code'] = atm['code']; r['atm_strike'] = float(atm['sp'])
+        b = _f(atm, 'bid_price'); a = _f(atm, 'ask_price')
+        if not b or not a or b <= 0 or a <= 0:
+            r['reason'] = 'ATM call 无bid/ask(流动性枯竭)'; r['total'] = 0; return r
+        r['spread'] = (a - b) / ((a + b) / 2) * 100
+
+        # 5. IV / realized / premium / status + 历史序列
+        vol = _call(ctx, 'get_option_volatility', r['atm_code'], query_time_period=5, hv_time_period=30)
+        r['vol_df'] = vol
+        if vol is not None and len(vol) > 0:
+            # 显式按时间降序: _iv_rank/_hv_trend 均假设 iloc[0]=最新值, 不赌 API 返回顺序
+            if 'timestamp' in vol.columns:
+                vol = vol.sort_values('timestamp', ascending=False).reset_index(drop=True)
+            row0 = vol.iloc[0]
+            r['iv'] = _f(row0, 'average_impvol') or _f(row0, 'implied_volatility')
+            r['hv'] = _f(row0, 'history_volatility')
+            r['premium'] = _f(row0, 'volatility_premium')
+            st = row0.get('impvol_status')
+            if st is not None and not (isinstance(st, float) and math.isnan(st)):
+                r['iv_status'] = IMPVOL_STATUS.get(int(st), '?')
+            r['iv_rank'] = _iv_rank(vol)
+            r['hv_trend'] = _hv_trend(vol)
+
+        # 6. GEX (dealer short call + long put 假设, 仅本到期日近似)
+        r['gex_net'], r['gex_gross'] = _gex(calls, puts, S)
+    except Exception as e:
+        r['reason'] = f'{type(e).__name__}: {e}'
+    return r
+
+
+def _iv_rank(vol):
+    if vol is None or len(vol) == 0 or 'implied_volatility' not in vol.columns:
+        return None
+    ivs = pd.to_numeric(vol['implied_volatility'], errors='coerce').dropna()
+    if len(ivs) == 0:
+        return None
+    return (ivs < ivs.iloc[0]).sum() / len(ivs) * 100  # 当前IV在序列中的分位
+
+
+def _hv_trend(vol):
+    if vol is None or len(vol) == 0 or 'history_volatility' not in vol.columns:
+        return None
+    hvs = pd.to_numeric(vol['history_volatility'], errors='coerce').dropna()
+    if len(hvs) < 5:
+        return None
+    hv5 = hvs.iloc[:5].mean()
+    hv20 = hvs.iloc[:min(20, len(hvs))].mean()
+    if not hv20 or hv20 == 0:
+        return None
+    return hv5 / hv20  # <1 收敛(区间稳), >1 扩张(突破风险)
+
+
+def _gex(calls, puts, S):
+    # dealer: short call(-) + long put(+) → 净正=long gamma=抑制(铁鹰友好)
+    call_g = (calls['oi'] * calls['gamma']).sum()
+    put_g = (puts['oi'] * puts['gamma']).sum()
+    net = (put_g - call_g) * 100 * S
+    gross = (call_g + put_g) * 100 * S
+    return net, gross
+
+
+# ===================== 打分 =====================
+def score(r):
+    if r.get('reason'):
+        r['total'] = 0; return
+    sp = r.get('spread')
+    if sp is None or sp > 15:
+        r['reason'] = f'价差{sp:.0f}%>15%淘汰' if sp else '无价差'
+        r['total'] = 0; return
+    # 流动性门槛(15): 过线即给, 不线性加
+    s_liq = 15 if sp < 8 else 8
+    # IV溢价(30) + 负值否决
+    prem = r.get('premium')
+    s_prem = 0
+    if prem is not None:
+        if prem > 8: s_prem = 30
+        elif prem > 4: s_prem = 24
+        elif prem > 0: s_prem = 15
+        else: s_prem = 0
+    # IV 位(15) — impvol_status 为主(富途全量口径), IV 绝对值兜底
+    # 注: IVRank 基于富途短期 IV 序列(~8 采样点, 非 252 日标准 Rank), 仅作参考列显示, 不主导打分
+    s_rank = 7  # 波动率数据缺失时给中性分(与 s_trend/s_gex 的缺省模式一致), 防 UnboundLocalError
+    st = r.get('iv_status')
+    if st == '高估': s_rank = 15
+    elif st == '震荡': s_rank = 10
+    elif st == '低估': s_rank = 5
+    else:
+        iv = r.get('iv')
+        if iv:
+            if iv > 40: s_rank = 13
+            elif iv > 20: s_rank = 10
+            else: s_rank = 6
+    # 区间形态(10) — HV 趋势
+    ht = r.get('hv_trend')
+    s_trend = 7
+    if ht is not None:
+        if ht < 0.9: s_trend = 10
+        elif ht > 1.1: s_trend = 3
+    # DTE(10)
+    dte = r.get('dte')
+    if dte and 30 <= dte <= 45: s_dte = 10
+    elif dte and abs(dte - 37.5) <= 10: s_dte = 6
+    else: s_dte = 2
+    # GEX(20) — dealer 净 gamma 环境
+    net, gross = r.get('gex_net'), r.get('gex_gross')
+    s_gex = 12
+    if net is not None and gross and gross > 0:
+        ratio = net / gross
+        if ratio > 0.05: s_gex = 20      # 显著正 gamma=抑制
+        elif ratio < -0.05: s_gex = 5    # 显著负 gamma=放大
+    s = s_liq + s_prem + s_rank + s_trend + s_dte + s_gex
+    # 财报事件期扣分(IV高估+高溢价=疑似事件期, gap risk)
+    if r.get('iv_status') == '高估' and (prem or 0) > 4:
+        r['event'] = True; s -= 15
+    # 负溢价否决(realized>>IV, 卖方必亏, 强制降级)
+    if prem is not None and prem < -5:
+        s = min(s, 40)
+    r['s_liq'], r['s_prem'], r['s_rank'], r['s_trend'], r['s_dte'], r['s_gex'] = \
+        s_liq, s_prem, s_rank, s_trend, s_dte, s_gex
+    r['total'] = max(0, s)
+
+
+def grade(t, event=False):
+    flag = '⚠' if event else ''
+    if t >= 75: return f'{flag}★优秀'
+    if t >= 60: return f'{flag}良好'
+    if t >= 45: return f'{flag}一般'
+    return f'{flag}不适合'
+
+
+def gex_label(r):
+    net, gross = r.get('gex_net'), r.get('gex_gross')
+    if net is None or not gross or gross == 0: return '-'
+    ratio = net / gross
+    if ratio > 0.05: return '正(抑制)'
+    if ratio < -0.05: return '负(放大)'
+    return '中性'
+
+
+# ===================== detail =====================
+def detail(r):
+    calls, puts, S = r.get('calls'), r.get('puts'), r['S']
+    if calls is None or puts is None:
+        print('  (无链数据)'); return
+    # 按 delta 选腿: 卖腿 ~0.30 / 保护腿 ~0.18(更远 OTM)
+    def _pick(df, target, sp_gt=None, sp_lt=None):
+        d = df[(df['option_delta'].notna()) & (df['option_delta'] != 0)].copy()
+        if sp_gt is not None: d = d[d['sp'] > sp_gt]
+        if sp_lt is not None: d = d[d['sp'] < sp_lt]
+        if len(d) == 0: return None
+        d['dd'] = (d['option_delta'] - target).abs()
+        return d.sort_values('dd').iloc[0]
+    otm_c = calls[calls['sp'] > S]; otm_p = puts[puts['sp'] < S]
+    c1 = _pick(otm_c, 0.30)
+    if c1 is None: print('  (无 OTM call 卖腿)'); return
+    c2 = _pick(otm_c, 0.18, sp_gt=c1['sp'])
+    p1 = _pick(otm_p, -0.30)
+    if p1 is None: print('  (无 OTM put 卖腿)'); return
+    p2 = _pick(otm_p, -0.18, sp_lt=p1['sp'])
+    if c2 is None or p2 is None: print('  (无保护腿)'); return
+    cb, ca = _f(c1, 'bid_price'), _f(c2, 'ask_price')
+    pb, pa = _f(p1, 'bid_price'), _f(p2, 'ask_price')
+    if not all([cb, ca, pb, pa]) or min(cb, ca, pb, pa) <= 0:
+        print('  (腿 bid/ask 不全)'); return
+    credit = cb + pb - ca - pa
+    width = max(c2['sp'] - c1['sp'], p1['sp'] - p2['sp'])
+    max_loss = width - credit
+    upper_be = c1['sp'] + credit; lower_be = p1['sp'] - credit
+    rr = (credit / max_loss * 100) if max_loss > 0 else 0
+    print(f'  铁鹰骨架(近OTM两档近似) @ {r["exp_date"]} DTE{r["dte"]} 现价{S:.2f}:')
+    print(f'    卖{c1["sp"]:.0f}C(bid{cb:.2f})/买{c2["sp"]:.0f}C(ask{ca:.2f}) | '
+          f'卖{p1["sp"]:.0f}P(bid{pb:.2f})/买{p2["sp"]:.0f}P(ask{pa:.2f})')
+    print(f'    净信用={credit:.2f} 最大损失={max_loss:.2f}(宽{width:.0f}) '
+          f'盈亏区间[{lower_be:.2f},{upper_be:.2f}] 收益/风险={rr:.0f}%')
+    print('    注: 行权价为近OTM两档近似, 实战应参考 OI wall + delta 选腿')
+
+
+# ===================== main =====================
+def main():
+    ap = argparse.ArgumentParser(description='Iron Condor 适配度扫描器 v2')
+    ap.add_argument('--codes', default=DEFAULT_CODES, help='标的列表,逗号分隔')
+    ap.add_argument('--discover', action='store_true', help='发现模式: 内置大池按成交额粗筛后精筛(优先于 --codes)')
+    ap.add_argument('--pool-size', type=int, default=25, help='发现模式入围精筛的数量(默认25)')
+    ap.add_argument('--top', type=int, default=0, help='只显示前N(0=全部)')
+    ap.add_argument('--dte-min', type=int, default=30)
+    ap.add_argument('--dte-max', type=int, default=45)
+    ap.add_argument('--detail', type=int, default=0, help='对前N名输出铁鹰腿骨架')
+    ap.add_argument('--output', default=None, help='导出 CSV 路径')
+    args = ap.parse_args()
+    codes = [c.strip() for c in args.codes.split(',') if c.strip()]
+
+    ctx = create_quote_context()
+    results = []
+    try:
+        if args.discover:
+            codes = _discover(ctx, args.pool_size)
+            if not codes:
+                print('发现模式: 粗筛无入围标的'); return
+        print(f'扫描 {len(codes)} 标的 | DTE[{args.dte_min},{args.dte_max}] | 6维打分+财报扣分+负溢价否决\n')
+        for i, code in enumerate(codes):
+            r = collect(ctx, code, args.dte_min, args.dte_max)
+            score(r)
+            results.append(r)
+            tag = grade(r['total'], r.get('event', False)) if not r.get('reason') else f'跳过:{r["reason"]}'
+            print(f'  {code:<10} 总分 {r["total"]:>3} {tag}')
+            if i < len(codes) - 1:
+                time.sleep(3.0)
+    finally:
+        safe_close(ctx)
+
+    ok = sorted([r for r in results if not r.get('reason')], key=lambda x: -x['total'])
+    show = ok[:args.top] if args.top > 0 else ok
+    skip = [r for r in results if r.get('reason')]
+
+    # 中文宽字符对齐: f-string 宽度按字符数计会错位, 用 common.pad_disp 按显示宽度补空格
+    W_MAIN = [10, 8, 5, 6, 6, 6, 7, 6, 8, 6]
+    W_SUB = [4, 5, 5, 5, 5, 5]
+    W_END = [5, 8]
+    LW = sum(W_MAIN) + 3 + sum(W_SUB) + 3 + sum(W_END)
+
+    def _line(cells, widths, first_left=True):
+        return ''.join(pad_disp(s, w, 'left' if (j == 0 and first_left) else 'right')
+                       for j, (s, w) in enumerate(zip(cells, widths)))
+
+    print(f'\n{"=" * LW}')
+    hdr = (_line(['标的', '现价', 'DTE', 'IV%', '已现%', '溢价%', 'IVRank', 'HVtr', 'GEX', '价差%'], W_MAIN)
+           + ' | ' + _line(['流动', '溢价', 'Rank', '形态', 'DTE', 'GEX'], W_SUB, False)
+           + ' | ' + _line(['总分', '评级'], W_END, False))
+    print(hdr); print('-' * LW)
+    for r in show:
+        g = lambda k: f'{r[k]:.1f}' if isinstance(r.get(k), (int, float)) and r.get(k) is not None else '-'
+        ht = f'{r["hv_trend"]:.2f}' if r.get('hv_trend') is not None else '-'
+        row = (_line([r['code'], f'{r["S"]:.2f}', str(r['dte']), g('iv'), g('hv'), g('premium'),
+                      g('iv_rank'), ht, gex_label(r), g('spread')], W_MAIN)
+               + ' | ' + _line([str(r['s_liq']), str(r['s_prem']), str(r['s_rank']),
+                                str(r['s_trend']), str(r['s_dte']), str(r['s_gex'])], W_SUB, False)
+               + ' | ' + _line([str(r['total']), grade(r['total'], r.get('event', False))], W_END, False))
+        print(row)
+    if skip:
+        print(f'\n-- 跳过({len(skip)}) --')
+        for r in skip:
+            print(f'  {r["code"]:<10} {r["reason"]}')
+
+    # 财报事件期提示
+    flagged = [r for r in show if r.get('event')]
+    print(f'\n{"=" * LW}')
+    print('⚠ 财报事件期提示(IV高估+溢价>4%, 疑似临近财报/事件, gap risk 大):')
+    if flagged:
+        for r in flagged:
+            print(f'  {r["code"]:<10} IV状态={r["iv_status"]} 溢价={r["premium"]:.1f}% (已扣15分)')
+    else:
+        print('  (本次无)')
+
+    # detail
+    if args.detail > 0:
+        print(f'\n{"=" * LW}\n铁鹰腿骨架(对前 {args.detail} 名):')
+        for r in show[:args.detail]:
+            print(f'\n● {r["code"]} 总分{r["total"]} {grade(r["total"], r.get("event", False))}')
+            detail(r)
+
+    # CSV
+    if args.output:
+        with open(args.output, 'w', newline='') as f:
+            w = csv.writer(f)
+            w.writerow(['code', 'S', 'dte', 'iv', 'hv', 'premium', 'iv_rank', 'hv_trend',
+                        'gex_net', 'gex_gross', 'spread', 's_liq', 's_prem', 's_rank',
+                        's_trend', 's_dte', 's_gex', 'event', 'total', 'grade'])
+            for r in ok:
+                w.writerow([r['code'], r.get('S'), r.get('dte'), r.get('iv'), r.get('hv'),
+                            r.get('premium'), r.get('iv_rank'), r.get('hv_trend'), r.get('gex_net'),
+                            r.get('gex_gross'), r.get('spread'), r.get('s_liq'), r.get('s_prem'),
+                            r.get('s_rank'), r.get('s_trend'), r.get('s_dte'), r.get('s_gex'),
+                            r.get('event'), r['total'], grade(r['total'], r.get('event', False))])
+        print(f'\n已导出 {args.output} ({len(ok)} 行)')
+
+
+if __name__ == '__main__':
+    main()
