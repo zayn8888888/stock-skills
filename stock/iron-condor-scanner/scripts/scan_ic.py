@@ -442,6 +442,118 @@ def detail(r, sell_delta=0.30, buy_delta=0.18, capital=None):
     print(f'    注: 按delta选腿({sell_delta}/{buy_delta}), 实战复核 OI wall + 券商算价器, 非下单单')
 
 
+# ===================== oiwall =====================
+def oiwall(r, sell_delta=0.30, buy_delta=0.18):
+    """单标的 OI wall 细看: 完整 OI/gamma 分布 + 墙标注 + 选腿对比 + 按行权价 GEX 拆解。
+    比 detail 的单行 OI 摘要更深, 复用 collect 拉的 calls/puts 与 _pick 选腿逻辑。"""
+    calls, puts, S = r.get('calls'), r.get('puts'), r.get('S')
+    if calls is None or puts is None or S is None:
+        print('  (无链数据)'); return
+    # 数值列兜底(merge 后可能 object/NaN)
+    for col in ['option_delta', 'option_implied_volatility', 'bid_price', 'ask_price', 'oi', 'gamma']:
+        if col in calls.columns:
+            calls[col] = pd.to_numeric(calls[col], errors='coerce')
+        if col in puts.columns:
+            puts[col] = pd.to_numeric(puts[col], errors='coerce')
+    calls = calls.sort_values('sp').reset_index(drop=True)
+    puts = puts.sort_values('sp').reset_index(drop=True)
+
+    # 选腿(复用 detail 的 _pick 逻辑: 按 delta 最近)
+    def _pick(df, target, sp_gt=None, sp_lt=None):
+        d = df[(df['option_delta'].notna()) & (df['option_delta'] != 0)].copy()
+        if sp_gt is not None: d = d[d['sp'] > sp_gt]
+        if sp_lt is not None: d = d[d['sp'] < sp_lt]
+        if len(d) == 0: return None
+        d['dd'] = (d['option_delta'] - target).abs()
+        return d.sort_values('dd').iloc[0]
+    otm_c = calls[calls['sp'] > S]; otm_p = puts[puts['sp'] < S]
+    c1 = _pick(otm_c, sell_delta)
+    p1 = _pick(otm_p, -sell_delta)
+    c2 = _pick(otm_c, buy_delta, sp_gt=c1['sp']) if c1 is not None else None
+    p2 = _pick(otm_p, -buy_delta, sp_lt=p1['sp']) if p1 is not None else None
+    legs = {}
+    if c1 is not None: legs[('C', float(c1['sp']))] = '卖C'
+    if c2 is not None: legs[('C', float(c2['sp']))] = '买C'
+    if p1 is not None: legs[('P', float(p1['sp']))] = '卖P'
+    if p2 is not None: legs[('P', float(p2['sp']))] = '买P'
+
+    # 合成 strike 行表(CALL+PUT 按 sp 对齐)
+    strikes = sorted(set(calls['sp'].tolist() + puts['sp'].tolist()))
+    cc = calls.set_index('sp')[['oi', 'gamma', 'option_delta', 'option_implied_volatility', 'bid_price', 'ask_price']]
+    cc.columns = ['C_OI', 'C_gam', 'C_del', 'C_IV', 'C_bid', 'C_ask']
+    pp = puts.set_index('sp')[['oi', 'gamma', 'option_delta', 'option_implied_volatility', 'bid_price', 'ask_price']]
+    pp.columns = ['P_OI', 'P_gam', 'P_del', 'P_IV', 'P_bid', 'P_ask']
+    df = pd.DataFrame({'sp': strikes}).merge(cc, left_on='sp', right_index=True, how='left') \
+                                       .merge(pp, left_on='sp', right_index=True, how='left').fillna(0)
+    df['gex'] = (df['P_OI'] * df['P_gam'] - df['C_OI'] * df['C_gam']) * 100 * S  # dealer: short call - / long put +
+    df['dist%'] = (df['sp'] - S) / S * 100
+
+    def _foi(v):
+        v = float(v or 0)
+        return f'{v/1000:.1f}k' if v >= 1000 else (f'{v:.0f}' if v >= 1 else '-')
+    def _leg_tag(sp):
+        return '/'.join(legs[k] for k in [('C', sp), ('P', sp)] if k in legs)
+
+    print(f'\n{"="*118}')
+    print(f'{r["code"]} OI/gamma 分布 @ {r.get("exp_date")}  现价 {S:.2f}  DTE{r.get("dte")}  '
+          f'(dealer: short call - / long put +)')
+    print(f'{"="*118}')
+    print(f'{"strike":>7} {"距%":>5} | {"C_OI":>6} {"C_γ":>6} {"C_δ":>5} {"C_IV":>5} | '
+          f'{"P_OI":>6} {"P_γ":>6} {"P_δ":>5} {"P_IV":>5} | {"GEX":>9} {"腿":>6}')
+    print('-' * 118)
+    near = df[(df['sp'] >= S * 0.85) & (df['sp'] <= S * 1.15)]
+    for _, row in near.iterrows():
+        atm = 'ATM' if abs(row['dist%']) < 1.5 else ''
+        tag = _leg_tag(float(row['sp'])) or atm
+        print(f'{row["sp"]:>7.1f} {row["dist%"]:>5.1f} | {_foi(row["C_OI"]):>6} {row["C_gam"]:>6.4f} '
+              f'{row["C_del"]:>5.2f} {row["C_IV"]:>5.0f} | {_foi(row["P_OI"]):>6} {row["P_gam"]:>6.4f} '
+              f'{row["P_del"]:>5.2f} {row["P_IV"]:>5.0f} | {row["gex"]:>9.0f} {tag:>6}')
+
+    # OI 墙 top5(两侧持仓最密集档, 真实支撑/阻力)
+    print(f'\n{"="*70}')
+    print('CALL 侧 OI top5 (阻力墙, dealer short call 越多压越重)')
+    print('-' * 70)
+    for _, row in calls.nlargest(5, 'oi').iterrows():
+        iv = row['option_implied_volatility'] or 0
+        print(f'  strike {row["sp"]:>6.1f}  OI={_foi(row["oi"]):>6}  γ={row["gamma"]:.4f}  '
+              f'δ={row["option_delta"]:.2f}  IV={iv:.0f}  bid/ask={row["bid_price"]:.2f}/{row["ask_price"]:.2f}')
+    print('\nPUT 侧 OI top5 (支撑墙, dealer long put 越多托越重)')
+    print('-' * 70)
+    for _, row in puts.nlargest(5, 'oi').iterrows():
+        iv = row['option_implied_volatility'] or 0
+        print(f'  strike {row["sp"]:>6.1f}  OI={_foi(row["oi"]):>6}  γ={row["gamma"]:.4f}  '
+              f'δ={row["option_delta"]:.2f}  IV={iv:.0f}  bid/ask={row["bid_price"]:.2f}/{row["ask_price"]:.2f}')
+
+    # 选腿 vs 最近墙(腿落在墙上=墙保护, 腿在墙外=裸露)
+    print(f'\n{"="*70}')
+    print('选腿 vs OI 墙位置')
+    print('-' * 70)
+    leg_list = []
+    if c1 is not None: leg_list.append((f'卖{float(c1["sp"]):g}C (δ{c1["option_delta"]:.2f})', c1, 'CALL'))
+    if c2 is not None: leg_list.append((f'买{float(c2["sp"]):g}C (δ{c2["option_delta"]:.2f})', c2, 'CALL'))
+    if p1 is not None: leg_list.append((f'卖{float(p1["sp"]):g}P (δ{p1["option_delta"]:.2f})', p1, 'PUT'))
+    if p2 is not None: leg_list.append((f'买{float(p2["sp"]):g}P (δ{p2["option_delta"]:.2f})', p2, 'PUT'))
+    wall_c = calls.nlargest(1, 'oi').iloc[0] if len(calls) and calls['oi'].sum() else None
+    wall_p = puts.nlargest(1, 'oi').iloc[0] if len(puts) and puts['oi'].sum() else None
+    for name, row, side in leg_list:
+        iv = row['option_implied_volatility'] or 0
+        wall = wall_c if side == 'CALL' else wall_p
+        wall_str = f'{float(wall["sp"]):g}(OI {_foi(wall["oi"])})' if wall is not None else '-'
+        print(f'  {name:18} strike {row["sp"]:>6.1f}  OI={_foi(row["oi"]):>5} γ={row["gamma"]:.4f} '
+              f'IV={iv:.0f} bid/ask={row["bid_price"]:.2f}/{row["ask_price"]:.2f}  | 最近墙 {wall_str}')
+
+    # 总 GEX + 按行权价拆解
+    total = df['gex'].sum()
+    pos = df[df['gex'] > 0]['gex'].sum()
+    neg = df[df['gex'] < 0]['gex'].sum()
+    print(f'\n{"="*70}')
+    print(f'本到期日 dealer 净 GEX = {total:,.0f}  (正=抑制/铁鹰友好, 负=放大)')
+    print(f'  正 gamma 档合计: {pos:,.0f}  | 负 gamma 档合计: {neg:,.0f}')
+    if len(df):
+        print(f'  GEX 最大正档: strike {df.loc[df["gex"].idxmax(), "sp"]:g} ({df["gex"].max():,.0f})')
+        print(f'  GEX 最大负档: strike {df.loc[df["gex"].idxmin(), "sp"]:g} ({df["gex"].min():,.0f})')
+
+
 # ===================== main =====================
 def main():
     ap = argparse.ArgumentParser(description='Iron Condor 适配度扫描器 v2')
@@ -456,8 +568,24 @@ def main():
     ap.add_argument('--buy-delta', type=float, default=0.18, help='保护腿目标delta(默认0.18; 宽鹰用0.08-0.10)')
     ap.add_argument('--capital', type=float, default=None, help='账户资金(算单笔风险≤2%%仓位建议, 不传则不输出仓位行)')
     ap.add_argument('--output', default=None, help='导出 CSV 路径')
+    ap.add_argument('--oiwall', default=None,
+                    help='单标的 OI wall 细看(完整 OI/gamma 分布+墙标注+选腿对比+GEX拆解, 优先于扫描)')
     args = ap.parse_args()
     codes = [c.strip() for c in args.codes.split(',') if c.strip()]
+
+    # OI wall 细看模式: 单标的深度输出, 优先于批量扫描
+    if args.oiwall:
+        ctx = create_quote_context()
+        try:
+            r = collect(ctx, args.oiwall, args.dte_min, args.dte_max)
+            if r.get('reason'):
+                print(f'{args.oiwall}: {r["reason"]}'); return
+            score(r)
+            print(f'{args.oiwall} 总分 {r["total"]} {grade(r["total"], r.get("event", False))}\n')
+            oiwall(r, args.sell_delta, args.buy_delta)
+        finally:
+            safe_close(ctx)
+        return
 
     ctx = create_quote_context()
     results = []
@@ -524,9 +652,13 @@ def main():
     # detail
     if args.detail > 0:
         print(f'\n{"=" * LW}\n铁鹰腿骨架(对前 {args.detail} 名):')
-        for r in show[:args.detail]:
+        for i, r in enumerate(show[:args.detail]):
             print(f'\n● {r["code"]} 总分{r["total"]} {grade(r["total"], r.get("event", False))}')
             detail(r, args.sell_delta, args.buy_delta, args.capital)
+            # 第一名总分≥75: 自动追加完整 OI wall 细看(扫描闭环, 免手动 --oiwall)
+            if i == 0 and r['total'] >= 75:
+                print(f'\n  ▼ 总分≥75, 自动展开 {r["code"]} 完整 OI wall 分布:')
+                oiwall(r, args.sell_delta, args.buy_delta)
 
     # CSV
     if args.output:

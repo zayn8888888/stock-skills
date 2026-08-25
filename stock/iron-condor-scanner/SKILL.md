@@ -16,10 +16,14 @@ python3 scripts/scan_ic.py --discover            # 发现模式: 大池~180标�
 python3 scripts/scan_ic.py --discover --pool-size 40 --top 10 --detail 3
 python3 scripts/scan_ic.py --codes US.SPY,US.IWM --output out.csv
 python3 scripts/scan_ic.py --dte-min 30 --dte-max 45
+python3 scripts/scan_ic.py --oiwall US.IWM        # 单标的 OI wall 细看(完整 OI/gamma 分布+墙标注+选腿对比+GEX拆解, 实战复核单只用)
+python3 scripts/scan_ic.py --oiwall US.IWM --sell-delta 0.25 --buy-delta 0.15  # 调宽窄鹰参数重选腿标注
 ```
-参数：`--codes` `--discover` `--pool-size N`(发现模式入围数,默认25) `--top N` `--dte-min` `--dte-max` `--detail N`(前N名铁鹰腿) `--output CSV`
+参数：`--codes` `--discover` `--pool-size N`(发现模式入围数,默认25) `--top N` `--dte-min` `--dte-max` `--detail N`(前N名铁鹰腿) `--oiwall CODE`(单标的OI wall细看,优先于扫描) `--sell-delta`(卖腿,默认0.30) `--buy-delta`(保护腿,默认0.18) `--capital`(账户资金,算≤2%仓位) `--output CSV`
 
 发现模式说明：内置 ~180 标的大池（纳指100/标普100 主要成分+主流ETF，均为有期权且流动性尚可的标的），先用批量快照按成交额粗筛（成交额是期权链厚度的代理指标），入围后再跑完整 6 维打分。池子靠人工维护，新晋热门股需手动补进 LARGE_POOL。
+
+OI wall 细看模式(`--oiwall CODE`)说明：对单只标的输出完整 OI/gamma 按行权价分布，复用 `collect` 拉链+快照、`_pick` 选腿。扫描结果里 `--detail` 的 OI 墙只报 call/put 各一个最大档摘要（`df.loc[df['oi'].idxmax()]`），`--oiwall` 给完整分布用于实战复核腿是否落在墙上。
 
 ## 打分模型(6维度满分100 + 财报扣分 + 负溢价否决)
 
@@ -36,7 +40,9 @@ python3 scripts/scan_ic.py --dte-min 30 --dte-max 45
 评级：≥75 ★优秀 / 60-74 良好 / 45-59 一般 / <45 不适合
 
 ## 输出
-排序表(标的/现价/DTE/IV/已实现/溢价/IVRank/HV趋势/GEX/价差/各维分/总分/评级) + 财报事件期提示 + 可选铁鹰腿骨架(delta选腿: 卖0.30/买0.18) + 可选 CSV。
+- 扫描模式：排序表(标的/现价/DTE/IV/已实现/溢价/IVRank/HV趋势/GEX/价差/各维分/总分/评级) + 财报事件期提示 + 可选铁鹰腿骨架(delta选腿: 卖0.30/买0.18) + 可选 CSV。
+- OI wall 自动展开：`--detail N` 时，**第一名总分≥75 自动追加完整 `oiwall` 分布**(扫描闭环，免手动 `--oiwall`)；<75 只出腿骨架。
+- OI wall 细看模式(`--oiwall CODE`)：现价±15% 完整 OI/gamma/delta/IV 分布表 + CALL/PUT OI top5 墙 + 选腿(按delta)vs最近墙位置对比 + 按行权价 GEX 拆解(总净GEX/正负档合计/最大正负档)。判断卖腿落在墙上(墙保护)还是墙外(裸露)。
 
 ## 依赖与限制
 - 富途 OpenD `127.0.0.1:11111` + Python `futu-api` SDK + `pandas`；复用 `stock-skills` 的 `common.py`（脚本自动从 CLAUDE_SKILLS_DIR / ~/.claude/skills / plugin cache 定位，多版本取最新）
