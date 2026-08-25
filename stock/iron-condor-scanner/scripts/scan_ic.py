@@ -228,7 +228,8 @@ def collect(ctx, code, dte_min, dte_max):
             if 'timestamp' in vol.columns:
                 vol = vol.sort_values('timestamp', ascending=False).reset_index(drop=True)
             row0 = vol.iloc[0]
-            r['iv'] = _f(row0, 'average_impvol') or _f(row0, 'implied_volatility')
+            r['iv'] = _f(row0, 'implied_volatility') or _f(row0, 'average_impvol')  # 当前IV(显示/CSV, 与溢价口径对齐)
+            r['iv_avg'] = _f(row0, 'average_impvol')  # 近1年IV均值(IV位兜底打分用)
             r['hv'] = _f(row0, 'history_volatility')
             r['premium'] = _f(row0, 'volatility_premium')
             st = row0.get('impvol_status')
@@ -301,10 +302,16 @@ def score(r):
     elif st == '震荡': s_rank = 10
     elif st == '低估': s_rank = 5
     else:
-        iv = r.get('iv')
-        if iv:
-            if iv > 40: s_rank = 13
-            elif iv > 20: s_rank = 10
+        # impvol_status 缺失时, 用当前IV相对近1年均值的位置兜底(偏高=适合卖方)
+        iv = r.get('iv'); iv_avg = r.get('iv_avg')
+        if iv and iv_avg and iv_avg > 0:
+            ratio = iv / iv_avg
+            if ratio >= 1.10: s_rank = 13   # 当前IV高于历史中枢10%+ = 偏高
+            elif ratio <= 0.90: s_rank = 6  # 低于中枢 = 偏低(IV便宜, 不适合卖方)
+            else: s_rank = 10
+        elif iv:  # 连iv_avg都没有, 退而用当前IV绝对值(粗糙, 跨标的不可比)
+            if iv > 40: s_rank = 11
+            elif iv > 20: s_rank = 9
             else: s_rank = 6
     # 区间形态(10) — HV 趋势
     ht = r.get('hv_trend')
@@ -354,11 +361,11 @@ def gex_label(r):
 
 
 # ===================== detail =====================
-def detail(r):
+def detail(r, sell_delta=0.30, buy_delta=0.18, capital=None):
     calls, puts, S = r.get('calls'), r.get('puts'), r['S']
     if calls is None or puts is None:
         print('  (无链数据)'); return
-    # 按 delta 选腿: 卖腿 ~0.30 / 保护腿 ~0.18(更远 OTM)
+    # 按 delta 选腿: 卖腿 ~sell_delta / 保护腿 ~buy_delta(更远 OTM)
     def _pick(df, target, sp_gt=None, sp_lt=None):
         d = df[(df['option_delta'].notna()) & (df['option_delta'] != 0)].copy()
         if sp_gt is not None: d = d[d['sp'] > sp_gt]
@@ -367,12 +374,12 @@ def detail(r):
         d['dd'] = (d['option_delta'] - target).abs()
         return d.sort_values('dd').iloc[0]
     otm_c = calls[calls['sp'] > S]; otm_p = puts[puts['sp'] < S]
-    c1 = _pick(otm_c, 0.30)
+    c1 = _pick(otm_c, sell_delta)
     if c1 is None: print('  (无 OTM call 卖腿)'); return
-    c2 = _pick(otm_c, 0.18, sp_gt=c1['sp'])
-    p1 = _pick(otm_p, -0.30)
+    c2 = _pick(otm_c, buy_delta, sp_gt=c1['sp'])
+    p1 = _pick(otm_p, -sell_delta)
     if p1 is None: print('  (无 OTM put 卖腿)'); return
-    p2 = _pick(otm_p, -0.18, sp_lt=p1['sp'])
+    p2 = _pick(otm_p, -buy_delta, sp_lt=p1['sp'])
     if c2 is None or p2 is None: print('  (无保护腿)'); return
     cb, ca = _f(c1, 'bid_price'), _f(c2, 'ask_price')
     pb, pa = _f(p1, 'bid_price'), _f(p2, 'ask_price')
@@ -383,12 +390,56 @@ def detail(r):
     max_loss = width - credit
     upper_be = c1['sp'] + credit; lower_be = p1['sp'] - credit
     rr = (credit / max_loss * 100) if max_loss > 0 else 0
-    print(f'  铁鹰骨架(近OTM两档近似) @ {r["exp_date"]} DTE{r["dte"]} 现价{S:.2f}:')
-    print(f'    卖{c1["sp"]:.0f}C(bid{cb:.2f})/买{c2["sp"]:.0f}C(ask{ca:.2f}) | '
-          f'卖{p1["sp"]:.0f}P(bid{pb:.2f})/买{p2["sp"]:.0f}P(ask{pa:.2f})')
-    print(f'    净信用={credit:.2f} 最大损失={max_loss:.2f}(宽{width:.0f}) '
+    # 期望值: 正态近似估到期落在盈亏区间的概率(胜率)
+    # IV口径=保守(期权定价口径), HV口径=若未来波动同过去, 反映IV溢价带来的胜率提升
+    def _win_rate(sigma):
+        if not sigma or sigma <= 0: return None
+        z_lo = (lower_be - S) / sigma; z_hi = (upper_be - S) / sigma
+        return 0.5 * (math.erf(z_hi / math.sqrt(2)) - math.erf(z_lo / math.sqrt(2))) * 100
+    dte = r['dte']
+    sigma_iv = S * (r.get('iv') or 0) / 100 * math.sqrt(dte / 365) if r.get('iv') else 0
+    sigma_hv = S * (r.get('hv') or 0) / 100 * math.sqrt(dte / 365) if r.get('hv') else 0
+    w_iv = _win_rate(sigma_iv); w_hv = _win_rate(sigma_hv)
+    # OI 挂墙: 两侧 OTM 持仓量最密集档, 真实支撑/阻力参考
+    def _oi_wall(df):
+        if 'oi' not in df.columns or len(df) == 0 or df['oi'].sum() == 0: return None
+        return df.loc[df['oi'].idxmax()]
+    def _fmt_oi(v):
+        v = float(v or 0)
+        return f'{v/1000:.1f}k' if v >= 1000 else f'{v:.0f}'
+    def _fmt_sp(x):
+        return f'{float(x):g}'
+    wall_c = _oi_wall(otm_c); wall_p = _oi_wall(otm_p)
+    dc1 = _f(c1, 'option_delta') or 0; dc2 = _f(c2, 'option_delta') or 0
+    dp1 = _f(p1, 'option_delta') or 0; dp2 = _f(p2, 'option_delta') or 0
+    dte_tag = '甜区✓ theta加速+gamma未爆' if 30 <= dte <= 45 else '偏离甜区⚠ gamma风险升'
+    print(f'  铁鹰骨架 @ {r["exp_date"]} DTE{dte}({dte_tag}) 现价{S:.2f}:')
+    print(f'    卖{_fmt_sp(c1["sp"])}C(δ{dc1:.2f} bid{cb:.2f} OI{_fmt_oi(c1["oi"])})/'
+          f'买{_fmt_sp(c2["sp"])}C(δ{dc2:.2f} ask{ca:.2f} OI{_fmt_oi(c2["oi"])}) | '
+          f'卖{_fmt_sp(p1["sp"])}P(δ{dp1:.2f} bid{pb:.2f} OI{_fmt_oi(p1["oi"])})/'
+          f'买{_fmt_sp(p2["sp"])}P(δ{dp2:.2f} ask{pa:.2f} OI{_fmt_oi(p2["oi"])})')
+    print(f'    净信用={credit:.2f} 最大损失={max_loss:.2f}(宽{_fmt_sp(width)}) '
           f'盈亏区间[{lower_be:.2f},{upper_be:.2f}] 收益/风险={rr:.0f}%')
-    print('    注: 行权价为近OTM两档近似, 实战应参考 OI wall + delta 选腿')
+    win_parts = []
+    if w_iv is not None: win_parts.append(f'按IV={w_iv:.0f}%')
+    if w_hv is not None: win_parts.append(f'按HV={w_hv:.0f}%')
+    ev_str = ''
+    if w_iv is not None and max_loss > 0:
+        ev = w_iv / 100 * credit - (1 - w_iv / 100) * max_loss
+        ev_str = f' | 期望(按IV)={ev:+.2f}/单'
+    if win_parts:
+        print(f'    静态胜率(正态近似): {" ".join(win_parts)}{ev_str}  (忽略尾部, 静态持有到期口径)')
+    if wall_c is not None or wall_p is not None:
+        wc = f'call侧{_fmt_sp(wall_c["sp"])}({_fmt_oi(wall_c["oi"])})' if wall_c is not None else 'call侧-'
+        wp = f'put侧{_fmt_sp(wall_p["sp"])}({_fmt_oi(wall_p["oi"])})' if wall_p is not None else 'put侧-'
+        print(f'    OI墙: {wc} {wp}  (持仓最密集档, 真实支撑/阻力, 与选腿对比)')
+    print(f'    管理: 赚50%信用平仓→+{credit*0.5:.2f} | 止损亏1x信用(买回翻倍)→-{credit:.2f} | DTE剩21天离场避gamma pinch')
+    if capital and capital > 0 and max_loss > 0:
+        risk_per_contract = max_loss * 100  # 1张=100股
+        max_risk = capital * 0.02
+        n = int(max_risk / risk_per_contract) if risk_per_contract > 0 else 0
+        print(f'    仓位: 账户{capital:.0f} 单笔风险≤2%={max_risk:.0f} → 建议≤{n}张(每张最大亏{risk_per_contract:.0f})')
+    print(f'    注: 按delta选腿({sell_delta}/{buy_delta}), 实战复核 OI wall + 券商算价器, 非下单单')
 
 
 # ===================== main =====================
@@ -401,6 +452,9 @@ def main():
     ap.add_argument('--dte-min', type=int, default=30)
     ap.add_argument('--dte-max', type=int, default=45)
     ap.add_argument('--detail', type=int, default=0, help='对前N名输出铁鹰腿骨架')
+    ap.add_argument('--sell-delta', type=float, default=0.30, help='卖腿目标delta(默认0.30窄鹰; 宽鹰用0.16-0.20)')
+    ap.add_argument('--buy-delta', type=float, default=0.18, help='保护腿目标delta(默认0.18; 宽鹰用0.08-0.10)')
+    ap.add_argument('--capital', type=float, default=None, help='账户资金(算单笔风险≤2%%仓位建议, 不传则不输出仓位行)')
     ap.add_argument('--output', default=None, help='导出 CSV 路径')
     args = ap.parse_args()
     codes = [c.strip() for c in args.codes.split(',') if c.strip()]
@@ -472,17 +526,17 @@ def main():
         print(f'\n{"=" * LW}\n铁鹰腿骨架(对前 {args.detail} 名):')
         for r in show[:args.detail]:
             print(f'\n● {r["code"]} 总分{r["total"]} {grade(r["total"], r.get("event", False))}')
-            detail(r)
+            detail(r, args.sell_delta, args.buy_delta, args.capital)
 
     # CSV
     if args.output:
         with open(args.output, 'w', newline='') as f:
             w = csv.writer(f)
-            w.writerow(['code', 'S', 'dte', 'iv', 'hv', 'premium', 'iv_rank', 'hv_trend',
+            w.writerow(['code', 'S', 'dte', 'iv', 'iv_avg', 'hv', 'premium', 'iv_rank', 'hv_trend',
                         'gex_net', 'gex_gross', 'spread', 's_liq', 's_prem', 's_rank',
                         's_trend', 's_dte', 's_gex', 'event', 'total', 'grade'])
             for r in ok:
-                w.writerow([r['code'], r.get('S'), r.get('dte'), r.get('iv'), r.get('hv'),
+                w.writerow([r['code'], r.get('S'), r.get('dte'), r.get('iv'), r.get('iv_avg'), r.get('hv'),
                             r.get('premium'), r.get('iv_rank'), r.get('hv_trend'), r.get('gex_net'),
                             r.get('gex_gross'), r.get('spread'), r.get('s_liq'), r.get('s_prem'),
                             r.get('s_rank'), r.get('s_trend'), r.get('s_dte'), r.get('s_gex'),
