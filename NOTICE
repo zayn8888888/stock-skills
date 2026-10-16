@@ -1,0 +1,21 @@
+# Third-party notices
+
+This repository includes skills published by Futu so they can be used inside this suite. Those directories remain authored by Futu and are not covered by `Copyright (c) 2026 zayn` in the root `LICENSE`. Their contents are included unchanged, including the original author name.
+
+## Declared as MIT in the file
+
+- `futu/futu-news-search`
+- `futu/futu-stock-digest`
+- `futu/futu-comment-sentiment`
+- `futu/futu-technical-anomaly`
+- `futu/futu-capital-anomaly`
+- `futu/futu-derivatives-anomaly`
+
+Each `SKILL.md` keeps its original `author: Futu` and `license: MIT`.
+
+## Authored by Futu, with no license field
+
+- `futu/futuapi`
+- `futu/install-futu-opend`
+
+These two are included as published by Futu. Their use follows the terms of Futu's public release.

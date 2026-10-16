@@ -1,4 +1,10 @@
-# Finnhub 数据源
+# Finnhub 数据源（兜底）
+
+富途日历是主源，见 `futu-calendar.md`。这里只在三种情况使用：
+
+1. OpenD 未连接，或富途日历脚本返回 `error`
+2. 欧元区 / ECB / 德国：富途经济日历没有这些市场代码
+3. 单只股票在富途财报窗口结果里缺失，需要 `symbol=` 精确查询
 
 ## A1. 全球经济数据日历
 
@@ -35,7 +41,7 @@ curl -sS "https://finnhub.io/api/v1/calendar/economic?from=${FROM}&to=${TO}&toke
 
 ## A2. 财报日历
 
-### 美股（Finnhub 主力）
+### 美股（富途窗口里缺这只代码时）
 
 ```bash
 # 全市场未来 14 天财报
@@ -51,10 +57,10 @@ curl -sS "https://finnhub.io/api/v1/calendar/earnings?from=${FROM}&to=${TO}&symb
 
 **过滤规则**：全市场场景只保留 EPS estimate ≥ $0.5 或 revenue ≥ $1B；单票不过滤。
 
-### 港股（Finnhub 经常空 → Tavily 兜底）
+### 港股（富途财报日历没有日期时）
 
-1. 先尝试 Finnhub：`curl ".../calendar/earnings?...&symbol=<code>.HK&token=..."`
-2. **触发 fallback**（任一）：`earningsCalendar = []` 或 `date` 存在但 `epsEstimate = null && revenueEstimate = null`
+1. 主源是富途 `get_earnings_calendar.py --market HK`。只有结果里没有目标代码时，才试 Finnhub：`curl ".../calendar/earnings?...&symbol=<code>.HK&token=..."`
+2. **再触发 Tavily**（任一）：Finnhub `earningsCalendar = []`，或 `date` 存在但 `epsEstimate = null && revenueEstimate = null`
 3. 并行调用 Tavily：
    - `site:hkex.com.hk <code> 業績公告 <月份>`
    - `<公司中文名> 業績 公布日期 <月份>`

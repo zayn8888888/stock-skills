@@ -7,7 +7,7 @@
 
 **数据时点**：{now UTC}（HKT {now+8h}）
 **覆盖范围**：US 经济 + 美股财报 + 全球 Polymarket 押注 + 中港政策（Tavily）
-**数据源状态**：Finnhub <✅/❌> · Polymarket <✅/❌> · Tavily <✅/❌>
+**数据源状态**：富途日历 <✅/❌> · Finnhub 兜底 <✅/❌/未用> · Polymarket <✅/❌> · Tavily <✅/❌>
 **说明**：日期默认 UTC，括号内为 HKT；hour 字段：bmo=盘前 / amc=盘后
 
 ---

@@ -1,5 +1,7 @@
 # 数据源详解
 
+经济日历与财报日历的调用方式见 `futu-calendar.md`。下面的 Finnhub 规格只用于兜底。押注仍用 Polymarket，不使用富途事件合约。
+
 ## A. Finnhub
 
 ### 概览

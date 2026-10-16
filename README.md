@@ -2,7 +2,7 @@
 
 > 为 [Claude Code](https://claude.com/claude-code) 设计的**股票 / 加密 / 富途生态分析 Skill 套件**。基于富途 OpenAPI 实时行情、Tavily 新闻搜索、Hyperliquid 链上数据、Finnhub / Polymarket 事件数据，覆盖从"市场扫板"到"个股深挖"、从"分析"到"决策留痕"的完整链路。
 
-## 包含的 Skill（24 个）
+## 包含的 Skill（23 个）
 
 ### 股票研究
 
@@ -18,7 +18,7 @@
 
 | Skill | 解决什么问题 | 触发举例 |
 |-------|------------|---------|
-| [`event-calendar`](core/event-calendar/) | 前瞻事件日历（Finnhub / Polymarket / Tavily） | "未来一周有什么大事" |
+| [`event-calendar`](core/event-calendar/) | 前瞻事件日历（富途日历为主，Polymarket 押注，Finnhub 兜底） | "未来一周有什么大事" |
 | [`tradfi-macro`](core/tradfi-macro/) | 传统金融宏观背景（VIX / 美元 / 利率 / 中国宏观） | "现在宏观环境怎样" |
 | [`hyperliquid-perps`](core/hyperliquid-perps/) | Hyperliquid 链上永续镜像，读隐含价 / funding / OI / premium | "NVDA 周末链上多少" |
 | [`trading-debate`](core/trading-debate/) | 多 agent 辩论决策 + 大师视角 + 组合层 + 复盘锚点 | "NVDA 给我一次多空辩论" |
@@ -46,7 +46,6 @@
 | [`futu-capital-anomaly`](futu/futu-capital-anomaly/) | 资金流 / 买卖经纪商 / 卖空异动检测 | "资金有没有异常" |
 | [`futu-derivatives-anomaly`](futu/futu-derivatives-anomaly/) | 期权 / 衍生品异动检测 | "期权链有什么异常" |
 | [`futu-comment-sentiment`](futu/futu-comment-sentiment/) | 富途牛牛评论情绪分析 | "牛牛圈情绪怎样" |
-| [`futu-community-sentiment`](futu/futu-community-sentiment/) | 富途社区情绪聚合 | "社区情绪有没有转向" |
 
 **链式协作建议**：
 - scanner 扫出候选 → **analyzer** 多维扫一遍
@@ -60,7 +59,7 @@
 
 ## 安装（Plugin 方式 · 推荐）
 
-仓库内置 Claude Code Plugin 配置，整套 24 个 skill 作为单个 plugin 一起 enable / disable，最少手工管理。
+仓库内置 Claude Code Plugin 配置，整套 skill 作为单个 plugin 一起 enable / disable，最少手工管理。
 
 ```bash
 /plugin marketplace add zayn8888888/stock-skills
@@ -276,7 +275,9 @@ NVDA + 700 + 茅台 该怎么排            # v0.5 跨市场：市值加权基�
 
 ## License
 
-[MIT](LICENSE) © zaynhuang
+本仓库原创部分为 [MIT](LICENSE) © zayn。
+
+`futu/` 下富途公开发布的 skill 另见 [NOTICE](NOTICE)。这些文件的作者保持 Futu，不纳入上面的版权行。
 
 ## 贡献
 

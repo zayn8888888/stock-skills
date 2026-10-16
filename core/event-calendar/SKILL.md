@@ -1,6 +1,6 @@
 ---
 name: event-calendar
-description: 前瞻事件日历助手。聚合三个数据源——Finnhub（美国经济数据释放日历 + 美股财报日历）、Polymarket（高流动性宏观市场隐含概率）、Tavily（中港政策与行业事件文本搜索），输出未来 N 天结构化事件清单，含日期、事件名、市场预期、市场押注概率、信源链接。触发场景：(1) 用户问"未来一周/一个月有什么大事 / FOMC 何时开会 / 降息概率多少 / CPI 何时发布 / 财报日历 / 美股财报日 / NVDA 什么时候出财报"；(2) 用户问"政策预期 / 关税预期 / 降息预期 / 押注 / Polymarket / 选举概率 / 衰退概率"；(3) 被 market-scanner 在「催化」「产业链外推」环节调用，被 stock-analyzer 作为「事件日历」维度调用。不适用于：历史事件回溯（用 stock-analyzer 维度 7）、实时盘中事件推送、A 股本土经济日历（Finnhub 不覆盖，仅靠 Tavily 兜底）。
+description: 前瞻事件日历助手。经济日历与财报日历优先用富途 OpenAPI（港股、美股、A 股），Finnhub 只在 OpenD 不可用或富途没有欧元区数据时兜底。Polymarket 负责高流动性宏观押注。Tavily 负责中港政策与行业事件文本。输出未来 N 天结构化事件清单，含日期、事件名、市场预期、市场押注概率、信源。触发场景：(1) 用户问"未来一周/一个月有什么大事 / FOMC 何时开会 / 降息概率多少 / CPI 何时发布 / 财报日历 / 美股财报日 / NVDA 什么时候出财报"；(2) 用户问"政策预期 / 关税预期 / 降息预期 / 押注 / Polymarket / 选举概率 / 衰退概率"；(3) 被 market-scanner 在「催化」「产业链外推」环节调用，被 stock-analyzer 作为「事件日历」维度调用。不适用于：历史事件回溯（用 stock-analyzer 维度 7）、实时盘中事件推送、把富途事件合约当成预测市场（押注仍用 Polymarket）。
 ---
 
 # 前瞻事件日历
@@ -16,7 +16,8 @@ description: 前瞻事件日历助手。聚合三个数据源——Finnhub（美
 ## 执行前必读（收到任务后第一步）
 
 ```bash
-Read references/finnhub.md          # Finnhub 经济日历 + 财报日历 API 详细用法
+Read references/futu-calendar.md   # 富途经济日历 + 财报日历（主源）
+Read references/finnhub.md          # Finnhub 兜底：OpenD 失败，以及欧元区 / ECB
 Read references/polymarket.md       # Polymarket Gamma API 详细用法
 Read references/caller-interface.md # 被 market-scanner / stock-analyzer 调用时的接口规格
 Read references/data-sources.md     # 三个数据源完整 API 规格（Finnhub/Polymarket/Tavily）
@@ -40,7 +41,7 @@ fi
 [ -z "${FINNHUB_API_KEY:-}" ] && echo "⚠️ FINNHUB_API_KEY 未设置"
 ```
 
-未配置时跳过 Finnhub，继续跑 Polymarket + Tavily。🔒 不要在对话里 echo $FINNHUB_API_KEY。
+未配置时跳过 Finnhub 兜底，继续跑富途日历 + Polymarket + Tavily。🔒 不要在对话里 echo $FINNHUB_API_KEY。
 
 ## 标准输入
 
@@ -57,9 +58,10 @@ fi
 
 ## 数据源执行顺序（并行）
 
-1. **Finnhub**（美国经济日历 + 美股财报）
-2. **Polymarket**（高流动性宏观押注 + 经济数据子表）
-3. **Tavily**（中港政策兜底）
+1. **富途日历**（经济日历 US/HK/SH/JP + 财报日历 US/HK/SH/SZ）
+2. **Finnhub**（仅兜底：OpenD 失败，或欧元区 / ECB，或单票在富途窗口里缺失）
+3. **Polymarket**（高流动性宏观押注 + 经济数据子表。预测市场不改走富途事件合约）
+4. **Tavily**（中港政策兜底）
 
 （各数据源 API 用法、查询模板、接口规格已在执行前必读块加载）
 
@@ -68,13 +70,13 @@ fi
 ```markdown
 ## 📅 前瞻事件日历 · {FROM} 至 {TO} · 数据时点 {now UTC}
 
-> 数据源：Finnhub {✅/❌} · Polymarket {✅/❌} · Tavily {✅/❌}
+> 数据源：富途日历 {✅/❌} · Finnhub 兜底 {✅/❌/未用} · Polymarket {✅/❌} · Tavily {✅/❌}
 > 时区：日期默认 UTC，括号内标注 HKT（UTC+8）/EST
 
 | 日期(UTC) | 事件 | 类型 | 影响标的 | 市场预期 / 隐含概率 | 信源 |
 |-----------|------|------|---------|-------------------|------|
-| 2026-05-13 (HKT 05-13) | NVDA Q1 FY27 财报 (amc) | 财报 | US.NVDA | EPS $0.74 / Rev $43.2B | finnhub |
-| 2026-05-15 (HKT 05-16) | FOMC 利率决议 | 货币政策 | US 全市场 | 降息 25bp 73% (vol $2.3M) | polymarket+finnhub |
+| 2026-05-13 (HKT 05-13) | NVDA Q1 FY27 财报 (amc) | 财报 | US.NVDA | EPS $0.74 / Rev $43.2B | futu |
+| 2026-05-15 (HKT 05-16) | FOMC 利率决议 | 货币政策 | US 全市场 | 降息 25bp 73% (vol $2.3M) | polymarket+futu |
 
 ### Polymarket 高流动性宏观押注 Top 5
 （同上格式，保留 question 全文 + slug 完整 URL）
@@ -89,10 +91,11 @@ fi
 
 | 场景 | 行为 |
 |------|------|
-| `FINNHUB_API_KEY` 未设置 / 401 / 网络错误 | 跳过源 A，标"⚠️ Finnhub 未配置"，继续 B+C |
-| Polymarket Gamma API 5xx | 跳过 B，标"⚠️ Polymarket 暂不可用"，继续 A+C |
-| Tavily 无结果 | C 区域显示"未检索到符合条件的政策日程" |
-| 三源全部失败 | 输出"⚠️ 三个数据源全部不可用"，不强行编内容 |
+| OpenD 未连接 / 富途日历脚本报错 | 经济日历与财报日历改走 Finnhub，标"⚠️ 富途日历不可用，已改用 Finnhub" |
+| `FINNHUB_API_KEY` 未设置 / 401 / 网络错误 | 只影响兜底。富途日历已成功则忽略；富途也失败则标"⚠️ Finnhub 未配置" |
+| Polymarket Gamma API 5xx | 跳过押注表，标"⚠️ Polymarket 暂不可用"。不要改用富途事件合约填这张表 |
+| Tavily 无结果 | 政策区域显示"未检索到符合条件的政策日程" |
+| 日历与押注全部失败 | 输出"⚠️ 数据源不可用"，不强行编内容 |
 
 ## 输出原则
 

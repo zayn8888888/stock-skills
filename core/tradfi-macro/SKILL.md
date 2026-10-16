@@ -47,7 +47,16 @@ python3 "$SCRIPTS/get_snapshot.py" US..TYX --json 2>/dev/null   # 30Y Treasury y
 
 提取字段：`last_price`（当前值）、`change_rate`（周涨跌幅%，用于相对变化判断）、`prev_close_price`。
 
-**⚠️ OpenD 未连接**：全部标 ❌，Step 2 Tavily 兜底拿数值（标 `[来源: Tavily]`）。
+**FedWatch（与快照并行，下次会议的利率区间概率）**：这是 CME 利率概率，不是预测市场。全年降息次数分布仍用 Step 2 的 Polymarket。
+
+```bash
+python3 "$SCRIPTS/get_fed_watch_target_rate.py" --json
+python3 "$SCRIPTS/get_fed_watch_dot_plot.py" --json
+```
+
+`get_fed_watch_target_rate` 取最近一次会议的 `meeting_date`、`target_range`、`probability`。`get_fed_watch_dot_plot` 取当年 `median_rate` 与 `current_rate`。脚本报错或 OpenD 未连接时，这两项标 N/A，不改用富途事件合约。
+
+**⚠️ OpenD 未连接**：行情快照和 FedWatch 全部标 ❌。VIX / TNX / TYX 走 Step 2 Tavily 兜底（标 `[来源: Tavily]`）。FedWatch 标 N/A。
 
 ### Step 2：Tavily（定性）并行
 
@@ -241,9 +250,9 @@ Risk-off：VIX 1周+30%以上 OR VIX > 25 + DXY 强势 + TNX 快速上行 + Fed 
 ### 5. 前瞻事件日历（来自 event-calendar）
 | 日期 | 事件 | 市场预期 / 押注概率 |
 |------|------|-------------------|
-| MM/DD | FOMC | 暂停 X% / 降25bp X% |
-| MM/DD | CPI  | 预期 X.X% |
-| MM/DD | NFP  | 预期 XXXk |
+| MM/DD | FOMC | FedWatch：区间 X-Y 概率 Z%（点阵中值 A%） |
+| MM/DD | CPI  | 预期 X.X%（富途日历 consensus） |
+| MM/DD | NFP  | 预期 XXXk（富途日历 consensus） |
 
 **Polymarket 宏观押注 Top 3**（vol24 > $200k）：
 | 市场 | Yes/No | vol24 | 链接 |
@@ -254,11 +263,11 @@ Risk-off：VIX 1周+30%以上 OR VIX > 25 + DXY 强势 + TNX 快速上行 + Fed 
 |------|---------|
 | 美国风险偏好 | Risk-on / Risk-off / 中性（VIX: XX，1周 ±X%） |
 | 美元 | 强势 / 弱势 / 震荡（DXY: XXX，1周 ±X%） |
-| 利率 | 宽松 / 收紧 / 正常（TNX: X.XX%，全年加息 X% / 0次降息 X%） |
+| 利率 | 宽松 / 收紧 / 正常（TNX: X.XX%，下次会议 FedWatch 最高概率区间 X-Y Z%；全年降息次数分布见 Polymarket） |
 | 近期数据意外 | 好于/符合/弱于 预期（CPI: X.X% vs X.X%） |
 | 中国宏观 | 宽松 / 收紧 / 观望 / N/A |
 | **综合宏观判断** | [Risk-on/Risk-off/中性] + [主驱动] |
-| **下次大事件** | [来自 event-calendar] · 距今 X 天 · 降息 X%/暂停 X% [Polymarket] |
+| **下次大事件** | [来自 event-calendar] · 距今 X 天 · 下次会议利率区间 [FedWatch] |
 | **含义** | [1-2 句：当前宏观对哪类资产顺风/逆风] |
 
 数据时点：YYYY-MM-DD HH:MM HKT
@@ -270,7 +279,8 @@ Risk-off：VIX 1周+30%以上 OR VIX > 25 + DXY 强势 + TNX 快速上行 + Fed 
 |------|------|
 | DXY | 不在富途行情，**始终走 Step 2 query 6 Tavily**，标 `[来源: Tavily]` |
 | OpenD 未连接 / Futu 全失败 | VIX / TNX / TYX 走 Tavily 补数值（days=2），标 `[来源: Tavily]` |
-| Polymarket 不可用 | 降息概率标 N/A |
+| FedWatch 脚本失败 | 下次会议利率区间标 N/A。全年降息次数仍看 Polymarket |
+| Polymarket 不可用 | 全年降息次数分布标 N/A。下次会议概率仍用 FedWatch |
 | Tavily 无结果 | 对应维度标 ⚠️，不编数字 |
 | 非 A/HK 标的 | 维度 4 标 N/A，跳过 query 3/4 |
 | event-calendar 不可用 | Section 5 标"⚠️ event-calendar 不可用"；利率节加息/降息/不变概率从 Polymarket 原始查询补跑（备用 bash 脚本：`curl -s "https://gamma-api.polymarket.com/markets?closed=false&active=true&limit=500&order=volume24hr&ascending=false" \| python3 -c "import json,sys; [print(round(float(m.get('volume24hr') or 0)),m['question'][:80],m.get('outcomePrices','')) for m in json.load(sys.stdin) if any(w in m.get('question','').lower() for w in ['fed','fomc','rate cut','rate hike','increase interest','decrease interest','basis point'])]" 2>/dev/null \| sort -rn \| head -10`；汇总展示：加息概率=所有 increase/hike Yes 之和，降息概率=所有 decrease/cut Yes 之和，不变=no change Yes） |

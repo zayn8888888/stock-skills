@@ -1,6 +1,6 @@
 # Tavily 关键词模板（中港 + 行业政策兜底）
 
-> Finnhub 不覆盖中国本土事件，Polymarket 极少有人民币区资产相关市场。中港政策类、央行类、行业监管类全部依赖 Tavily 文本搜索 + Claude 解析。
+> 经济数据发布日程优先用富途日历（含沪市）。这里的 Tavily 只补政策、监管、没有结构化日期的事件。Polymarket 极少有人民币区资产相关市场。
 >
 > 模板里的占位符：`{YYYY-MM}` 当月、`{NEXT-MM}` 下个月、`{INDUSTRY_CN}` 中文行业名、`{INDUSTRY_EN}` 英文行业名。
 
@@ -36,9 +36,9 @@
 | `中国 社融 信贷 {NEXT-MM}` | pbc.gov.cn / cls.cn |
 | `Hong Kong GDP release schedule` | censtatd.gov.hk / scmp.com |
 
-## 4. 港股财报日历兜底（Finnhub 港股 estimate 经常空时启用）
+## 4. 港股财报日历兜底（富途和 Finnhub 都没有日期时启用）
 
-触发条件：Finnhub `/calendar/earnings?symbol=<CODE>.HK` 返回空数组、或返回 `date` 但 `epsEstimate / revenueEstimate` 全 null。
+触发条件：富途 `get_earnings_calendar.py --market HK` 的窗口结果里没有目标代码，且 Finnhub `/calendar/earnings?symbol=<CODE>.HK` 返回空数组，或返回 `date` 但 `epsEstimate / revenueEstimate` 全 null。
 
 ### 4.1 三层并行 query
 

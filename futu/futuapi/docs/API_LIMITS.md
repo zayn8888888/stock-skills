@@ -9,6 +9,7 @@
 | 接口 | 限频 |
 |------|------|
 | `place_order` | 15 次/30 秒 |
+| `place_combo_order` | 15 次/30 秒（与 `place_order` 共用） |
 | `modify_order` | 20 次/30 秒 |
 | `order_list_query` | 10 次/30 秒 |
 
@@ -54,6 +55,13 @@
 | `get_cur_kline` | num 最大 1000 |
 | `request_history_kline` | 单次 max_count 最大 1000，超过需用 page_req_key 翻页 |
 | `get_stock_filter` | 单次最多 200 个结果 |
+| `get_search_quote` | 每 30 秒最多 10 次 |
+| `get_search_news` | 每 30 秒最多 10 次 |
+| 预测市场盘口/实时K线/逐笔 | `get_event_contract_order_book`/`get_event_contract_kline`/`get_event_contract_ticker` 查询前必须先 `subscribe_event_contract` 订阅对应类型，否则报错 |
+| `request_history_event_contract_kline` | 预测市场历史 K 线，无需订阅，占用历史 K 线额度 |
+| `get_event_contract_order_book` | num 需 > 0，默认 10 |
+| 预测市场 K 线 | 仅支持 K_1M/K_5M/K_60M/K_DAY，其余类型报错；`max_count` 上限 1000 |
+| `get_event_contract_ticker` | count 最大 1000 |
 
 ## 加密货币接口限制
 

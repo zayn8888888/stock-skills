@@ -9,6 +9,21 @@
 2. 必须为每条传导路径列**反驳点**（这条传导可能不成立的理由）
 3. 必须用 **L1 信号**（5 日 / 10 日涨幅 + 资金流）回测每个外推目标，标"已在动 / 没在动"
 
+## 数据底：富途产业链
+
+外推前先拿富途产业链，把上下游成分股当作候选池。这只提供「图上有哪些公司」，不代替上面的三条硬约束。
+
+```bash
+SCRIPTS="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/futuapi/scripts/quote"
+python3 "$SCRIPTS/get_industrial_chain_list.py" --market <HK|US|CN> --keyword "<主热点关键词>" --json
+python3 "$SCRIPTS/get_industrial_chain_detail.py" --chain-id <上一步 chain_id> --json
+```
+
+- 市场按主热点所在市场选一个：港股 `HK`，美股 `US`，A 股 `CN`。
+- 列表里取名称最贴近主热点的一条 `chain_id`，再拉详情。详情里的上、中、下游证券作为传导目标的优先候选。
+- 详情里没有的代码，仍可以按下面五类路径写出，但必须标「不在富途产业链图内」。
+- OpenD 未连接或脚本返回 `error`：跳过这一步，沿用原来的路径表，并在 L5 开头标「⚠️ 富途产业链不可用，外推未经过产业链图校验」。
+
 ## 五类标准传导路径（适用所有市场）
 
 对 L1-L4 识别的每个主热点板块（≤ 2 个，超出选 5 日 / 10 日涨幅最强的），逐一展开：

@@ -196,7 +196,17 @@ from=today, to=today+21, region=US
 取：FOMC / CPI / NFP 日期+预期值 + Polymarket 宏观 Top 3（vol24 > $200k）
 ```
 
-**4b. Fed 全年利率前景 Polymarket**（bash，**若本会话已有 tradfi-macro 报告则跳过，直接引用其 Section 2 全年利率前景表**）：
+**4b. 下次会议利率概率用 FedWatch，全年次数分布仍用 Polymarket。** 若本会话已有 tradfi-macro 报告，直接引用其中的 FedWatch 区间和全年降息次数表，下面两段都跳过。
+
+```bash
+SCRIPTS="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/futuapi/scripts/quote"
+python3 "$SCRIPTS/get_fed_watch_target_rate.py" --json
+python3 "$SCRIPTS/get_fed_watch_dot_plot.py" --json
+```
+
+FedWatch 失败则下次会议概率标 N/A，不要改用富途事件合约。全年加息 / 降息次数分布继续用下面的 Polymarket。
+
+**4b-2. Fed 全年利率前景 Polymarket**（bash）：
 
 ```bash
 python3 -c "

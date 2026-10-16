@@ -24,9 +24,12 @@ import sys
 import os as _os
 sys.path.insert(0, _os.path.normpath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..")))
 from common import (
-    create_trade_context,
+    create_sec_or_future_trade_context,
+    normalize_trade_ctx_type,
+    TRADE_CTX_TYPE_CHOICES,
     parse_trd_env,
     parse_market,
+    TRD_MARKET_CLI_CHOICES,
     parse_security_firm,
     get_default_acc_id,
     get_default_trd_env,
@@ -40,14 +43,18 @@ from common import (
 )
 
 
-def get_orders(acc_id=None, market=None, trd_env=None, security_firm=None, output_json=False):
+def get_orders(acc_id=None, market=None, trd_env=None, security_firm=None,
+               ctx_type="SEC", output_json=False):
     acc_id = acc_id or get_default_acc_id()
     trd_market = parse_market(market) if market else get_default_market()
     trd_env = parse_trd_env(trd_env) if trd_env else get_default_trd_env()
+    ctx_type = normalize_trade_ctx_type(ctx_type)
 
     ctx = None
     try:
-        ctx = create_trade_context(trd_market, security_firm=parse_security_firm(security_firm))
+        ctx = create_sec_or_future_trade_context(
+            trd_market, security_firm=parse_security_firm(security_firm), ctx_type=ctx_type
+        )
         ret, data = ctx.order_list_query(trd_env=trd_env, acc_id=acc_id, refresh_cache=True)
         check_ret(ret, data, ctx, "查询订单")
 
@@ -102,12 +109,15 @@ def get_orders(acc_id=None, market=None, trd_env=None, security_firm=None, outpu
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="获取今日订单列表")
     parser.add_argument("--acc-id", type=int, default=None, help="账户 ID")
-    parser.add_argument("--market", choices=["US", "HK", "HKCC", "CN", "SG"], default=None, help="交易市场")
+    parser.add_argument("--market", choices=TRD_MARKET_CLI_CHOICES, default=None, help="交易市场")
     parser.add_argument("--trd-env", choices=["REAL", "SIMULATE"], default=None, help="交易环境")
     parser.add_argument("--security-firm",
                         choices=["FUTUSECURITIES", "FUTUINC", "FUTUSG", "FUTUAU", "FUTUCA", "FUTUJP", "FUTUMY"],
                         default=None, help="券商标识")
+    parser.add_argument("--ctx-type", choices=list(TRADE_CTX_TYPE_CHOICES), default="SEC",
+                        help="交易上下文：SEC=证券，FUTURE=期货/预测市场（与 get_accounts 的 ctx_type 一致）")
     parser.add_argument("--json", action="store_true", dest="output_json", help="输出 JSON 格式")
     args = parser.parse_args()
     get_orders(acc_id=args.acc_id, market=args.market, trd_env=args.trd_env,
-               security_firm=args.security_firm, output_json=args.output_json)
+               security_firm=args.security_firm, ctx_type=args.ctx_type,
+               output_json=args.output_json)
